@@ -9,7 +9,7 @@ from uuid import uuid4
 from functools import partial
 
 from lib.consts import MAIN_PATTERN, SPECIAL_COMMENT_PATTERN, \
-    BLANK_SUBSTITUTE, SETUP_CODE_DEFAULT, TEST_DEFAULT, REGION_IMPORT_PATTERN
+    BLANK_SUBSTITUTE, SETUP_CODE_DEFAULT, REGION_IMPORT_PATTERN
 from lib.name_visitor import generate_server, AnnotatedName
 from lib.io_helpers import Bcolors, resolve_path, file_name, \
     make_if_absent, write_to, file_ext, Namespace, parse_args, \
@@ -273,7 +273,10 @@ def generate_fpp_question(
     Bcolors.info('Generating from source', source_path)
 
     source_path = resolve_path(source_path)
-    autograder: AutograderConfig = autograders.get(file_ext(source_path), PythonAutograder())
+    
+    extension = file_ext(source_path)
+    ag = autograders.get(extension, PythonAutograder)
+    autograder: AutograderConfig = ag()
 
     if log_details:
         print('- Extracting from source...')
@@ -314,7 +317,10 @@ def generate_fpp_question(
 
     server_code = remove_region('server')
     gen_server_code, setup_names, answer_names = autograder.generate_server(
-        setup_code, answer_code, no_ast=no_parse)
+        setup_code=setup_code, 
+        answer_code=answer_code, 
+        no_ast=no_parse
+    )
     server_code = server_code or gen_server_code
 
     prompt_code = remove_region('prompt_code')
@@ -346,7 +352,7 @@ def generate_fpp_question(
     if log_details:
         print('- Populating {} ...'.format(test_dir))
 
-    test_region = remove_region('test', TEST_DEFAULT)
+    test_region = remove_region('test', "")
 
     autograder.populate_tests_dir( 
         test_dir, 
