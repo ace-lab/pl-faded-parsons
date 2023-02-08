@@ -1,194 +1,99 @@
-from typing import *
-
-from collections import defaultdict, namedtuple
+from collections import defaultdict
+from enum import IntEnum
 from json import dumps
 from os import path, PathLike
-from re import finditer, match as test
+from re import match as test
 from shutil import copyfile
 from uuid import uuid4
-from functools import partial
 
-from lib.consts import MAIN_PATTERN, SPECIAL_COMMENT_PATTERN, \
-    BLANK_SUBSTITUTE, SETUP_CODE_DEFAULT, REGION_IMPORT_PATTERN
-from lib.name_visitor import generate_server, AnnotatedName
-from lib.io_helpers import Bcolors, resolve_path, file_name, \
-    make_if_absent, write_to, file_ext, Namespace, parse_args, \
-    auto_detect_sources, read_region_source_lines
+from lib.consts import *
+from lib.io_helpers import *
+
+from lib.tokens import Tokens, Token, TokenType, lex, regex_chunk_lines
+from lib.name_visitor import AnnotatedName
 from lib.autograde import AutograderConfig, autograders, PythonAutograder
 
-def extract_regions(
-        source_code: str, *,
-        keep_comments_in_prompt: bool = False,
-        source_path: str = None) -> dict[str, str]:
-    """ Extracts from well-formatted `source_code` string the text for the question, 
-        the problem starting code, the answer code, and any other custom regions
-
-        Formatting rules:
-        - If the file begins with a docstring, it will become the `question_text` region
-            - The question text is removed from the answer
-            - Docstrings are always removed from the prompt
-        - Text surrounded by `?`s will become blanks in the prompt
-            - Blanks cannot span more than a single line
-            - The text within the question marks fills the blank in the answer
-            - `?`s in any kind of string-literal or comment are ignored
-        - Comments are removed from the prompt *unless*
-            - `keep_comments_in_prompt = True` OR
-            - The comment is of the form `#{n}given` or `#blank`, 
-              which are the only comments removed from the answer
-        - Custom regions are begun and ended by `## {region name} ##`
-            - A maximum of one region may be open at a time
-            - All text in a region is only copied into that region
-            - Regions must be closed before the end of the source string
-            - Text will be copied into a new file with the regions name in the
-            question directory, excluding these special regions:
-                explicit: `test` `setup_code`
-                implicit: `answer_code` `prompt_code` `question_text`
-            - Code in `setup_code` will be parsed to extract exposed names unless the --no-parse
-            flag is set. Type annotations and function docstrings are used to fill out server.py
-            - Any custom region that clashes with an automatically generated file name
-            will overwrite the automatically generated code
-        - Import regions allow for the contents of arbitrary files to be loaded as regions
-            - They are formatted as `## import {rel_file_path} as {region name} ##`
-                where `rel_file_path` is the relative path to the file from the source file
-            - Like regular regions, they cannot be used inside of another region
-
-
-        e.g.
-        ```
-        > source = "sum = lambda a, b: ?a + b? #0given"
-        > extract_regions(source)
-        {'prompt_code': "sum = lambda a, b: !BLANK #0given", 'answer_code': "sum = lambda a, b: a + b"}
-
-        > source = "\\\"\\\"\\\"Make good?\\\"\\\"\\\" ?del bad?  # badness?!?"
-        > extract_regions(source)
-        {'question_text': "Make good?", 'prompt_code': "!BLANK", 'answer_code': "del bad  # badness?!?!"}
-        ```
-    """
+def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
+    itr = regex_chunk_lines(blank_re, tkn.text, line_number=tkn.lineno)
     # (exclusive) end of the last match
-    last_end = 0
-    first_match = True
-
-    RegionToken = namedtuple('RegionToken', ['line', 'id'])
-    current_region: RegionToken = None
-
-    format_line = partial('({}:{})'.format, source_path or 'line')
-
-    # accumulators
-    line_number = 1
-    regions = defaultdict(str)
-
-    for match in finditer(MAIN_PATTERN, source_code):
-        start, end = match.span()
-
-        # make sure to keep un-captured text between matches
-        # (if no un-captured text exists, unmatched = '')
-        unmatched = source_code[last_end:start]
-        if current_region:
-            regions[current_region.id] += unmatched
-        else:
-            regions['prompt_code'] += unmatched
-            regions['answer_code'] += unmatched
-
-        # keep the line number updated
-        line_number += sum(1 for x in unmatched if x == '\n')
-
-        last_end = end
-
-        # only one of these is ever non-None
-        region_delim, comment, docstring, string, blank_ans = match.groups()
-
-        if region_delim is not None:
-            if not len(region_delim):
+    for line_number, found, chunk in itr:
+        if found:
+            # non-None
+            blank, = chunk.groups()
+            if not blank:
+                # only possible with custom regexes.
                 raise SyntaxError(
-                    "Regions must be named (ie ## test ##) " + format_line(line_number))
-            if current_region:
-                if region_delim != current_region.id:
-                    raise SyntaxError(
-                        "Region \"{}\" began {} before \"{}\" ended {}".format(
-                            region_delim,
-                            format_line(current_region.line),
-                            current_region.id,
-                            format_line(line_number + 1))
-                    )
-                else:
-                    current_region = None
-            else:
-                import_region = test(REGION_IMPORT_PATTERN, region_delim)
-                if import_region:
-                    region_source, alias = import_region.groups()
-                    try:
-                        regions[alias] += read_region_source_lines(
-                            source_path, region_source)
-                    except FileNotFoundError:
-                        raise FileNotFoundError(
-                            "Region \"{}\" failed on import. Could not find {} at {}".format(
-                                alias, region_source, format_line(line_number)))
-                    except OSError as e:
-                        raise OSError(
-                            "Region \"{}\" failed on import. Could not read {}:\n\t\t{}\n\tat {}".format(
-                                alias, region_source, e.strerror, format_line(line_number)))
-                else:
-                    current_region = RegionToken(line_number + 1, region_delim)
-        elif current_region:
-            regions[current_region.id] += next(filter(bool, match.groups()))
-        elif comment:
-            special_comment = test(SPECIAL_COMMENT_PATTERN, comment)
+                    'blankDelimiter Regex captured empty text at '
+                        + format_ln(source_path, line_number))
 
-            if not special_comment:
-                regions['answer_code'] += comment
-
-            if special_comment or keep_comments_in_prompt:
-                # even if excluding the comment from the prompt,
-                # every comment ends with a '\n'.
-                # must keep it to maintain whitespacing
-                regions['prompt_code'] += comment
-        elif docstring:
-            if first_match:
-                # isolate the question doc and save it
-                regions['question_text'] += docstring[3:-3]
-            else:
-                # docstrings cannot be included in current FPP
-                # regions['prompt_code'] += docstring
-                regions['answer_code'] += docstring
-        elif string:
-            # strings always stay in both
-            regions['prompt_code'] += string
-            regions['answer_code'] += string
-        elif blank_ans:
-            # fill in proper blank text
-            regions['prompt_code'] += BLANK_SUBSTITUTE
-            regions['answer_code'] += blank_ans
+            yield (blank, BLANK_SUBSTITUTE)
         else:
-            raise Exception('All capture groups are None after', last_end)
+            yield (chunk, chunk)
 
-        # keep track of any \n in the matched part of the string
-        # (namely for docstrings or region delimiters)
-        line_number += sum(1 for x in source_code[start:end] if x == '\n')
-        first_match = False
 
-    # all region delimiters should've been detected.
-    # if there's a current region, it'll never be closed
-    if current_region:
-        raise SyntaxError("File ended before \"{}\" {} ended".format(
-            current_region.id, format_line(current_region.line)))
+def parse_fpp_regions(tokens: Tokens):
+    if 'blankDelimiter' in tokens.metadata:
+        blank_re = make_blank_re(tokens.metadata['blankDelimiter'])
+    else:
+        blank_re = DEFAULT_BLANK_PATTERN
 
-    # don't forget everything after the last match!
-    unmatched = source_code[last_end:]
-    regions['prompt_code'] += unmatched
-    regions['answer_code'] += unmatched
+    r_texts: dict[str, list[str]] = defaultdict(list)
+    answer, prompt = r_texts['answer_code'], r_texts['prompt_code']
 
-    # remove all whitespace-only lines
-    # usually as a result of removing comments
-    # then remove trailing ws
-    regions['prompt_code'] = '\n'.join(
-        filter(bool, map(str.rstrip, regions['prompt_code'].splitlines())))
-    # remove trailing ws on each line,
-    # then remove trailing ws
-    regions['answer_code'] = '\n'.join(
-        map(str.rstrip, regions['answer_code'].splitlines())
-    ).lstrip()
+    class DocstringState(IntEnum):
+        Accepting = 0
+        FollowWithNewline = 1
+        Finished = 2
+        Skipped = 3
 
-    return regions
+    docstring_state = DocstringState.Accepting
+    for tkn in tokens.data:
+        if not tkn.text: continue
+
+        if tkn.region:
+            if tkn.region == 'question_text' and docstring_state == DocstringState.FollowWithNewline:
+                r_texts[tkn.region].append('\n')
+                docstring_state = DocstringState.Finished
+            r_texts[tkn.region].append(tkn.text)
+            continue
+
+        if tkn.type == TokenType.DOCSTRING:
+            if docstring_state == DocstringState.Accepting:
+                qs = r_texts['question_text']
+                if qs:
+                    qs.append('\n')
+                    docstring_state = DocstringState.Finished
+                else:
+                    docstring_state = DocstringState.FollowWithNewline
+                qs.append(tkn.text[3:-3])
+            else:
+                prompt.append(tkn.text)
+                answer.append(tkn.text)
+        elif tkn.type == TokenType.COMMENT:
+            target = prompt if test(SPECIAL_COMMENT_PATTERN, tkn.text) \
+                else answer
+            target.append(tkn.text)
+        elif tkn.type == TokenType.STRING:
+            prompt.append(tkn.text)
+            answer.append(tkn.text)
+        elif tkn.type == TokenType.UNMATCHED:
+            for ans, prmpt in parse_blanks(tokens.source_path, tkn, blank_re):
+                answer.append(ans)
+                prompt.append(prmpt)
+        else:
+            raise Exception("Unreachable! Inexhaustive token types: " + str(tkn.type))
+
+        docstring_state = docstring_state or DocstringState.Skipped
+
+    out = { 'metadata': tokens.metadata }
+    for k, region_list in r_texts.items():
+        ls = ''.join(region_list)
+        ls = map(str.rstrip, ls.splitlines())
+        if k == 'prompt_code':
+            ls = filter(bool, ls)
+        out[k] = '\n'.join(ls).strip()
+
+    return out
 
 
 def generate_question_html(
@@ -259,7 +164,7 @@ def generate_info_json(question_name: str, autograder: AutograderConfig, *, inde
 
     return dumps(info_json, indent=indent) + '\n'
 
-    
+
 def generate_fpp_question(
     source_path: PathLike[AnyStr], *,
     force_generate_json: bool = False,
@@ -273,7 +178,7 @@ def generate_fpp_question(
     Bcolors.info('Generating from source', source_path)
 
     source_path = resolve_path(source_path)
-    
+
     extension = file_ext(source_path)
     ag = autograders.get(extension, PythonAutograder)
     autograder: AutograderConfig = ag()
@@ -283,7 +188,8 @@ def generate_fpp_question(
 
     with open(source_path, 'r') as source:
         source_code = ''.join(source)
-        regions = extract_regions(source_code, source_path=source_path)
+        tokens = lex(source_code, source_path=source_path)
+        regions = parse_fpp_regions(tokens)
 
     def remove_region(key, default=''):
         if key in regions:
@@ -317,8 +223,8 @@ def generate_fpp_question(
 
     server_code = remove_region('server')
     gen_server_code, setup_names, answer_names = autograder.generate_server(
-        setup_code=setup_code, 
-        answer_code=answer_code, 
+        setup_code=setup_code,
+        answer_code=answer_code,
         no_ast=no_parse
     )
     server_code = server_code or gen_server_code
@@ -352,15 +258,20 @@ def generate_fpp_question(
     if log_details:
         print('- Populating {} ...'.format(test_dir))
 
-    test_region = remove_region('test', "")
+    test_region = remove_region('test')
 
-    autograder.populate_tests_dir( 
-        test_dir, 
-        answer_code, 
-        setup_code, 
-        test_region, 
+    autograder.populate_tests_dir(
+        test_dir,
+        answer_code,
+        setup_code,
+        test_region,
         log_details = log_details
     )
+
+    metadata = remove_region('metadata')
+
+    if metadata:
+        write_to(question_dir, 'metadata.json', dumps(metadata))
 
     if regions:
         Bcolors.warn('- Writing unrecognized regions:')

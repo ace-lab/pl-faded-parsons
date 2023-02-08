@@ -1,7 +1,7 @@
 from ast import *
-from typing import Union, Any
 
 from dataclasses import dataclass
+from typing import Union, Any
 
 from lib.consts import Bcolors, SERVER_DEFAULT
 
@@ -120,7 +120,7 @@ def generate_server(setup_code: str, answer_code: str, *,
         , (1, '# Define incoming variables here')
         , (1, 'names_for_user = [')
         ]
-    
+
     if setup_names:
         lines.extend((2, format_annotated_name(n)) for n in setup_names)
     else:
@@ -133,13 +133,13 @@ def generate_server(setup_code: str, answer_code: str, *,
         , (1, '# Define outgoing variables here')
         , (1, 'names_from_user = [')
         ]
-    
+
     if answer_names:
         lines.extend((2, format_annotated_name(n)) for n in answer_names)
     else:
         lines.append((2, '# ex: student defines a determinant function name det'))
         lines.append((2, '# {"name": "det", "description": "determinant for a 2x2 matrix", "type": "python function"}'))
-    
+
     lines += \
         [ (1, ']')
         , (0, '')

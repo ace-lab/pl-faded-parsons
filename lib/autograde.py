@@ -19,7 +19,7 @@ class AutograderConfig(ABC):
     @abstractmethod
     def info_json_update(self) -> Dict[str, Union[str, Dict[str, Union[bool, str, int]]]]:
         pass
-    
+
     @abstractmethod
     def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str, pre_code: str='', post_code: str='', log_details: bool= True) -> None:
         pass
@@ -51,7 +51,7 @@ class PythonAutograder(AutograderConfig):
             }
         }
 
-    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str, 
+    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
                     pre_code: str='', post_code: str='', log_details: bool= True) -> None:
         test_region = test_region if test_region != "" else TEST_DEFAULT
         try:
@@ -60,7 +60,7 @@ class PythonAutograder(AutograderConfig):
                 success, test_file = True, make_test_file(json)
             except Exception as e:
                 success, test_file = False, test_region
-            
+
             if success and log_details:
                 Bcolors.info('  - Generating tests/test.py from json test region')
                 write_to(test_dir, 'test_source.json', test_region)
@@ -69,7 +69,7 @@ class PythonAutograder(AutograderConfig):
                 Bcolors.fail('    * Generating tests from json failed with error:', e.msg)
                 Bcolors.warn('    - Recovering by using test region as python file')
             test_file = test_region
-        
+
         write_to(test_dir, 'test.py', test_file)
         write_to(test_dir, 'ans.py', answer_code)
         write_to(test_dir, 'setup_code.py', setup_code)
@@ -93,12 +93,12 @@ class RubyAutograder(AutograderConfig):
             }
         }
 
-    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str, 
+    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
                     pre_code: str='', post_code: str='', log_details: bool= True) -> None:
         app_dir = path.join(path.dirname(f"{test_dir}/"), "app")
         spec_dir = path.join(path.dirname(f"{app_dir}/"), "spec")
         makedirs(spec_dir, exist_ok=True)
-        
+
         if log_details:
             Bcolors.info('  - Generating grader metadata')
 
@@ -106,7 +106,7 @@ class RubyAutograder(AutograderConfig):
             "submission_file": "script.rb",
             "submission_root": "",
             "submit_to_line" : 0, # TODO: fix
-            "pre-text": f"{pre_code}\n", 
+            "pre-text": f"{pre_code}\n",
             "post-text": f"{post_code}\n",
             "grading_exclusions" : [
             ]
@@ -118,6 +118,6 @@ class RubyAutograder(AutograderConfig):
         write_to(test_dir, 'meta.json', metadata)
         write_to(test_dir, 'solution', answer_code)
 
-    def generate_server(self, setup_code: str, answer_code: str, *, 
+    def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
         return super().generate_server(setup_code, answer_code, no_ast=no_ast, tab=tab)

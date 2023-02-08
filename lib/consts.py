@@ -1,6 +1,4 @@
-from typing import *
-
-from os.path import join
+from typing import Final
 from re import compile, Pattern
 
 
@@ -58,7 +56,7 @@ class Test(PLTestCase):
     @name("test 0")
     def test_0(self):
         points = 0
-        # ex: calling a student defined function det 
+        # ex: calling a student defined function det
         #     with args=(1, 2, 3, 4)
         # case = [1, 2, 3, 4]
         # user_val = Feedback.call_user(self.st.det, *case)
@@ -70,7 +68,7 @@ class Test(PLTestCase):
         # ex: test correctness, update points
         # if Feedback.check_scalar('case: ' + case, ref_val, user_val):
         #     points += 1
-        
+
         Feedback.set_score(points)\n"""
 
 SETUP_CODE_DEFAULT: Final[str] = """# AUTO-GENERATED FILE
@@ -97,34 +95,36 @@ def generate(data):
     return data\n"""
 
 # Matches, with precedence in listed order:
-MAIN_PATTERN: Final[Pattern] = compile(
+MAIN_PATTERN: Final[Pattern] = compile('|'.join((
     # - capture group 0: (one-line) region delimiter surrounded by ##'s
     #                    (capturing only the text between the ##'s).
     #                    Consumes leading newline and surrounding spaces/tabs,
     #                    and if the next line doesn't have a region comment,
     #                    it consumes the trailing newline as well.
-    r'(?:\r?\n|^)[ \t]*\#\#[\t ]*(.*?)\s*\#\#.*?(?:(?=\r?\n[ \t]*\#\#)|\r?\n|$)|' +
+    r'(?:\r?\n|^)[\t ]*##[\t ]+(\S.*?)[\t ]+##.*?(?:(?=\r?\n[\t ]*##[^#])|\r?\n|$)',
     # - capture group 1:  (one-line) comment, up to next comment or newline
     #                     (excluding the newline/eof)
-    r'(\#.*?)(?=\#|\r?\n|$)|' +
-    # - capture group 2: (multi-line) triple-quote string literal
-    r'(\"\"\"[\s\S]*?\"\"\")|' +
+    r'(#.*?)(?=#|\r?\n|$)',
+    # - capture group 2:
+    #     - (multi-line) triple-apostrophe string literal
+    #     - (multi-line) triple-quote string literal
+    r'(\'\'\'[\s\S]*?\'\'\'|\"\"\"[\s\S]*?\"\"\")',  # [\s\S] includes newlines! don't change!
     # - capture group 3:
+    #     - (one-line) single-backtick string literal
     #     - (one-line) single-apostrophe string literal
     #     - (one-line) single-quote string literal
-    r'(\'.*?\'|\".*?\")|' +
-    # - capture group 4:  (one-line) answer surrounded by ?'s (excluding ?'s)
-    r'\?(.*?)\?'
-)
+    r'(\`.*?\`|\'.*?\'|\".*?\")'
+)))
 
 SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
-    r'^#(blank[^#]*|\d+given)\s*'
+    r'^#(blank[^#]*|\d+given)'
 )
 
+DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?(.*?)\?')
 BLANK_SUBSTITUTE: Final[str] = '!BLANK'
 
 REGION_IMPORT_PATTERN: Final[Pattern] = compile(
-    r'^\s*import\s*(\w.*)\s+as\s+(\w.*?)\s*$'
+    r'^\s*import\s*(.+?)\s+as\s+(.+?)\s*$'
 )
 
 PROGRAM_DESCRIPTION: Final[str] = Bcolors.f(Bcolors.OK_GREEN, ' A tool for generating faded parsons problems.') + """
