@@ -1,21 +1,20 @@
 from typing import *
 
 from collections import defaultdict, namedtuple
-from json import dumps, loads
+from json import dumps
 from os import path, PathLike
 from re import finditer, match as test
 from shutil import copyfile
 from uuid import uuid4
 from functools import partial
 
-from lib.generate_test import make_test_file
 from lib.consts import MAIN_PATTERN, SPECIAL_COMMENT_PATTERN, \
-    BLANK_SUBSTITUTE, SETUP_CODE_DEFAULT, TEST_DEFAULT, REGION_IMPORT_PATTERN
+    BLANK_SUBSTITUTE, SETUP_CODE_DEFAULT, REGION_IMPORT_PATTERN
 from lib.name_visitor import generate_server, AnnotatedName
 from lib.io_helpers import Bcolors, resolve_path, file_name, \
     make_if_absent, write_to, file_ext, Namespace, parse_args, \
     auto_detect_sources, read_region_source_lines
-
+from lib.autograde import AutograderConfig, autograders, PythonAutograder
 
 def extract_regions(
         source_code: str, *,
@@ -242,7 +241,7 @@ def generate_question_html(
 </pl-faded-parsons>""".format(question_text=question_text, tab=tab, indented=indented)
 
 
-def generate_info_json(question_name: str, *, indent=4) -> str:
+def generate_info_json(question_name: str, autograder: AutograderConfig, *, indent=4) -> str:
     """ Creates the default info.json for a new FPP question, with a unique v4 UUID.
         Expects `question_name` to be lower snake case.
     """
@@ -254,24 +253,12 @@ def generate_info_json(question_name: str, *, indent=4) -> str:
         'topic': '',
         'tags': ['berkeley', 'fp'],
         'type': 'v3',
-        'gradingMethod': 'External',
-        'externalGradingOptions': {
-            'enabled': True,
-            'image': 'prairielearn/grader-python',
-            'entrypoint': '/python_autograder/run.sh',
-            'timeout': 5
-        }
     }
+
+    info_json.update(autograder.info_json_update())
 
     return dumps(info_json, indent=indent) + '\n'
 
-def try_generate_test_file(test_data: str) -> Tuple[bool, str]:
-    try:
-        json = loads(test_data)
-    except Exception as e:
-        return False, test_data
-    
-    return True, make_test_file(json)
     
 def generate_fpp_question(
     source_path: PathLike[AnyStr], *,
@@ -286,6 +273,10 @@ def generate_fpp_question(
     Bcolors.info('Generating from source', source_path)
 
     source_path = resolve_path(source_path)
+    
+    extension = file_ext(source_path)
+    ag = autograders.get(extension, PythonAutograder)
+    autograder: AutograderConfig = ag()
 
     if log_details:
         print('- Extracting from source...')
@@ -325,8 +316,11 @@ def generate_fpp_question(
     answer_code = remove_region('answer_code')
 
     server_code = remove_region('server')
-    gen_server_code, setup_names, answer_names = generate_server(
-        setup_code, answer_code, no_ast=no_parse)
+    gen_server_code, setup_names, answer_names = autograder.generate_server(
+        setup_code=setup_code, 
+        answer_code=answer_code, 
+        no_ast=no_parse
+    )
     server_code = server_code or gen_server_code
 
     prompt_code = remove_region('prompt_code')
@@ -341,11 +335,13 @@ def generate_fpp_question(
 
     write_to(question_dir, 'question.html', question_html)
 
+    write_to(question_dir, 'solution', answer_code)
+
     json_path = path.join(question_dir, 'info.json')
     json_region = remove_region('info.json')
     missing_json = not path.exists(json_path)
     if force_generate_json or json_region or missing_json:
-        json_text = json_region or generate_info_json(question_name)
+        json_text = json_region or generate_info_json(question_name, autograder)
         write_to(question_dir, 'info.json', json_text)
         if not missing_json:
             Bcolors.warn('  - Overwriting', json_path,
@@ -356,24 +352,15 @@ def generate_fpp_question(
     if log_details:
         print('- Populating {} ...'.format(test_dir))
 
-    write_to(test_dir, 'ans.py', answer_code)
+    test_region = remove_region('test', "")
 
-    write_to(test_dir, 'setup_code.py', setup_code)
-
-    test_region = remove_region('test', TEST_DEFAULT)
-
-    try:
-        success, test_file = try_generate_test_file(test_region)
-        if success and log_details:
-            Bcolors.info('  - Generating tests/test.py from json test region')
-            write_to(test_dir, 'test_source.json', test_region)
-    except SyntaxError as e:
-        if log_details:
-            Bcolors.fail('    * Generating tests from json failed with error:', e.msg)
-            Bcolors.warn('    - Recovering by using test region as python file')
-        test_file = test_region
-    
-    write_to(test_dir, 'test.py', test_file)
+    autograder.populate_tests_dir( 
+        test_dir, 
+        answer_code, 
+        setup_code, 
+        test_region, 
+        log_details = log_details
+    )
 
     if regions:
         Bcolors.warn('- Writing unrecognized regions:')
