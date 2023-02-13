@@ -105,7 +105,7 @@ class RubyAutograder(AutograderConfig):
         metadata = dumps({
             "submission_file": "script.rb",
             "submission_root": "",
-            "submit_to_line" : 0, # TODO: fix
+            "submit_to_line" : -1,
             "pre-text": f"{pre_code}\n", 
             "post-text": f"{post_code}\n",
             "grading_exclusions" : [
