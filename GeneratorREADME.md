@@ -6,7 +6,7 @@
 
 - Docker
 
-Via docker, the appropriate images can be maintained and installed. 
+Via docker, the appropriate images can be maintained and installed.
 You may optionally install [a local PrairieLearn clone](https://github.com/PrairieLearn/PrairieLearn) if you want to tinker with its internals.
 
 
@@ -32,10 +32,10 @@ root-course-directory
 |   |   ...                     <<
 ```
 
-To begin writing any FPP questions, you will need the `pl-faded-parsons` directory and all of its contents. 
+To begin writing any FPP questions, you will need the `pl-faded-parsons` directory and all of its contents.
 It contains all the html and js files required by PrairieLearn to display a `<pl-faded-parsons>` element.
 
-This element is then used by questions you would traditionally write as subfolders in the `questions` directory. 
+This element is then used by questions you would traditionally write as subfolders in the `questions` directory.
 The tool `generate_fpp.py` will take well-formatted python files and turn them into a question folder.
 
 ### Grading
@@ -50,7 +50,7 @@ Any file following the semantic rules (see below) may be provided, but the tool 
 
 This tool will search for a provided path in `./`, `questions/`, `../../questions/`, and finally `../../` before erring.
 If none is provided, it will hunt for a `questions` directory in these locations, and use all .py files there.
- 
+
 ### Semantic Rules
  - If the file begins with a docstring, it will become the question text
      - The question text is removed from the reference answer
@@ -59,7 +59,8 @@ If none is provided, it will hunt for a `questions` directory in these locations
      - Blanks cannot span more than a single line
      - The text within the question marks fills the blank in the answer
      - `?`s in any kind of string-literal or comment are ignored
- - Comments are removed from the prompt unless the comment matches a special form: 
+     - The delimiter can be changed from `?` using the `metadata` region
+ - Comments are removed from the prompt unless the comment matches a special form:
      - `#{n}given`: include as a part of the start solution (n-times-indented)
      - `#blank {txt}`: use txt as the default for a blank in the preceding line
      - These special forms are the only comments removed from the answer
@@ -69,10 +70,10 @@ If none is provided, it will hunt for a `questions` directory in these locations
      - All text in a region is only copied into that region
      - Text will be copied into a new file with the regions name in the
        question directory, excluding these special regions:
-         - explicit: `test` `setup_code`
+         - explicit: `test` `setup_code` `metadata`
          - implicit: `answer_code` `prompt_code` `question_text`
      - Code in `setup_code` will be parsed to extract exposed names unless the --no-parse
-       flag is set. 
+       flag is set.
          - Type annotations and function docstrings are used to fill out `server.py` and the Provided section of the prompt text
      - Any custom region that clashes with an automatically generated file name
        will overwrite the automatically generated code
@@ -126,7 +127,7 @@ Note that the full-line comments as well as the `# return early!` comment will b
 By contrast, the special-form comments (eg `#0given` and `#blank _:_`) will not appear in the reference solution, but will edit the starting configuration of the sortable code lines.
 (`#0given` includes `def is_sublist(lst, sublist):` as a part of the starting solution with 0 indents, `#1given` includes `return False` with 1 indent, and `#blank _:_` sets the initial text of the blank in the brackets to `_:_`. )
 
-There is no way to indicate a red-herring or distractor line! 
+There is no way to indicate a red-herring or distractor line!
 Distractors are philosophically  antithetical to the design of FPPs!
 
 Continuing to the `test` region, the file concludes:
@@ -144,7 +145,7 @@ def score_cases(student_fn, ref_fn, *cases):
         ref_val = ref_fn(*case)
         if user_val == ref_val:
             correct += 1
-    
+
     # set_score must be in range 0.0 to 1.0
     if cases:
         Feedback.set_score(correct / len(cases))
@@ -160,7 +161,7 @@ class Test(PLTestCase):
             ([1, 2, 3, 4], [4, 3])
         )
 
-    
+
     @points(8)
     @name("advanced cases")
     def test_1(self):
@@ -189,9 +190,9 @@ At a glance:
  - Any printing done by the student will automatically be relayed to them in the grading section, but we highly discourage grading printed output.
 
 Common Gotchas:
- - Setting the highest possible points value for a test function is done through `@points`, and the performance is entered on a 0-to-1 scale through `Feedback.set_score`. 
+ - Setting the highest possible points value for a test function is done through `@points`, and the performance is entered on a 0-to-1 scale through `Feedback.set_score`.
  **Entering the number of points received will not work!**
- - Test helper functions (ie `score_cases` in the example above) **cannot** be methods (static or instance) on the Test class. 
+ - Test helper functions (ie `score_cases` in the example above) **cannot** be methods (static or instance) on the Test class.
  They must be defined in a different scope.
 
 
@@ -207,11 +208,11 @@ questions
 Instead of writing a docstring, you may choose to write a file (eg for syntax-highlighting/checking):
 ``` html
 <!-- square_question.html -->
-Make a function <code>square_color</code> that tells if a chess 
+Make a function <code>square_color</code> that tells if a chess
 square is black based off of its position (see the labeled board below).
 <br>
-<img src="https://www.dummies.com/wp-content/uploads/201843.image0.jpg" 
-    alt="chessboard" 
+<img src="https://www.dummies.com/wp-content/uploads/201843.image0.jpg"
+    alt="chessboard"
     style="margin-left:auto; margin-right:auto; display:block; width:50;"
 >
 <br>
@@ -219,11 +220,11 @@ square is black based off of its position (see the labeled board below).
 <h3> Background </h3>
 
 In this activity we will be using modulo (%)! It is often spoken about as
-the remainder, the complement to integer division. We often use it to find if something 
-is even or odd, by inspecting if <code>x % 2 == 0</code> for even and 
+the remainder, the complement to integer division. We often use it to find if something
+is even or odd, by inspecting if <code>x % 2 == 0</code> for even and
 <code>x % 2 == 1</code> for odd.
 
-Another way to think of it is to convert <i>linear</i> change into 
+Another way to think of it is to convert <i>linear</i> change into
 <i>cyclic</i> change. Consider how it acts on this linearly increasing list:
 
 <pl-code language="python">
@@ -254,7 +255,7 @@ def to_coordinates(pos: str) -> tuple[int, int]:
 ## setup_code ##
 ...
 ```
-The `setup_code` region is required to determine that this is not code to be given to the student. 
+The `setup_code` region is required to determine that this is not code to be given to the student.
 They will have no visibility of this code, but its name will be available to them.
 
 This code will be parsed and the type information and documentation extracted.
@@ -296,7 +297,7 @@ will write the single line `3.14159` to `question_name/res/pi.txt`.
 
 ## Generating Boilerplate Tests with `generate_test.py`
 
-Most test files for FPP follow the same pattern as the first example, having a suite of tests, each with their own set of inputs. 
+Most test files for FPP follow the same pattern as the first example, having a suite of tests, each with their own set of inputs.
 The results of applying the reference and student functions to the inputs are used to determine the score for the problem.
 
 The `lib` folder contains a standalone tool called `generate_test.py` that will accept a well-formatted JSON file to create tests.
@@ -317,7 +318,7 @@ The json file must follow this schema:
     }]
 }
 ```
-Note that each case must be a string of the tuple of the arguments for that case, eg the written out case `foo(2, [2, 3], 'hi')` would be the json case `"(2, [2, 3], 'hi')"`. 
+Note that each case must be a string of the tuple of the arguments for that case, eg the written out case `foo(2, [2, 3], 'hi')` would be the json case `"(2, [2, 3], 'hi')"`.
 The enclosing parenthesis may also be omitted, so the case `baz("hello")` could be written `"hello"`.
 
 Tuple generator unpacking is also valid for programmatically listing cases.
@@ -342,7 +343,7 @@ To generate the test file shown in the simple example section, the following jso
       "name": "example cases",
       "points": 2,
       "inputs": [
-          "['a', 'b', 'c', 'd'], ['b', 'c']", 
+          "['a', 'b', 'c', 'd'], ['b', 'c']",
           "[1, 2, 3, 4], [4, 3]"
         ]
     },
@@ -372,12 +373,12 @@ The directory name will be set by the name of the file used to generate the ques
 
 ### The `info.json` File
 
-The `info.json` file will only be generated if a matching file doesn't exist, or if `--force-json file_path` is passed. 
+The `info.json` file will only be generated if a matching file doesn't exist, or if `--force-json file_path` is passed.
 This is so that a new uuid will not be generated each time the file is run.
 
 ### The `server.py` file
 
-The server file specifies which names pass into the student's scope, and which names must pass out of their scope. 
+The server file specifies which names pass into the student's scope, and which names must pass out of their scope.
 The code in the `setup_code` and `prompt_code` regions will be parsed to derive which names enter and exit this scope, and what types they carry.
 
 Parsing of this code can be disabled for an entire batch by the flag `--no-parse`, but it will overwrite any existing `server.py` with the default.
@@ -389,3 +390,13 @@ This is filled with the answer, setup code, and test code.
 This is where the python autograder automatically looks for the files named `ans.py`, `setup_code.py`, and `test.py`.
 
 These are the files that get generated from their respective special name regions.
+
+## The `metadata` region
+
+The `metadata` special region allows for flags to be passed to the problem generator as a JSON. Any unrecognized flags are written into `metadata.json`. Fields the generator recognizes are:
+   - `"noParse": bool` is equivalent to the `--no-parse` command-line argument *(default: `false`)*
+   - `"forceGenerateJson": bool` is equivalent to the `--force-json` command-line argument *(default: `false`)*
+   - `"blankDelimiter"` allows the user to change the delimiters on blanks (fading). The delimiter cannot use any of `, ', ", or #. The value must be:
+     - `string`: A delimiter to use in place of `?`
+     - `{ "start": string, "end": string }`: Delimiters used to indicate the start and end of a blank
+     - `{ "pattern": regex_string }`: a string regular expression pattern that captures the content of blanks. It must capture exactly one group, and cannot match the empty string.
