@@ -19,7 +19,7 @@ def score_cases(student_fn, ref_fn, *cases):
         ref_val = ref_fn(*case)
         if user_val == ref_val:
             correct += 1
-    
+
     # set_score must be in range 0.0 to 1.0
     if cases:
         Feedback.set_score(correct / len(cases))
@@ -133,10 +133,10 @@ def __main__():
     parser.add_argument('path_to_json', help='a path to a well formatted json')
 
     args = parser.parse_args()
-    
+
     with open(args.path_to_json, 'r') as f:
         json = load(f)
-    
+
     print(make_test_file(json))
 
 

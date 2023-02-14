@@ -1,12 +1,16 @@
-from argparse import *
 from os.path import *
 from typing import *
 
+from argparse import Namespace, ArgumentParser, RawTextHelpFormatter
 from functools import partial
-
 from os import getcwd, listdir, makedirs, PathLike
+from re import compile
 
 from lib.consts import Bcolors, PROGRAM_DESCRIPTION
+
+
+def format_ln(source_path, line_number: int):
+    return '({}:{})'.format(source_path or 'line', line_number)
 
 
 def file_name(file_path: PathLike[AnyStr]) -> AnyStr:
@@ -38,11 +42,8 @@ def read_region_source_lines(source_path: str, region_source: str) -> str:
 
         Searches in ./ and ./`source_path`/ for `region_source`
     """
-    if not exists(region_source):
+    if not exists(region_source) and source_path:
         region_source = join(dirname(source_path), region_source)
-
-    if not exists(region_source):
-        raise FileNotFoundError(region_source)
 
     with open(region_source, 'r') as f:  # may raise OSError
         return ''.join(f.readlines())
@@ -62,7 +63,7 @@ def auto_detect_sources(questions_dir: Optional[PathLike[AnyStr]] = None) -> lis
             Bcolors.fail(*e.args)
 
     resolve = partial(join, questions_dir)
-    def is_valid(f): 
+    def is_valid(f):
         return isfile(f) and file_ext(f).endswith('py')
     return list(filter(is_valid, map(resolve, listdir(questions_dir))))
 
@@ -75,7 +76,7 @@ def resolve_path(path: str, *,
 
         ```
         standard course directory structure:
-        + <course>  
+        + <course>
         | ...        << search here 3rd
         |-+ elements/pl-faded-parsons
         | |-generate_fpp.py
@@ -125,8 +126,64 @@ def resolve_path(path: str, *,
                             ('directory ' if path_is_dir else 'file ') + original)
 
 
+def make_blank_re(config):
+    """ expects config to be
+        `delim_str  | { "pattern": regex }  | { "start": str, "end": str }`
+    """
+    def validate(re_str: str) -> Pattern:
+        if any(c in re_str for c in '#`\'"'):
+            raise SyntaxError('custom patterns for blank delimiter ' +
+                'cannot use #, \', ", or `')
+
+        re = compile(re_str)
+
+        if re.groups != 1:
+            raise SyntaxError('custom patterns for blankDelimiter must ' +
+                'capture exactly one group (the text to fade out)')
+
+        if re.match('') is not None:
+            raise SyntaxError('custom patterns for blankDelimiter must' +
+                'not match the empty string')
+
+        return re
+
+    reserved = r'.+*?^$()[]{}|'
+    def validate_l_r(l, r):
+        if not l or not r:
+            raise SyntaxError('blankDelimiter must not be empty')
+        def esc(x):
+            for c in reserved:
+                if c == x:
+                    return '\\' + c
+            return x
+        return validate(esc(l) + r'(.+?)' + esc(r))
+
+    if isinstance(config, str):
+        return validate_l_r(config, config)
+
+    if not isinstance(config, dict):
+        raise SyntaxError('blankDelimiter metadata must either be a ' +
+            'delimiter string or a config object')
+
+    if 'pattern' in config:
+        return validate(config['pattern'])
+
+    if 'start' in config and 'end' in config:
+        s, e = config['start'], config['end']
+
+        if not isinstance(s, str) or not isinstance(e, str):
+            raise SyntaxError('custom blank delimiter start and end ' +
+                'must be strings')
+
+        return validate_l_r(s, e)
+
+    raise SyntaxError('''blankDelimiter must be a string or adhere to schema:
+    { "start": start_delimiter_string, "end": end_delimiter_string } |
+    { "pattern": regex_string_that_captures_faded_text }''')
+
+
 def parse_args(arg_text: str = None) -> Namespace:
-    """ Returns a Namespace containing all the flag and path data. 
+    """ Returns a Namespace containing all the flag and path data.
         If arg_text is not provided, uses `sys.argv`.
     """
     parser = ArgumentParser(description=PROGRAM_DESCRIPTION,
