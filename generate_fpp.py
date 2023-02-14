@@ -170,7 +170,6 @@ def generate_fpp_question(
     force_generate_json: bool = False,
     no_parse: bool = False,
     log_details: bool = True,
-    show_required: bool = False
 ):
     """ Takes a path of a well-formatted source (see `extract_prompt_ans`),
         then generates and populates a question directory of the same name.
@@ -197,6 +196,11 @@ def generate_fpp_question(
             del regions[key]
             return v
         return default
+
+    metadata = remove_region('metadata')
+
+    force_generate_json = metadata.get('forceGenerateJson', force_generate_json)
+    no_parse = metadata.get('noParse', no_parse)
 
     question_name = file_name(source_path)
 
@@ -236,7 +240,8 @@ def generate_fpp_question(
         prompt_code,
         question_text=question_text,
         setup_names=setup_names,
-        answer_names=answer_names if show_required else None
+        # show_required removed:
+        # answer_names=answer_names if show_required else None
     )
 
     write_to(question_dir, 'question.html', question_html)
@@ -267,8 +272,6 @@ def generate_fpp_question(
         test_region,
         log_details = log_details
     )
-
-    metadata = remove_region('metadata')
 
     if metadata:
         write_to(question_dir, 'metadata.json', dumps(metadata))
