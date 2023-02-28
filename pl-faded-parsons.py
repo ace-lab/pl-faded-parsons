@@ -111,11 +111,14 @@ def render_question_panel(element_html, data):
         if pre_text or post_text:
             raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
                 'Add format="bottom" to your element to use this feature.')
-        
-    if format == "bottom":
+    elif format == "bottom":
         if pre_text or post_text:
+            # if we move code lines into the mustache, this would probably be html_params[format].update(...)
             html_params.update({ "code_lines" : get_code_lines() })
 
+    elif format == "no_code":
+        if pre_text or post_text:
+            html_params.update({ "code_lines" : get_code_lines() })
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
