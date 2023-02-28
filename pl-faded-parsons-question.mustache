@@ -14,30 +14,51 @@
 
 {{! the boxes for starter code and solution area}}
 
-{{^vertical}}
+{{#right}}
 {{! if not vertical (horizontal), keep half size boxes }}
 <div class="pl-faded-parsons row">
   <div id="{{answers_name}}starter-code"     class="col-sm-6 border px-1 sortable-code"></div>
   <div id="{{answers_name}}parsons-solution" class="col-sm-6 border sortable-code"></div>
 </div>
-{{/vertical}}
+{{/right}}
 
 
 {{! if vertical, full size boxes }}
 {{! note: by entering the {#vertical} {/vertical} section, the mustache renderer dereferences 
           all tags as children of the `vertical` node, which has a duplicate of the 
           `answers_name` data dereferenced elsewhere }}
-{{#vertical}}
+{{#bottom}}
 <div class="pl-faded-parsons row">
   <div id="{{answers_name}}starter-code"     class="col-sm-12 border px-1 sortable-code"></div>
   
-  <pl-code {{{language}}}> {{{pre_text}}} </pl-code>
-  
+  {{#pre_text}}
+  <pl-code {{{language}}}> {{{text}}} </pl-code>
+  {{/pre_text}}
+
   <div id="{{answers_name}}parsons-solution" class="col-sm-12 sortable-code"></div>
 
-  <pl-code {{{language}}}> {{{post_text}}} </pl-code>
+  {{#post_text}}
+  <pl-code {{{language}}}> {{{text}}} </pl-code>
+  {{/post_text}}
 </div>
-{{/vertical}}
+{{/bottom}}
+
+
+{{#no_code}}
+<div class="pl-faded-parsons row">
+  <div id="{{answers_name}}starter-code"     class="col-sm-12 border px-1 sortable-code hidden"></div>
+  
+  {{#pre_text}}
+  <pl-code {{{language}}}> {{{text}}} </pl-code>
+  {{/pre_text}}
+
+  <div id="{{answers_name}}parsons-solution" class="col-sm-12 sortable-code"></div>
+
+  {{#post_text}}
+  <pl-code {{{language}}}> {{{text}}} </pl-code>
+  {{/post_text}}
+</div>
+{{/no_code}}
 
 <script>
   var populateCheck = setInterval(function() {

@@ -47,7 +47,12 @@ def render_question_panel(element_html, data):
     """Render the panel that displays the question (from code_lines.txt) and interaction boxes"""
     element = xml.fragment_fromstring(element_html)
     answers_name = get_answers_name(element_html)
-    vertical_format = pl.get_string_attrib(element, "format", None) == "vertical"
+
+    format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
+    if format not in ("bottom", "right", "no_code"):
+        raise Exception(f"Unsupported pl-faded-parsons format: \"{format}\". Please see documentation for supported formats")
+
+    lang = pl.get_string_attrib(element, "language", None)
 
     populate_info = []
     for blank in data['submitted_answers']:
@@ -58,11 +63,13 @@ def render_question_panel(element_html, data):
     solution_order_info = json.loads(data['submitted_answers']['parsons-solution-order']) if 'parsons-solution-order' in data['submitted_answers'] else []
 
     html_params = {
-        "answers_name": answers_name,
         "code_lines": str(element.text),
         "populate_info": populate_info,
         "student_order_info": student_order_info,
         "solution_order_info": solution_order_info,
+        format : {
+            "answers_name": answers_name,
+        }
     }
 
     def get_child_text_by_tag(element, tag: str) -> str:
@@ -70,40 +77,45 @@ def render_question_panel(element_html, data):
         default value is empty string"""
         return next((elem.text for elem in element if elem.tag == tag), "")
 
+    def get_code_lines():
+        code_lines = get_child_text_by_tag(element, "code-lines") or \
+            read_file_lines(data, 'code_lines.txt', error_if_not_found=False)
+
+        if not code_lines:
+            raise Exception("A non-empty code_lines.txt or <code-lines> child must be provided in right (horizontal) placement.")
+        
+        return code_lines
 
     pre_text = get_child_text_by_tag(element, "pre-text") \
         .rstrip("\n") # trim trailing newlines
     post_text = get_child_text_by_tag(element, "post-text") \
         .lstrip("\n") # trim leading newlines
 
-    if pre_text or post_text:
-        if not vertical_format:
-            raise Exception("pre-text and post-text are not supported in horizontal mode. " +
-                'Add format="vertical" to your element to use this feature.')
+    pre = { "text" : pre_text }
+    post = { "text" : post_text}
 
-        code_lines = get_child_text_by_tag(element, "code-lines") or \
-            read_file_lines(data, 'code_lines.txt', error_if_not_found=False)
+    if lang:
+        pre.update({ "language" : f"language=\"{lang}\"" })
+        post.update({ "language" : f"language=\"{lang}\"" })
 
-        if not code_lines:
-            raise Exception("A non-empty code_lines.txt or <code-lines> child must be provided in horizontal mode.")
-
-        html_params.update({
-            "code_lines" : code_lines
+    if pre_text:
+        html_params[format].update({ 
+            "pre_text" : pre,
+        })
+    if post_text:
+        html_params[format].update({
+            "post_text" : post,
         })
 
-    if vertical_format:
-        html_params.update({
-            "vertical" : {
-                "pre_text" : pre_text,
-                "post_text" : post_text,
-                "answers_name" : answers_name,
-            },
-        })
+    if format == "right":
+        if pre_text or post_text:
+            raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
+                'Add format="bottom" to your element to use this feature.')
+        
+    if format == "bottom":
+        if pre_text or post_text:
+            html_params.update({ "code_lines" : get_code_lines() })
 
-        if lang := pl.get_string_attrib(element, "language", None):
-            html_params["vertical"].update({
-                "language" : f"language=\"{lang}\""
-            })
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
