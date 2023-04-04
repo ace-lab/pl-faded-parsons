@@ -48,16 +48,16 @@ ul.output {
     background-color: #FFA;
 }
 .sortable-code li {
-    -moz-border-radius:10px;
-    -webkit-border-radius:10px;
-    border-radius: 10px;
+    /* -moz-border-radius:10px;
+    -webkit-border-radius:10px; 
+    border-radius: 10px; */
     background-color:#EFEFEF;
     border:1px solid lightgray;
     padding:2px;
     /* Keep difference of 10 to respect padding specified just above */
-    padding-left: 30px;
-    text-indent: -20px;
-    margin-top: 5px;
+    padding-left: 3ch;     
+    text-indent: -2ch;
+    margin-top: 5px; /* 0.6ch */
     overflow: hidden;
     cursor: move;
 }

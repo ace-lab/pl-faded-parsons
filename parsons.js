@@ -1,5 +1,7 @@
 const givenIndentRegexp = /#(\d+)given\s*/;
-
+let context = document.createElement("canvas").getContext("2d");
+context.font = "monospace";
+const char_width_in_px = context.measureText("0").width;
 // The "original" grader for giving line based feedback.
 class LineBasedGrader {
   constructor(parson) {
@@ -197,7 +199,7 @@ class ParsonsWidget {
 
     const defaults = {
       incorrectSound: false,
-      x_indent: 50,
+      x_indent: 4,
       can_indent: true,
       feedback_cb: false,
       first_error_only: true,
@@ -233,6 +235,7 @@ class ParsonsWidget {
     }
   }
   ////Public methods
+  
   // Parses an assignment definition given as a string and returns and
   // transforms this into an object defining the assignment with line objects.
   //
@@ -261,6 +264,7 @@ class ParsonsWidget {
     $.each(lines, function (index, item) {
       lineObject = new ParsonsCodeline(item, that);
       lineObject.orig = index;
+      lineObject.indent = 0;
       if (item.search(/#distractor\s*$/) >= 0) {
         // This line is a distractor
         lineObject.indent = -1;
@@ -297,7 +301,6 @@ class ParsonsWidget {
     });
 
     $.each(given, function (_index, item) {
-      console.log(item);
       widgetData.push(item);
     });
 
@@ -658,7 +661,7 @@ class ParsonsWidget {
     const line = this.getLineById(codelineID);
     $("#" + codelineID).css(
       "margin-left",
-      this.options.x_indent * line.indent + "px"
+      this.options.x_indent * line.indent + "ch"
     );
     this.updateVertLines();
   }
@@ -678,7 +681,7 @@ class ParsonsWidget {
     const backgroundColor = element.css("background-color");
     let backgroundPosition = "";
     for (let i = 1; i <= maxIndent + 1; i++) {
-      backgroundPosition += i * this.options.x_indent + "px 0, ";
+      backgroundPosition += i * this.options.x_indent + "ch 0, "; 
     }
     element.css({
       background:
@@ -700,7 +703,6 @@ class ParsonsWidget {
     let numBlanksThisLine = 0;
     while (codeline.code.search(/!BLANK/) >= 0) {
       let replaceText = "";
-      console.log(codeline.code);
       if (codeline.code.search(ParsonsWidget.blankRegexp) >= 0) {
         replaceText = codeline.code.match(ParsonsWidget.blankRegexp)[1].trim();
         codeline.code = codeline.code.replace(ParsonsWidget.blankRegexp, "");
@@ -772,7 +774,7 @@ class ParsonsWidget {
           return;
         }
         that.updateIndent(
-          ui.position.left - ui.item.parent().position().left,
+          (ui.position.left - ui.item.parent().position().left) / char_width_in_px,
           ui.item[0].id
         );
         that.updateHTMLIndent(ui.item[0].id);
