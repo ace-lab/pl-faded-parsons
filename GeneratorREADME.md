@@ -42,6 +42,13 @@ The tool `generate_fpp.py` will take well-formatted python files and turn them i
 
 The tool has the ability to generate testing content, but the PrairieLearn's python autograder will not be able to be run locally without following [these steps in the pl dev guide](https://prairielearn.readthedocs.io/en/latest/externalGrading/#running-locally-for-development) to initialize docker correctly.
 
+## Usage
+
+```
+$./generate_fpp.py <relative/path/to/source/file>
+```
+
+
 ## Formatting a Source File
 
 ### Usable Files
