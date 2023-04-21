@@ -95,7 +95,6 @@ class Parser:
         
         return scrambled, given
 
-
     def get_scrambled_and_given(self, language, indent_size=4, max_distractors=10):
 
         scrambled = []
@@ -105,15 +104,16 @@ class Parser:
         for segments in self.line_segments:
             new_line = { "language": language }
 
-            matches = re.findall(r'#blank (.*)', segments[-1])
-            tail = re.sub(r'#blank .*$', '', segments[-1])
+            matches = re.findall(r'#blank [^#]*', segments[-1])
+            tail = re.sub(r'#blank [^#]*', '', segments[-1])
             blank_count = len(segments) - 1
             fills = list(map(lambda e: e.replace('#blank ', ""), matches)) + [""] * (blank_count-len(matches))
             segments[-1] = tail
             
             parsed_segments = [{ "code" : { "content" : segments[0] } }]
             for segment, pre_fill in zip(segments[1:], fills):
-                parsed_segments.append({ "blank" : { "default" : pre_fill } })
+                width = str(len(pre_fill)+1) if pre_fill != "" else "4"
+                parsed_segments.append({ "blank" : { "default" : pre_fill, "width" : width } })
                 parsed_segments.append({ "code"  : { "content" : segment  } })
 
             matches = re.search(r'#([0-9]+)given', tail)
@@ -147,6 +147,7 @@ class Parser:
 
         return scrambled, given
 
+
 def base64_encode(s):
     return base64.b64encode(s.encode("ascii")).decode("ascii")
 
@@ -162,13 +163,8 @@ def render_question_panel(element_html, data):
 
     lang = pl.get_string_attrib(element, "language", None)
 
-    max_distractors = 2
-
     html_params = {
         "code_lines": str(element.text),
-        # format : {
-        #     "answers_name": answers_name,
-        # }
     }
 
     def get_child_text_by_tag(element, tag: str) -> str:
@@ -214,13 +210,21 @@ def render_question_panel(element_html, data):
     
     parse = Parser(raw_lines.strip())
 
-    starter_lines_data_available    = 'starter-lines' in data['submitted_answers'] and data['submitted_answers']['starter-lines'] != []
-    submission_lines_data_available = 'submission-lines' in data['submitted_answers'] and data['submitted_answers']['submission-lines'] != []
+    starter_lines_data_available    = 'starter-lines' in data['submitted_answers'] and \
+        data['submitted_answers']['starter-lines'] != []
+    submission_lines_data_available = 'submission-lines' in data['submitted_answers'] and \
+        data['submitted_answers']['submission-lines'] != []
 
-    if starter_lines_data_available and submission_lines_data_available:
-        scrambled_lines, given_lines = parse.old_state(lang, data['submitted_answers']['starter-lines'], data['submitted_answers']['submission-lines'])
+    if starter_lines_data_available or submission_lines_data_available:
+        start_lines = data['submitted_answers']['starter-lines'] if starter_lines_data_available else []
+        scrambled_lines, given_lines = parse.old_state(
+            lang, start_lines, data['submitted_answers']['submission-lines'] )
     else:
         scrambled_lines, given_lines = parse.get_scrambled_and_given(lang, indent_size=4)
+        if format in ("right", "bottom", ):
+            random.shuffle(scrambled_lines)
+        if format in ("no_code", ):
+            random.shuffle(given_lines)
 
     scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
     given     = { "lines" : given_lines    , "answers_name" : answers_name }
@@ -230,14 +234,11 @@ def render_question_panel(element_html, data):
             raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
                 'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
         size = "narrow"
-        random.shuffle(scrambled['lines'])
     elif format == "bottom":
         size = "wide"
-        random.shuffle(scrambled['lines'])
     elif format == "no_code":
         size = "wide"
         given["lines"] = given['lines'] + scrambled['lines']
-        random.shuffle(given['lines'])
     
     scrambled[size] = {"non_empty" : "non_empty"}
     given    [size] = {"non_empty" : "non_empty"}
@@ -306,7 +307,7 @@ def parse(element_html, data):
     submission_code = "\n".join([
         line.get("content", "")
         for line in submission_lines
-    ])
+    ]) + "\n" 
 
     data['submitted_answers']['student-parsons-solution'] = submission_code
     if format != "no_code":

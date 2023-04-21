@@ -143,6 +143,11 @@ class ParsonsWidget {
             });
         });
 
+        // when blanks are filled, adjust their width
+        $('input.text-box').on('input', function() {
+            $(this).width( this.value.length.toString() + 'ch');
+        });
+
         // Log the original codelines in the exercise in order to be able to
         // match the input/output hashes to the code later on. We need only a
         // few properties of the codeline objects
@@ -334,11 +339,6 @@ const ParsonsGlobal = {
       ParsonsGlobal.logger && ParsonsGlobal.logger.onSubmit();
     },
   
-    /* When blanks are filled in adjust their length */
-    adjustBlankWidth: function() {
-      $(this).width( this.value.length.toString() + 'ch');
-    },
-  
     /*
      * Initialize the widget.  Code that goes in left-hand box will be in
      * the hidden form field  named 'code-lines'.
@@ -358,8 +358,7 @@ const ParsonsGlobal = {
       });
 
       ParsonsGlobal.widget.updateVertLines();
-      // when blanks are filled, adjust their width
-      $('input.text-box').on('input', ParsonsGlobal.adjustBlankWidth);
+      
       // when form submitted, grab the student work and put it into hidden form fields
       $('form.question-form').submit(ParsonsGlobal.submitHandler);
   

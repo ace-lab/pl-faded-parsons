@@ -19,7 +19,7 @@
           `answers_name` data dereferenced elsewhere }}
 
     {{#scrambled}}
-    <div id="{{answers_name}}starter-code" class="col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} border px-1 sortable-code">
+    <div id="{{answers_name}}starter-code" class="col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} px-1 sortable-code">
         <ul id="ul-{{answers_name}}starter-code" class="ui-sortable">
             {{#lines}}
                 {{> pl-faded-parsons-code-line}}
@@ -33,7 +33,7 @@
     {{/pre_text}}
 
     {{#given}}
-    <div id="{{answers_name}}parsons-solution" class="col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} border px-1 sortable-code">
+    <div id="{{answers_name}}parsons-solution" class="col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}} sortable-code">
         <ul id="ul-{{answers_name}}parsons-solution" class="ui-sortable output">
             {{#lines}}
                 {{> pl-faded-parsons-code-line}}
