@@ -266,7 +266,7 @@ def render_submission_panel(element_html, data):
 def render_answer_panel(element_html, data):
     """Show the instructor's reference solution"""
     html_params = {
-        "solution_path": "tests/ans.py",
+        "solution_path": "solution",
     }
     with open('pl-faded-parsons-answer.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()

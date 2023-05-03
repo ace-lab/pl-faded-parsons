@@ -1,5 +1,5 @@
 # [The Faded Parsons Element](https://github.com/ace-lab/faded-parsons-element)
-This repository contains the Berkeley Faded Parson's element and is designed to be used as a submodule.
+This repository contains the Berkeley Faded Parson's element and is designed to be used as a submodule. Please see the [wiki for more information](https://github.com/ace-lab/faded-parsons-element/wiki)
 
 ## Adding to Your Projects
 
