@@ -91,7 +91,7 @@ class RubyAutograder(AutograderConfig):
             'gradingMethod': 'External',
             'externalGradingOptions': {
                 'enabled': True,
-                'image': 'nalsoon/ruby-autograder',
+                'image': 'saasbook/pl-fpp-ruby-autograder',
                 'entrypoint': '/grader/run.py',
                 'timeout': 30
             }
@@ -124,11 +124,12 @@ class RubyAutograder(AutograderConfig):
 
     def clean_tests_dir(self, test_dir: str) -> None:
         app_dir = path.join(path.dirname(f"{test_dir}/"), "app")
-        print("Installing gems locally")
+        print(f"Installing gems locally in `{app_dir}` with `{RUBY_SETUP_CMD}` ... ", end="")
         with popen(f"cd {app_dir} && " + RUBY_SETUP_CMD) as out:
+            out.read()
             # this print is here to join the thread that runs the command and 
             #   prevent the generator from exiting before gems are installed
-            print("", end="") 
+            print("Done") 
 
     def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
