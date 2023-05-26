@@ -284,9 +284,9 @@ def generate_fpp_question(
             Bcolors.warn('  - Skipping anonymous region!')
             continue
 
-        # if no file extension is given, give it .py
-        if not file_ext(raw_path):
-            raw_path += '.py'
+        # if no file extension is given, give it .py (removed due to Gemfile)
+        # if not file_ext(raw_path):
+        #     raw_path += '.py'
 
         # ensure that the directories exist before writing
         final_path = path.join(question_dir, raw_path)
@@ -295,6 +295,8 @@ def generate_fpp_question(
 
         # write files
         write_to(question_dir, raw_path, data)
+    
+    autograder.clean_tests_dir(test_dir)
 
     Bcolors.printf(Bcolors.OK_GREEN, 'Done.')
 

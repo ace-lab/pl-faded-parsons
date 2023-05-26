@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Union
 from json import loads, dumps
-from os import makedirs, path
+from os import makedirs, path, popen
 
 from lib.name_visitor import AnnotatedName, generate_server, SERVER_DEFAULT
 from lib.consts import TEST_DEFAULT
@@ -13,6 +13,7 @@ DEFAULT_GEMFILE = """source 'https://www.rubygems.org'
 gem 'rspec'
 gem 'json'
 """
+RUBY_SETUP_CMD = """bundle package"""
 
 class AutograderConfig(ABC):
 
@@ -23,6 +24,9 @@ class AutograderConfig(ABC):
     @abstractmethod
     def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str, pre_code: str='', post_code: str='', log_details: bool= True) -> None:
         pass
+
+    def clean_tests_dir(self, test_dir: str) -> None:
+        return 
 
     def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
@@ -87,7 +91,7 @@ class RubyAutograder(AutograderConfig):
             'gradingMethod': 'External',
             'externalGradingOptions': {
                 'enabled': True,
-                'image': 'nalsoon/ruby-autograder',
+                'image': 'saasbook/pl-fpp-ruby-autograder',
                 'entrypoint': '/grader/run.py',
                 'timeout': 30
             }
@@ -118,6 +122,16 @@ class RubyAutograder(AutograderConfig):
         write_to(test_dir, 'meta.json', metadata)
         write_to(test_dir, 'solution', answer_code)
 
+    def clean_tests_dir(self, test_dir: str) -> None:
+        app_dir = path.join(path.dirname(f"{test_dir}/"), "app")
+        print(f"Installing gems locally in `{app_dir}` with `{RUBY_SETUP_CMD}` ... ", end="")
+        with popen(f"cd {app_dir} && " + RUBY_SETUP_CMD) as out:
+            out.read()
+            # this print is here to join the thread that runs the command and 
+            #   prevent the generator from exiting before gems are installed
+            print("Done") 
+
     def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
         return super().generate_server(setup_code, answer_code, no_ast=no_ast, tab=tab)
+
