@@ -1,6 +1,4 @@
 
-// Array.from(document.getElementById("ul-parsons-solution").children).map((v, i) => Array.from(v.children).map((v, i) => v.tagName === "INPUT" ? v.value : v.innerText)).map((v, i) => v.join('')).join('\n')
-
 // fetch char_width_in_px
 let context = document.createElement("canvas").getContext("2d");
 context.font = "monospace";
