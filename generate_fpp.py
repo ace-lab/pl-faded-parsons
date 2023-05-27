@@ -178,10 +178,6 @@ def generate_fpp_question(
 
     source_path = resolve_path(source_path)
 
-    extension = file_ext(source_path)
-    ag = autograders.get(extension, PythonAutograder)
-    autograder: AutograderConfig = ag()
-
     if log_details:
         print('- Extracting from source...')
 
@@ -201,6 +197,15 @@ def generate_fpp_question(
 
     force_generate_json = metadata.get('forceGenerateJson', force_generate_json)
     no_parse = metadata.get('noParse', no_parse)
+
+    ag_extension = metadata.get("autograder", file_ext(source_path))
+    if ag_extension == "fpp":
+        raise Exception('Autograder not specified! Add the "autograder" field ' + \
+                        'to the metadata of the source file with the extension' + \
+                        ' of the autograder to use (e.g. "rb" for ruby)')
+
+    ag = autograders.get(ag_extension, PythonAutograder)
+    autograder: AutograderConfig = ag()
 
     question_name = file_name(source_path)
 
