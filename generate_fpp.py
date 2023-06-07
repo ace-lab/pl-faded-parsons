@@ -199,10 +199,11 @@ def generate_fpp_question(
     no_parse = metadata.get('noParse', no_parse)
 
     ag_extension = metadata.get("autograder", file_ext(source_path))
-    # if ag_extension == "fpp":
-    #     raise Exception('Autograder not specified! Add the "autograder" field ' + \
-    #                     'to the metadata of the source file with the extension' + \
-    #                     ' of the autograder to use (e.g. "rb" for ruby)')
+    if ag_extension[0] != '.': ag_extension = '.' + ag_extension
+    if ag_extension == "fpp":
+        Bcolors.warn('Autograder not specified! Add the "autograder" field ' + \
+                     'to the metadata of the source file with the extension' + \
+                     ' of the autograder to use (e.g. "rb" for ruby)')
     ag = autograders.get(ag_extension, PythonAutograder)
     autograder: AutograderConfig = ag()
 
