@@ -21,7 +21,7 @@ def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
             # non-None
             blank, = chunk.groups()
             if not blank:
-                # only possible with custom regexes.
+                # delimeter capture group is empty
                 raise SyntaxError(
                     'blankDelimiter Regex captured empty text at '
                         + format_ln(source_path, line_number))
