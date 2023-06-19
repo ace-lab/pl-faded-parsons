@@ -48,9 +48,9 @@ ul.output {
     background-color: #FFA;
 }
 .sortable-code li {
-    /* -moz-border-radius:10px;
-    -webkit-border-radius:10px; 
-    border-radius: 10px; */
+    -moz-border-radius:10px;
+    -webkit-border-radius:10px;
+    border-radius: 10px;
     background-color:#EFEFEF;
     border:1px solid lightgray;
     padding:2px;
