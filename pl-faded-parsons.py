@@ -217,17 +217,20 @@ def render_question_panel(element_html, data):
 
     if starter_lines_data_available or submission_lines_data_available:
         start_lines = data['submitted_answers']['starter-lines'] if starter_lines_data_available else []
-        scrambled_lines, given_lines = parse.old_state(
+        scrambled_lines, solution_lines = parse.old_state(
             lang, start_lines, data['submitted_answers']['submission-lines'] )
     else:
-        scrambled_lines, given_lines = parse.get_scrambled_and_given(lang, indent_size=4)
-        if format in ("right", "bottom", ):
+        source_lines, given_lines = parse.get_scrambled_and_given(lang, indent_size=4)
+        scrambled_lines = source_lines.copy()
+        solution_lines = given_lines.copy()
+
+        if format in ("right", "bottom", "no_code", ):
             random.shuffle(scrambled_lines)
         if format in ("no_code", ):
-            random.shuffle(given_lines)
+            random.shuffle(solution_lines)
 
     scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
-    given     = { "lines" : given_lines    , "answers_name" : answers_name }
+    given     = { "lines" : solution_lines , "answers_name" : answers_name }
 
     if format == "right":
         if pre_text or post_text:
