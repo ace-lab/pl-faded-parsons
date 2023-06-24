@@ -45,7 +45,7 @@ def register_autograder(extension: str = ''):
         return cls
     return add_autograder
 
-def new_autograder_by_ext(extension: str) -> AutograderConfig:
+def new_autograder_from_ext(extension: str) -> AutograderConfig:
     if extension not in autograders:
         if extension in ("fpp", ''):
             Bcolors.warn('Autograder not specified! Add the "autograder" field ' + \

@@ -11,7 +11,7 @@ from lib.io_helpers import *
 
 from lib.tokens import lex
 from lib.name_visitor import AnnotatedName
-from lib.autograde import AutograderConfig, new_autograder_by_ext
+from lib.autograde import AutograderConfig, new_autograder_from_ext
 from lib.parse import parse_fpp_regions
 
 @dataclass
@@ -141,7 +141,7 @@ def generate_fpp_question(
     metadata["autograder"] = metadata.get("autograder", file_ext(source_path))
     options.update(**metadata)
 
-    autograder: AutograderConfig = new_autograder_by_ext(options.ag_extension)
+    autograder: AutograderConfig = new_autograder_from_ext(options.ag_extension)
 
     question_name = file_name(source_path)
 
@@ -160,22 +160,23 @@ def generate_fpp_question(
         print('- Copying {} to {} ...'.format(path.basename(source_path), copy_dest_path))
     copyfile(source_path, copy_dest_path)
 
+    setup_code = remove_region('setup_code', SETUP_CODE_DEFAULT)
+    answer_code = remove_region('answer_code')
+    server_code = remove_region('server')
+    prompt_code = remove_region('prompt_code')
+    question_text = remove_region('question_text')
+    
     if options.write_log:
         print('- Populating {} ...'.format(question_dir))
 
-    setup_code = remove_region('setup_code', SETUP_CODE_DEFAULT)
-    answer_code = remove_region('answer_code')
 
-    server_code = remove_region('server')
+
     gen_server_code, setup_names, answer_names = autograder.generate_server(
         setup_code=setup_code,
         answer_code=answer_code,
         no_ast=(not options.do_parse)
     )
     server_code = server_code or gen_server_code
-
-    prompt_code = remove_region('prompt_code')
-    question_text = remove_region('question_text')
 
     question_html = generate_question_html(
         prompt_code,
