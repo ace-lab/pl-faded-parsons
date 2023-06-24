@@ -1,107 +1,53 @@
-from collections import defaultdict
-from enum import IntEnum
+
 from json import dumps
 from os import path, PathLike
-from re import match as test
 from shutil import copyfile
 from uuid import uuid4
+from dataclasses import dataclass
+from argparse import Namespace
 
 from lib.consts import *
 from lib.io_helpers import *
 
-from lib.tokens import Tokens, Token, TokenType, lex, regex_chunk_lines
+from lib.tokens import lex
 from lib.name_visitor import AnnotatedName
-from lib.autograde import AutograderConfig, autograders, PythonAutograder
+from lib.autograde import AutograderConfig, new_autograder_by_ext
+from lib.parse import parse_fpp_regions
 
-def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
-    itr = regex_chunk_lines(blank_re, tkn.text, line_number=tkn.lineno)
-    # (exclusive) end of the last match
-    for line_number, found, chunk in itr:
-        if found:
-            # non-None
-            blank, = chunk.groups()
-            if not blank:
-                # only possible with custom regexes.
-                raise SyntaxError(
-                    'blankDelimiter Regex captured empty text at '
-                        + format_ln(source_path, line_number))
+@dataclass
+class Options:
+    def __init__(self, cli_args: Namespace, metadata: Dict = {}):
+        self.force_generate_json = False
 
-            yield (blank, BLANK_SUBSTITUTE)
-        else:
-            yield (chunk, chunk)
+        self.cli_args = cli_args
+        self.profile = cli_args.profile
+        self.write_log = not cli_args.quiet
+        self.source_paths = cli_args.source_paths
 
+        self.metadata = metadata
+        self.do_parse = not metadata.get("no-parse", cli_args.no_parse)
+        self.ag_extension = metadata.get("autograder", '')
 
-def parse_fpp_regions(tokens: Tokens):
-    if 'blankDelimiter' in tokens.metadata:
-        blank_re = make_blank_re(tokens.metadata['blankDelimiter'])
-    else:
-        blank_re = DEFAULT_BLANK_PATTERN
+    def update(self, **metadata):
+        self.metadata.update(metadata)
+        self.do_parse = not metadata.get("no-parse", not self.do_parse)
+        self.ag_extension = metadata.get("autograder", self.ag_extension)
+        
+    def dump(self) -> str:
+        """Produce a json dump of this object"""
 
-    r_texts: dict[str, list[str]] = defaultdict(list)
-    answer, prompt = r_texts['answer_code'], r_texts['prompt_code']
-
-    class DocstringState(IntEnum):
-        Accepting = 0
-        FollowWithNewline = 1
-        Finished = 2
-        Skipped = 3
-
-    docstring_state = DocstringState.Accepting
-    for tkn in tokens.data:
-        if not tkn.text: continue
-
-        if tkn.region:
-            if tkn.region == 'question_text' and docstring_state == DocstringState.FollowWithNewline:
-                r_texts[tkn.region].append('\n')
-                docstring_state = DocstringState.Finished
-            r_texts[tkn.region].append(tkn.text)
-            continue
-
-        if tkn.type == TokenType.DOCSTRING:
-            if docstring_state == DocstringState.Accepting:
-                qs = r_texts['question_text']
-                if qs:
-                    qs.append('\n')
-                    docstring_state = DocstringState.Finished
-                else:
-                    docstring_state = DocstringState.FollowWithNewline
-                qs.append(tkn.text[3:-3])
-            else:
-                prompt.append(tkn.text)
-                answer.append(tkn.text)
-        elif tkn.type == TokenType.COMMENT:
-            target = prompt if test(SPECIAL_COMMENT_PATTERN, tkn.text) \
-                else answer
-            target.append(tkn.text)
-        elif tkn.type == TokenType.STRING:
-            prompt.append(tkn.text)
-            answer.append(tkn.text)
-        elif tkn.type == TokenType.UNMATCHED:
-            for ans, prmpt in parse_blanks(tokens.source_path, tkn, blank_re):
-                answer.append(ans)
-                prompt.append(prmpt)
-        else:
-            raise Exception("Unreachable! Inexhaustive token types: " + str(tkn.type))
-
-        docstring_state = docstring_state or DocstringState.Skipped
-
-    out = { 'metadata': tokens.metadata }
-    for k, region_list in r_texts.items():
-        ls = ''.join(region_list)
-        ls = map(str.rstrip, ls.splitlines())
-        if k == 'prompt_code':
-            ls = filter(bool, ls)
-        out[k] = '\n'.join(ls).strip()
-
-    return out
+        return dumps({
+            "autograder" : self.ag_extension,
+            "no-parse" : not self.do_parse,
+        })
 
 
 def generate_question_html(
     prompt_code: str, *,
     question_text: str = None,
     tab: str = '  ',
-    setup_names: list[AnnotatedName] = None,
-    answer_names: list[AnnotatedName] = None
+    setup_names: List[AnnotatedName] = None,
+    answer_names: List[AnnotatedName] = None
 ) -> str:
     """Turn an extracted prompt string into a question html file body"""
     indented = prompt_code.replace('\n', '\n' + tab)
@@ -167,9 +113,7 @@ def generate_info_json(question_name: str, autograder: AutograderConfig, *, inde
 
 def generate_fpp_question(
     source_path: PathLike[AnyStr], *,
-    force_generate_json: bool = False,
-    no_parse: bool = False,
-    log_details: bool = True,
+    options: Options = None,
 ):
     """ Takes a path of a well-formatted source (see `extract_prompt_ans`),
         then generates and populates a question directory of the same name.
@@ -178,7 +122,7 @@ def generate_fpp_question(
 
     source_path = resolve_path(source_path)
 
-    if log_details:
+    if options.write_log:
         print('- Extracting from source...')
 
     with open(source_path, 'r') as source:
@@ -194,18 +138,10 @@ def generate_fpp_question(
         return default
 
     metadata = remove_region('metadata')
+    metadata["autograder"] = metadata.get("autograder", file_ext(source_path))
+    options.update(**metadata)
 
-    force_generate_json = metadata.get('forceGenerateJson', force_generate_json)
-    no_parse = metadata.get('noParse', no_parse)
-
-    ag_extension = metadata.get("autograder", file_ext(source_path))
-    if ag_extension[0] != '.': ag_extension = '.' + ag_extension
-    if ag_extension == "fpp":
-        Bcolors.warn('Autograder not specified! Add the "autograder" field ' + \
-                     'to the metadata of the source file with the extension' + \
-                     ' of the autograder to use (e.g. "rb" for ruby)')
-    ag = autograders.get(ag_extension, PythonAutograder)
-    autograder: AutograderConfig = ag()
+    autograder: AutograderConfig = new_autograder_by_ext(options.ag_extension)
 
     question_name = file_name(source_path)
 
@@ -213,18 +149,18 @@ def generate_fpp_question(
     # sibling of the source file in the filesystem
     question_dir = path.join(path.dirname(source_path), question_name)
 
-    if log_details:
+    if options.write_log:
         print('- Creating destination directories...')
 
     test_dir = path.join(question_dir, 'tests')
     make_if_absent(test_dir)
 
     copy_dest_path = path.join(question_dir, 'source.py')
-    if log_details:
+    if options.write_log:
         print('- Copying {} to {} ...'.format(path.basename(source_path), copy_dest_path))
     copyfile(source_path, copy_dest_path)
 
-    if log_details:
+    if options.write_log:
         print('- Populating {} ...'.format(question_dir))
 
     setup_code = remove_region('setup_code', SETUP_CODE_DEFAULT)
@@ -234,7 +170,7 @@ def generate_fpp_question(
     gen_server_code, setup_names, answer_names = autograder.generate_server(
         setup_code=setup_code,
         answer_code=answer_code,
-        no_ast=no_parse
+        no_ast=(not options.do_parse)
     )
     server_code = server_code or gen_server_code
 
@@ -250,22 +186,22 @@ def generate_fpp_question(
     )
 
     write_to(question_dir, 'question.html', question_html)
-
+    write_to(question_dir, 'server.py', server_code)
     write_to(question_dir, 'solution', answer_code)
 
     json_path = path.join(question_dir, 'info.json')
     json_region = remove_region('info.json')
     missing_json = not path.exists(json_path)
-    if force_generate_json or json_region or missing_json:
+    if options.force_generate_json or json_region or missing_json:
         json_text = json_region or generate_info_json(question_name, autograder)
         write_to(question_dir, 'info.json', json_text)
         if not missing_json:
             Bcolors.warn('  - Overwriting', json_path,
                          'using \"info.json\" region...' if json_region else '...')
 
-    write_to(question_dir, 'server.py', server_code)
+    
 
-    if log_details:
+    if options.write_log:
         print('- Populating {} ...'.format(test_dir))
 
     test_region = remove_region('test')
@@ -275,11 +211,11 @@ def generate_fpp_question(
         answer_code,
         setup_code,
         test_region,
-        log_details = log_details
+        log_details= options.write_log
     )
 
     if metadata:
-        write_to(question_dir, 'metadata.json', dumps(metadata))
+        write_to(question_dir, 'metadata.json', options.dump())
 
     if regions:
         Bcolors.warn('- Writing unrecognized regions:')
@@ -311,12 +247,13 @@ def generate_many(args: Namespace):
         args.source_paths = auto_detect_sources()
 
     def generate_one(source_path, force_json=False):
+        options = Options(args)
+        options.force_generate_json = force_json
+
         try:
             generate_fpp_question(
                 source_path,
-                force_generate_json=force_json,
-                no_parse=args.no_parse,
-                log_details=not args.quiet
+                options=options
             )
             return True
         except SyntaxError as e:
