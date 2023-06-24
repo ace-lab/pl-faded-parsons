@@ -36,10 +36,25 @@ class AutograderConfig(ABC):
 autograders: Dict[str, AutograderConfig] = {}
 
 def register_autograder(extension: str = ''):
+    with_dot = ('' if extension[0] == '.' else '.') + extension
+    without_dot = extension[1:] if extension[0] == '.' else extension
+
     def add_autograder(cls: AutograderConfig) -> AutograderConfig:
-        autograders.update({ extension : cls })
+        autograders.update({ with_dot : cls,
+                             without_dot : cls })
         return cls
     return add_autograder
+
+def new_autograder_from_ext(extension: str) -> AutograderConfig:
+    if extension not in autograders:
+        if extension in ("fpp", ''):
+            Bcolors.warn('Autograder not specified! Add the "autograder" field ' + \
+                        'to the metadata of the source file with the extension' + \
+                        ' of the autograder to use (e.g. "rb" for ruby)')
+        else:
+            Bcolors.warn(f"Autograder for extension '{extension}' not found!")
+        print("- Defaulting to Python autograder")
+    return autograders.get(extension, PythonAutograder)()
 
 @register_autograder(extension='.py')
 class PythonAutograder(AutograderConfig):
