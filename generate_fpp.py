@@ -5,6 +5,7 @@ from shutil import copyfile
 from uuid import uuid4
 from dataclasses import dataclass
 from argparse import Namespace
+from re import compile, Pattern
 
 from lib.consts import *
 from lib.io_helpers import *
@@ -16,6 +17,18 @@ from lib.parse import parse_fpp_regions
 
 @dataclass
 class Options:
+    cli_args: Namespace
+    source_paths: list
+    
+    verbosity: int
+    profile: bool
+    do_parse: bool
+    make_dir: bool
+
+    blank_regex: Pattern = None
+    ag_extension: str = ''
+    out_path: str = ''
+
     def __init__(self, cli_args: Namespace, metadata: Dict = {}):
         self.force_generate_json = False
 
@@ -26,17 +39,15 @@ class Options:
 
         self.metadata: dict = metadata
         self.do_parse: bool = metadata.get("parse", cli_args.parse)
-        self.ag_extension: str = metadata.get("autograder", '')
         self.make_dir: bool = metadata.get("make-dir", cli_args.make_dir)
-
-        self.out_path: str = cli_args.output_path or metadata.get("output-path", '')
+        self.update(**metadata)
 
     def update(self, **metadata):
         self.metadata.update(metadata)
+        self.blank_regex: str = metadata.get("blankingRegex", self.blank_regex)
         self.do_parse: bool = metadata.get("parse", self.do_parse)
         self.ag_extension: str = metadata.get("autograder", self.ag_extension)
         self.make_dir: bool = metadata.get("make-dir", self.make_dir)
-
         self.out_path = self.cli_args.output_path or metadata.get("output-path", self.out_path)
         
     def dump(self) -> str:
@@ -135,7 +146,11 @@ def generate_fpp_question(
     with open(source_path, 'r') as source:
         source_code = ''.join(source)
         tokens = lex(source_code, source_path=source_path)
-        regions = parse_fpp_regions(tokens)
+        
+        tokens.metadata["autograder"] = tokens.metadata.get("autograder", file_ext(source_path))
+        options.update(**tokens.metadata)
+
+        regions = parse_fpp_regions(tokens, options)
 
     def remove_region(key, default=''):
         if key in regions:
@@ -143,10 +158,6 @@ def generate_fpp_question(
             del regions[key]
             return v
         return default
-
-    metadata = remove_region('metadata')
-    metadata["autograder"] = metadata.get("autograder", file_ext(source_path))
-    options.update(**metadata)
 
     autograder: AutograderConfig = new_autograder_from_ext(options.ag_extension)
 
@@ -231,8 +242,7 @@ def generate_fpp_question(
         log_details= options.verbosity > 0
     )
 
-    if metadata:
-        write_to(question_dir, 'metadata.json', options.dump())
+    write_to(question_dir, 'metadata.json', options.dump())
 
     if regions:
         Bcolors.warn('- Writing unrecognized regions:')

@@ -24,11 +24,13 @@ def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
         else:
             yield (chunk, chunk)
 
-def parse_fpp_regions(tokens: Tokens) -> Dict[str, str]:
+def parse_fpp_regions(tokens: Tokens, options) -> Dict[str, str]:
     """Transform a lexed collection of Tokens into a dictionary where
        keys are region names and values are data contained.
     """
-    if 'blankDelimiter' in tokens.metadata:
+    if options.blank_regex is not None:
+        blank_re = options.blank_regex
+    elif 'blankDelimiter' in tokens.metadata:
         blank_re = io.make_blank_re(tokens.metadata['blankDelimiter'])
     else:
         blank_re = DEFAULT_BLANK_PATTERN
@@ -81,7 +83,7 @@ def parse_fpp_regions(tokens: Tokens) -> Dict[str, str]:
 
         docstring_state = docstring_state or DocstringState.Skipped
 
-    out = { 'metadata': tokens.metadata }
+    out = { }
     for k, region_list in r_texts.items():
         ls = ''.join(region_list)
         ls = map(str.rstrip, ls.splitlines())
