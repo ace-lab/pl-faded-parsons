@@ -120,7 +120,7 @@ SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
     r'^#(blank[^#]*|\d+given)'
 )
 
-DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?(.*?)\?')
+DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?([^?\n]*)\?')
 BLANK_SUBSTITUTE: Final[str] = '!BLANK'
 
 REGION_IMPORT_PATTERN: Final[Pattern] = compile(
