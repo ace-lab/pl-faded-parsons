@@ -8,10 +8,16 @@ import lib.io_helpers as io
 
 
 def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
+    # print("IUAHSIDUAHSDIUAHSDIUHA")
+    # print(tkn.text)
+    # print("left")
+    print(blank_re.sub(BLANK_SUBSTITUTE, tkn.text), end='|')
+    # print("subbed")
     itr = regex_chunk_lines(blank_re, tkn.text, line_number=tkn.lineno)
     # (exclusive) end of the last match
     for line_number, found, chunk in itr:
         if found:
+            # print(f"Found chunk at line {line_number}: `{chunk}`")
             # non-None
             blank, = chunk.groups()
             if not blank:
@@ -22,7 +28,9 @@ def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
 
             yield (blank, BLANK_SUBSTITUTE)
         else:
+            # print(chunk, end='')
             yield (chunk, chunk)
+        # print(chunk, end='')
 
 def parse_fpp_regions(tokens: Tokens) -> Dict[str, str]:
     """Transform a lexed collection of Tokens into a dictionary where
@@ -50,6 +58,11 @@ def parse_fpp_regions(tokens: Tokens) -> Dict[str, str]:
             if tkn.region == 'question_text' and docstring_state == DocstringState.FollowWithNewline:
                 r_texts[tkn.region].append('\n')
                 docstring_state = DocstringState.Finished
+            elif tkn.region == 'prompt_code':
+                for ans, prmpt in parse_blanks(tokens.source_path, tkn, blank_re):
+                    answer.append(ans)
+                    prompt.append(prmpt)
+                continue
             r_texts[tkn.region].append(tkn.text)
             continue
 
