@@ -166,11 +166,7 @@ def generate_fpp_question(
     test_dir = path.join(question_dir, 'tests')
     
     if options.verbosity > 0: print('- Creating destination directories...')
-    # print(question_dir)
-    # print(q_dir)
-    # print(options.out_path)
-    # print(path.dirname(source_path))
-    # print(source_path)
+    
     make_if_absent(question_dir)
     make_if_absent(test_dir)
 
