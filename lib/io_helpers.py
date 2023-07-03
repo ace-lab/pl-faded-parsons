@@ -1,7 +1,7 @@
 from os.path import *
 from typing import *
 
-from argparse import Namespace, ArgumentParser, RawTextHelpFormatter
+from argparse import Namespace, ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from functools import partial
 from os import getcwd, listdir, makedirs, PathLike
 from re import compile
@@ -191,12 +191,18 @@ def parse_args(arg_text: str = None) -> Namespace:
 
     parser.add_argument('--profile', action='store_true',
                         help='prints profile data after running')
-    parser.add_argument('--quiet', action='store_true',
-                        help='restricts logging to warnings and errors only')
-    parser.add_argument('--no-parse', action='store_true',
-                        help='prevents the code from being parsed by py.ast to derive content')
-
-    parser.add_argument('source_path', action='append', nargs='*')
+    parser.add_argument('--verbose', '-v', action='count', default=1,
+                        help='specify the verbosity with which to run (max 3)')
+    parser.add_argument('--quiet', '-q', action='count', default=0,
+                        help='specify the reduction in verbosity with which to run (max 3)')
+    parser.add_argument('--parse', action=BooleanOptionalAction,
+                        help='parse the code with py.ast to derive content (also --no-parse)')
+    parser.add_argument('--make-dir', '--duplicate-directory', action=BooleanOptionalAction, default=True,
+                        help='create a directory with the name of the question in the output path')
+    parser.add_argument('--output-path', '-o', action='store', nargs='?', metavar='path',
+                        help='specify what directory to write the generated question to (see --duplicate-directory)\n' +\
+                             'default is next to the source path')
+    parser.add_argument('source_path', action='append', nargs='*', metavar='paths')
     parser.add_argument('--questions-dir', action='append', metavar='path',
                         help='target all .py files in directory as sources')
     parser.add_argument('--force-json', action='append', metavar='path',
@@ -208,6 +214,12 @@ def parse_args(arg_text: str = None) -> Namespace:
     # unpack weird nesting, delete confusing name
     ns.source_paths = [p for l in ns.source_path for p in l]
     del ns.source_path
+
+    # combine verbose-ness and quiet-ness and cut off into domain [-3, 3]
+    ns.verbosity = ns.verbose - ns.quiet
+    ns.verbosity = min(ns.verbosity, 3)
+    ns.verbosity = max(-3, ns.verbosity)
+    del ns.verbose
 
     if ns.questions_dir:
         for qd in ns.questions_dir:

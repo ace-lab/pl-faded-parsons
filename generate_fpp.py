@@ -19,26 +19,34 @@ class Options:
     def __init__(self, cli_args: Namespace, metadata: Dict = {}):
         self.force_generate_json = False
 
-        self.cli_args = cli_args
-        self.profile = cli_args.profile
-        self.write_log = not cli_args.quiet
-        self.source_paths = cli_args.source_paths
+        self.cli_args: Namespace = cli_args
+        self.profile: bool = cli_args.profile
+        self.source_paths: list = cli_args.source_paths
+        self.verbosity: int = cli_args.verbosity
 
-        self.metadata = metadata
-        self.do_parse = not metadata.get("no-parse", cli_args.no_parse)
-        self.ag_extension = metadata.get("autograder", '')
+        self.metadata: dict = metadata
+        self.do_parse: bool = metadata.get("parse", cli_args.parse)
+        self.ag_extension: str = metadata.get("autograder", '')
+        self.make_dir: bool = metadata.get("make-dir", cli_args.make_dir)
+
+        self.out_path: str = cli_args.output_path or metadata.get("output-path", '')
 
     def update(self, **metadata):
         self.metadata.update(metadata)
-        self.do_parse = not metadata.get("no-parse", not self.do_parse)
-        self.ag_extension = metadata.get("autograder", self.ag_extension)
+        self.do_parse: bool = metadata.get("parse", self.do_parse)
+        self.ag_extension: str = metadata.get("autograder", self.ag_extension)
+        self.make_dir: bool = metadata.get("make-dir", self.make_dir)
+
+        self.out_path = self.cli_args.output_path or metadata.get("output-path", self.out_path)
         
     def dump(self) -> str:
         """Produce a json dump of this object"""
 
         return dumps({
             "autograder" : self.ag_extension,
-            "no-parse" : not self.do_parse,
+            "parse" : self.do_parse,
+            "make-dir" : self.make_dir,
+            "output-path" : self.out_path
         })
 
 
@@ -118,13 +126,12 @@ def generate_fpp_question(
     """ Takes a path of a well-formatted source (see `extract_prompt_ans`),
         then generates and populates a question directory of the same name.
     """
-    Bcolors.info('Generating from source', source_path)
+
+    if options.verbosity > -1: Bcolors.info('Generating from source', source_path)
+
+    if options.verbosity > 0: print('- Extracting from source...')
 
     source_path = resolve_path(source_path)
-
-    if options.write_log:
-        print('- Extracting from source...')
-
     with open(source_path, 'r') as source:
         source_code = ''.join(source)
         tokens = lex(source_code, source_path=source_path)
@@ -143,20 +150,28 @@ def generate_fpp_question(
 
     autograder: AutograderConfig = new_autograder_from_ext(options.ag_extension)
 
+    if options.out_path == '':
+        dirname = path.dirname(source_path)
+        q_dir = './' if dirname == '' else dirname
+    else:
+        q_dir = options.out_path
+
     question_name = file_name(source_path)
-
-    # create all new content in a new folder that is a
-    # sibling of the source file in the filesystem
-    question_dir = path.join(path.dirname(source_path), question_name)
-
-    if options.write_log:
-        print('- Creating destination directories...')
-
+    if options.make_dir:
+        # create all new content in a new folder that is a
+        # sibling of the source file in the filesystem
+        question_dir = path.join(q_dir, question_name)
+    else:
+        question_dir = q_dir
     test_dir = path.join(question_dir, 'tests')
+    
+    if options.verbosity > 0: print('- Creating destination directories...')
+    
+    make_if_absent(question_dir)
     make_if_absent(test_dir)
 
     copy_dest_path = path.join(question_dir, 'source.py')
-    if options.write_log:
+    if options.verbosity > 0: 
         print('- Copying {} to {} ...'.format(path.basename(source_path), copy_dest_path))
     copyfile(source_path, copy_dest_path)
 
@@ -166,10 +181,7 @@ def generate_fpp_question(
     prompt_code = remove_region('prompt_code')
     question_text = remove_region('question_text')
     
-    if options.write_log:
-        print('- Populating {} ...'.format(question_dir))
-
-
+    if options.verbosity > 0: print('- Populating {} ...'.format(question_dir))
 
     gen_server_code, setup_names, answer_names = autograder.generate_server(
         setup_code=setup_code,
@@ -202,7 +214,7 @@ def generate_fpp_question(
 
     
 
-    if options.write_log:
+    if options.verbosity > 0:
         print('- Populating {} ...'.format(test_dir))
 
     test_region = remove_region('test')
@@ -212,7 +224,7 @@ def generate_fpp_question(
         answer_code,
         setup_code,
         test_region,
-        log_details= options.write_log
+        log_details= options.verbosity > 0
     )
 
     if metadata:
