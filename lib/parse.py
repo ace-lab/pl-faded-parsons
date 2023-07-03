@@ -8,6 +8,7 @@ import lib.io_helpers as io
 
 
 def parse_blanks(source_path: str, tkn: Token, blank_re: Pattern):
+
     itr = regex_chunk_lines(blank_re, tkn.text, line_number=tkn.lineno)
     # (exclusive) end of the last match
     for line_number, found, chunk in itr:
@@ -50,6 +51,11 @@ def parse_fpp_regions(tokens: Tokens) -> Dict[str, str]:
             if tkn.region == 'question_text' and docstring_state == DocstringState.FollowWithNewline:
                 r_texts[tkn.region].append('\n')
                 docstring_state = DocstringState.Finished
+            elif tkn.region == 'prompt_code':
+                for ans, prmpt in parse_blanks(tokens.source_path, tkn, blank_re):
+                    answer.append(ans)
+                    prompt.append(prmpt)
+                continue
             r_texts[tkn.region].append(tkn.text)
             continue
 
