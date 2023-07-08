@@ -13,7 +13,7 @@ DEFAULT_GEMFILE = """source 'https://www.rubygems.org'
 gem 'rspec'
 gem 'json'
 """
-RUBY_SETUP_CMD = """bundle package"""
+RUBY_SETUP_CMD = """rvm use 2.6.10 && bundle package"""
 
 class AutograderConfig(ABC):
 
