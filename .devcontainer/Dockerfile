@@ -11,3 +11,4 @@ RUN rm -rf /pl-ucb-csxxx/elements/pl-faded-parsons/
 
 # prep for autograder jobs scheduling
 RUN mkdir /tmp/pl_jobqueue
+RUN ln -s /workspaces/pl-faded-parsons/ /pl-ucb-csxxx/elements/pl-faded-parsons

@@ -2,9 +2,9 @@
     "name": "PL Faded Parsons DevContainer",
 	"build": { "dockerfile": "Dockerfile" },
 	"workspaceFolder": "/pl-ucb-csxxx",
-    // "initializeCommand": "",
-    "postCreateCommand" : "ln /workspaces/pl-faded-parsons/ /pl-ucb-csxxx/elements/pl-faded-parsons",
-    "postAttachCommand" : "export HOST_JOBS_DIR=/tmp/pl_jobqueue && sudo docker run -it --rm -p 3000:3000 -v $HOST_JOBS_DIR:/jobs -v /pl-ucb-csxxx/:/course -v /var/run/docker.sock:/var/run/docker.sock prairielearn/prairielearn:latest",
+    // Below commands don't work together yet (hard symlinks seem to break things -- as always). Maybe future work?
+    // "postCreateCommand" : "ln /workspaces/pl-faded-parsons/ /pl-ucb-csxxx/elements/pl-faded-parsons",
+    // "postAttachCommand" : "export HOST_JOBS_DIR=/tmp/pl_jobqueue && sudo docker run -it --rm -p 3000:3000 -v $HOST_JOBS_DIR:/jobs -v /pl-ucb-csxxx/:/course -v /var/run/docker.sock:/var/run/docker.sock prairielearn/prairielearn:latest",
     "features": {
         "ghcr.io/devcontainers/features/python:1": {},
         "ghcr.io/devcontainers/features/docker-in-docker:2": {}
