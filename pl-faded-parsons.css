@@ -148,3 +148,7 @@ li.correctPosition, .testcase.pass {
 .text-box:focus{
     outline:0;
 }
+
+code {
+    font-size: 100%;
+}
