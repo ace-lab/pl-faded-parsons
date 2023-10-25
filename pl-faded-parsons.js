@@ -14,12 +14,12 @@ class ParsonsCodeLine {
         if (elem.style !== null) {
           let raw_indent = parseInt(elem.style.marginLeft, 10);
           code_indent = raw_indent / widget.options.x_indent;
-        } 
+        }
 
         this.code_indent = isNaN(code_indent) ? 0 : code_indent;
     }
     elem () { return this.elem; }
-    asText () { 
+    asText () {
         let elemClone = $(this.elem).clone();
         elemClone.find("input").each(function (_, inp) {
             inp.replaceWith(inp.value);
@@ -56,7 +56,7 @@ class ParsonsWidget {
             can_indent: true,
             onSortableUpdate: (_event, _ui) => {},
             onBlankUpdate: (_event, _codeline) => {},
-            
+
             // TODO: reimplement support (tagged with TODO:FB)
             incorrectSound: false,
             feedback_cb: false,
@@ -84,22 +84,22 @@ class ParsonsWidget {
                 if ($(event.target)[0] != ui.item.parent()[0]) {
                     return;
                 }
-                
+
                 if (that.options.can_indent) {
                     that.updateIndent(
                         that.calculateCodeIndent(
-                            ui.position.left - ui.item.parent().position().left, 
-                            ui.item[0] ), 
+                            ui.position.left - ui.item.parent().position().left,
+                            ui.item[0] ),
                         ui.item[0] );
                 }
-                
+
                 that.addLogEntry({ type: "moveOutput", target: ui.item[0].id }, true);
             },
             receive: function (_event, ui) {
                 that.updateIndent(
                     that.calculateCodeIndent(
                         ui.position.left - ui.item.parent().position().left, // TODO: check if this left distance calc is correct
-                        ui.item[0] ), 
+                        ui.item[0] ),
                     ui.item[0] );
 
                 that.addLogEntry({ type: "addOutput", target: ui.item[0].id }, true);
@@ -123,9 +123,9 @@ class ParsonsWidget {
                         true
                     );
                 },
-                stop: function (event, ui) { 
-                    if ($(event.target)[0] != ui.item.parent()[0]) { 
-                        // line moved to output and logged there 
+                stop: function (event, ui) {
+                    if ($(event.target)[0] != ui.item.parent()[0]) {
+                        // line moved to output and logged there
                         return;
                     }
                     that.addLogEntry({ type: "moveInput", target: ui.item[0].id }, true);
@@ -143,7 +143,11 @@ class ParsonsWidget {
 
         // when blanks are filled, adjust their width
         $('input.text-box').on('input', function() {
-            $(this).width( this.value.length.toString() + 'ch');
+            that.autoSizeInput(this);
+        });
+        // auto-size on load/ready
+        $('input.text-box').each(function () {
+            that.autoSizeInput(this);
         });
 
         // Log the original codelines in the exercise in order to be able to
@@ -153,17 +157,17 @@ class ParsonsWidget {
         const bindings = this.modified_lines
             .map(line => { return { code: line.code, distractor: line.distractor }; }); // * /
         this.addLogEntry({ type: "init", time: new Date(), bindings: bindings }); // */
-        
+
         /* TODO:FB
             /////////////////
-            this.feedback_exists = false; 
-            this.FEEDBACK_STYLES = { 
+            this.feedback_exists = false;
+            this.FEEDBACK_STYLES = {
                 correctPosition: "correctPosition",
                 incorrectPosition: "incorrectPosition",
                 correctIndent: "correctIndent",
                 incorrectIndent: "incorrectIndent",
             };
-            
+
             // use grader passed as an option if defined and is a function
             if (this.options.grader && _.isFunction(this.options.grader)) {
                 this.grader = new this.options.grader(this);
@@ -172,6 +176,9 @@ class ParsonsWidget {
             }
         // */
 
+    }
+    autoSizeInput(el) {
+        $(el).width( el.value.length.toString() + 'ch');
     }
     getSourceLines() {
         let source_tray = document.getElementById("ul-" + this.options.source_tray);
@@ -191,19 +198,19 @@ class ParsonsWidget {
         let dist = dist_in_px / char_width_in_px;
         let old_code_indent = (new ParsonsCodeLine(elem, this)).code_indent;
         let new_code_indent = old_code_indent + Math.floor(dist / this.options.x_indent);
-         
+
         return Math.max(0, new_code_indent);
     }
     solutionCode() {
         const solution_lines = this.getSolutionLines();
-        
+
         let solutionCode = ""
         let codeMetadata = "";
         let blankText = "";
         let originalLine = "";
         for (const line of solution_lines) {
             const yamlConfigClone = $(line.elem).clone();
-            
+
             blankText = "";
             yamlConfigClone.find("input").each(function (_, inp) {
                 inp.replaceWith("!BLANK");
@@ -228,7 +235,7 @@ class ParsonsWidget {
     updateIndent(new_code_indent, elem) {
         let line = new ParsonsCodeLine(elem, this);
         let old_code_indent = line.code_indent;
-        
+
         if (old_code_indent !== new_code_indent) {
             this.options.onSortableUpdate(
                 {
@@ -264,17 +271,17 @@ class ParsonsWidget {
         const backgroundColor = element.css("background-color");
         let backgroundPosition = "";
         for (let i = 1; i <= max_code_indent + 1; i++) {
-            backgroundPosition += i * this.options.x_indent + "ch 0, "; 
+            backgroundPosition += i * this.options.x_indent + "ch 0, ";
         }
         element.css({
         background:
             "linear-gradient(#ee0, #ee0) no-repeat border-box, "
                 .repeat(max_code_indent)
-                .slice(0) 
-                + "repeating-linear-gradient(0,#ee0,#ee0 10px," 
-                + backgroundColor 
-                + " 10px, " 
-                + backgroundColor 
+                .slice(0)
+                + "repeating-linear-gradient(0,#ee0,#ee0 10px,"
+                + backgroundColor
+                + " 10px, "
+                + backgroundColor
                 + " 20px) no-repeat border-box",
             "background-size": "1px 100%, ".repeat(max_code_indent + 1).slice(0, -2),
             "background-position": backgroundPosition.slice(0, -2),
@@ -288,7 +295,7 @@ class ParsonsWidget {
     // trashHash() {}
     addLogEntry() {}
     // getLineById() {}
-    // normalizeIndents() {} 
+    // normalizeIndents() {}
     // getModifiedCode() {}
     // hashToIDList() {}
     // updateIndentsFromHash() {}
@@ -323,20 +330,20 @@ const ParsonsGlobal = {
           starterElements.push({ content: line.asText(), indent: line.code_indent, index: idx, segments: line.asSegments() });
       });
       $('#starter-code-order').val(JSON.stringify(starterElements));
-      
+
       var solutionCode = ParsonsGlobal.widget.getSolutionLines();
       const solutionElements = [];
       solutionCode.forEach(function(line, idx) {
           solutionElements.push({content: line.asText(), indent: line.code_indent, index: idx, segments: line.asSegments() });
       });
       $('#parsons-solution-order').val(JSON.stringify(solutionElements));
-      
+
       let out = ParsonsGlobal.widget.solutionCode();
       $('#student-parsons-solution').val(out[0]);
-  
+
       ParsonsGlobal.logger && ParsonsGlobal.logger.onSubmit();
     },
-  
+
     /*
      * Initialize the widget.  Code that goes in left-hand box will be in
      * the hidden form field  named 'code-lines'.
@@ -344,7 +351,7 @@ const ParsonsGlobal = {
      */
     setup: function() {
       ParsonsGlobal.widget = new ParsonsWidget({
-        'solution_tray': 'parsons-solution', //  This should be changeable from question.html 
+        'solution_tray': 'parsons-solution', //  This should be changeable from question.html
                                           //  in the case of multiple FPPs in one question
         'onSortableUpdate': (event, ui) => {
           ParsonsGlobal.logger && ParsonsGlobal.logger.onSortableUpdate(event, ui);
@@ -356,15 +363,15 @@ const ParsonsGlobal = {
       });
 
       ParsonsGlobal.widget.updateVertLines();
-      
+
       // when form submitted, grab the student work and put it into hidden form fields
       $('form.question-form').submit(ParsonsGlobal.submitHandler);
-  
+
       if (ParsonsGlobal.makeLogger && (typeof ParsonsLogger !== 'undefined') && !ParsonsGlobal.logger) {
         ParsonsGlobal.logger = new ParsonsLogger(ParsonsGlobal.widget);
       }
-      
+
     }
   }
-  
+
 $(document).ready(ParsonsGlobal.setup);
