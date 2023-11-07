@@ -22,6 +22,11 @@ From the top-level of your directory run:
 git submodule update --remote ./elements/pl-faded-parsons/
 ```
 
+## The RSpec Autograder
+
+If your Parsons problems test students' ability to write unit tests in RSpec, 
+we have developed an autograder companion to this tool ![which can be found here](https://hub.docker.com/r/saasbook/pl-fpp-ruby-autograder).
+
 ## Work around `pl-faded-parsons`
 [Nathaniel Weinman, Armando Fox, and Marti A. Hearst. 2021. Improving Instruction of Programming Patterns with Faded Parsons Problems. In Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems (CHI '21). Association for Computing Machinery, New York, NY, USA, Article 53, 1–4. https://doi.org/10.1145/3411764.3445228](https://dl.acm.org/doi/10.1145/3411764.3445228)
 
