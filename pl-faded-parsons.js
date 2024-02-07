@@ -48,6 +48,9 @@ class ParsonsWidget {
       config,
     );
 
+    /** When true, navigating to a codeline with arrow keys enters its first blank */
+    this.autoEnterBlank = true;
+
     const requiredFields =
       "uuid solution solutionList main toolbar starterOrderStorage solutionOrderStorage solutionSubmissionStorage";
     const missing = requiredFields
@@ -191,9 +194,12 @@ class ParsonsWidget {
               if (e.altKey) {
                 child.insertAfter(codeline);
               } else {
-                child.focus();
+                // focus on first blank if present
+                const blank = child.find("input.parsons-blank").first();
+                (widget.autoEnterBlank && blank.length ? blank : child).focus();
               }
             }
+            e.preventDefault();
             return true;
           }
           if (e.key.endsWith("Down")) {
@@ -205,9 +211,12 @@ class ParsonsWidget {
               if (e.altKey) {
                 child.insertBefore(codeline);
               } else {
-                child.focus();
+                // focus on first blank if present
+                const blank = child.find("input.parsons-blank").first();
+                (widget.autoEnterBlank && blank.length ? blank : child).focus();
               }
             }
+            e.preventDefault();
             return true;
           }
           return false;
@@ -254,6 +263,7 @@ class ParsonsWidget {
           },
           click: function () {
             $(codeline).focus();
+            widget.autoEnterBlank = false;
           },
           keyup: function (e) {
             if (!e.altKey) {
@@ -284,22 +294,23 @@ class ParsonsWidget {
             }
             // (Alt/Option)+Arrow to Reorder Lines, Arrow to Navigate
             if (e.key.startsWith("Arrow")) {
-              if (!handleVerticalArrowKeys(e)) {
-                e.preventDefault();
-                navigateBetweenTrays(e.altKey, e.key.endsWith("Right"));
-              }
+              if (handleVerticalArrowKeys(e)) return;
+              e.preventDefault();
+              navigateBetweenTrays(e.altKey, e.key.endsWith("Right"));
               return;
             }
             // Enter to refocus on the blanks
             if (e.key === "Enter") {
               e.preventDefault();
               $(codeline).children("input").first().focus();
+              widget.autoEnterBlank = true;
               return;
             }
             // Escape removes focus
             if (e.key === "Escape") {
               e.preventDefault();
               $(codeline).blur();
+              widget.autoEnterBlank = false;
               return;
             }
           },
@@ -308,95 +319,101 @@ class ParsonsWidget {
         /// setup callbacks for the codeline's blanks //////////
         const inputs = $(codeline).find("input.parsons-blank");
         const n = inputs.length;
+        // immediately resize blanks to fit content
         inputs.each((_, input) => widget.autoSizeInput(input));
-        inputs.each(
-          (
-            i,
-            input, // note: because blanks are static, i is always the correct index into inputs.
-          ) =>
-            $(input).on({
-              focus: () => $(codeline).addClass("codeline-highlight"),
-              blur: () => $(codeline).removeClass("codeline-highlight"),
-              click: (e) => {
-                $(input).focus();
-                e.stopPropagation();
-              },
-              input: (e) => {
-                widget.autoSizeInput(input);
-                widget.config.onBlankUpdate(e, input);
-              },
-              keydown: (e) => {
-                // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
-                // otherwise advance/retreat blanks on the line
-                if (e.key === "Tab") {
-                  const [boundary, delta] = e.shiftKey ? [0, -1] : [n - 1, +1];
-                  if (
-                    ParsonsGlobal.uiConfig.alwaysIndentOnTab ||
-                    i == boundary
-                  ) {
-                    e.preventDefault();
-                    widget.updateIndent(delta, codeline, false);
-                  }
+        // note: because blanks are static, i is always the correct index into inputs.
+        inputs.each((i, input) =>
+          $(input).on({
+            focus: () => $(codeline).addClass("codeline-highlight"),
+            blur: () => $(codeline).removeClass("codeline-highlight"),
+            click: (e) => {
+              $(input).focus();
+              e.stopPropagation();
+              widget.autoEnterBlank = true;
+            },
+            input: (e) => {
+              widget.autoSizeInput(input);
+              widget.config.onBlankUpdate(e, input);
+              widget.autoEnterBlank = true;
+            },
+            keydown: (e) => {
+              // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
+              // otherwise advance/retreat blanks on the line
+              if (e.key === "Tab") {
+                const [boundary, delta] = e.shiftKey ? [0, -1] : [n - 1, +1];
+                if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || i == boundary) {
+                  e.preventDefault();
+                  widget.updateIndent(delta, codeline, false);
+                }
+                return;
+              }
+              // (Alt/Option)+Arrow to Reorder Lines
+              // Arrow Up/Down to Navigate Lines
+              // Arrow Right/Left to move cursor (including between input boxes)
+              if (e.key.startsWith("Arrow")) {
+                if (handleVerticalArrowKeys(e)) return;
+                if (e.altKey) {
+                  e.preventDefault();
+                  navigateBetweenTrays(true, e.key.endsWith("Right"));
                   return;
                 }
-                // (Alt/Option)+Arrow to Reorder Lines
-                // Arrow Up/Down to Navigate Lines
-                // Arrow Right/Left to move cursor (including between input boxes)
-                if (e.key.startsWith("Arrow")) {
-                  if (!handleVerticalArrowKeys(e)) {
-                    const cursorPosition = input.selectionStart;
-                    if (input.selectionEnd == cursorPosition) {
-                      if (
-                        e.key.endsWith("Left") &&
-                        cursorPosition == 0 &&
-                        i != 0
-                      ) {
-                        e.preventDefault();
-                        inputs
-                          .eq(i - 1)
-                          .focus()
-                          .each((_j, inp) => {
-                            inp.setSelectionRange(
-                              inp.value.length,
-                              inp.value.length,
-                            );
-                          });
-                      }
-                      if (
-                        e.key.endsWith("Right") &&
-                        cursorPosition == input.value.length &&
-                        i != n - 1
-                      ) {
-                        e.preventDefault();
-                        inputs
-                          .eq(i + 1)
-                          .focus()
-                          .each((_j, inp) => {
-                            inp.setSelectionRange(0, 0);
-                          });
-                      }
+                const cursorPosition = input.selectionStart;
+                if (input.selectionEnd == cursorPosition) {
+                  if (e.key.endsWith("Left") && cursorPosition == 0) {
+                    e.preventDefault();
+                    if (i == 0) {
+                      navigateBetweenTrays(false, false);
+                    } else {
+                      inputs
+                        .eq(i - 1)
+                        .focus()
+                        .each((_j, inp) => {
+                          inp.setSelectionRange(
+                            inp.value.length,
+                            inp.value.length,
+                          );
+                        });
                     }
                   }
-                  return;
+                  if (
+                    e.key.endsWith("Right") &&
+                    cursorPosition == input.value.length
+                  ) {
+                    e.preventDefault();
+                    if (i == n - 1) {
+                      navigateBetweenTrays(false, true);
+                    } else {
+                      inputs
+                        .eq(i + 1)
+                        .focus()
+                        .each((_j, inp) => {
+                          inp.setSelectionRange(0, 0);
+                        });
+                    }
+                  }
                 }
-                // Escape to loose focus on the blank
-                if (e.key === "Escape") {
-                  $(codeline).focus();
-                  e.stopPropagation();
-                  return;
-                }
-                // Enter/Shift+Enter to advance/retreat blanks
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  const delta = e.shiftKey ? -1 : +1;
-                  const allInputs = $(codeline.parentElement).find("input");
-                  const m = allInputs.length;
-                  const nextIndex = (allInputs.index(input) + m + delta) % m;
-                  allInputs.eq(nextIndex).focus();
-                  return;
-                }
-              },
-            }),
+                return;
+              }
+              // Escape to loose focus on the blank
+              if (e.key === "Escape") {
+                $(codeline).focus();
+                e.stopPropagation();
+                widget.autoEnterBlank = false;
+                return;
+              }
+              // Enter/Shift+Enter to advance/retreat blanks
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const delta = e.shiftKey ? -1 : +1;
+                const allInputs = $(codeline.parentElement).find("input");
+                const m = allInputs.length;
+                const nextIndex = (allInputs.index(input) + m + delta) % m;
+                allInputs.eq(nextIndex).focus();
+                widget.autoEnterBlank = true;
+                return;
+              }
+            },
+          }),
         );
       });
   }
@@ -545,12 +562,11 @@ class ParsonsWidget {
   }
   /** Redraws the tab stops in the solution box if this.config.canIndent */
   redrawTabStops() {
-    if (!this.config.canIndent) return;
+    if (!this.config.canIndent || !ParsonsGlobal.uiConfig.showTabStops) return;
 
-    let max_code_indent = 0;
-    this.getSolutionLines().forEach(function (line) {
-      max_code_indent = Math.max(max_code_indent, line.code_indent);
-    });
+    const max_code_indent = this.getSolutionLines()
+      .map((line) => this.getCodelineIndent(line))
+      .reduce((x, y) => Math.max(x, y), 0);
     const [backgroundColor, tabStopColor] = [
       "var(--code-background)",
       "var(--pln-txt-color-faded)",
@@ -680,6 +696,8 @@ window.ParsonsGlobal = window.ParsonsGlobal || {
     alwaysIndentOnTab: true,
     /** Toggles the indicator for the next unused tab stop */
     showNextTabStop: false,
+    /** Toggles displaying tab stop altogether */
+    showTabStops: false,
   },
   charWidthInPx: (function () {
     const context = document.createElement("canvas").getContext("2d");
