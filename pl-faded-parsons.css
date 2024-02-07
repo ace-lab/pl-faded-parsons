@@ -32,6 +32,16 @@
   position: static;
   float: left;
 }
+.codeline-tray.starter-code-tray {
+  /* background: repeating-linear-gradient(
+    45deg,
+    #aaa4,
+    #aaa4 80px,
+    #4444 80px,
+    #4444 100px
+  ); */
+  background: #4448;
+}
 .codeline-tray ul {
   font-size: smaller;
   font-family: monospace;
