@@ -51,12 +51,19 @@ class ParsonsWidget {
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     this.autoEnterBlank = true;
 
-    const requiredFields =
-      "uuid solution solutionList main toolbar starterOrderStorage solutionOrderStorage solutionSubmissionStorage";
-    const missing = requiredFields
-      .split(" ")
+    const missing = [
+      "uuid",
+      "solution",
+      "solutionList",
+      "main",
+      "toolbar",
+      "starterOrderStorage",
+      "solutionOrderStorage",
+      "solutionSubmissionStorage",
+    ]
       .filter((f) => this.config[f] == null)
       .join(", ");
+
     if (missing)
       throw new Error(
         `ParsonsWidget config requires field(s) ${missing} to be non-null`,
