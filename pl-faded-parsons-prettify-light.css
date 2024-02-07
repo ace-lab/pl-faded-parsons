@@ -33,7 +33,7 @@ li.L7,
 li.L8,
 li.L9 {
   padding-left: 1em;
-  background-color: #f5f7ff;
+  background-color: var(--code-background);
   list-style-type: decimal;
 }
 
