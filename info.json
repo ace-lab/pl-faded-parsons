@@ -1,17 +1,15 @@
 {
   "controller": "pl-faded-parsons.py",
   "dependencies": {
-    "elementScripts": [
-      "jquery-ui.js",
-      "jquery.ui.touch-punch.min.js",
-      "prettify.js",
-      "underscore-min.js",
-      "lis.js",
-      "pl-faded-parsons.js"
+    "nodeModulesScripts": [
+      "jquery-ui-dist/jquery-ui.min.js",
+      "jquery-ui-touch-punch/jquery.ui.touch-punch.min.js"
     ],
+    "elementScripts": ["prettify.js", "pl-faded-parsons.js"],
     "elementStyles": [
       "pl-faded-parsons.css",
-      "pl-faded-parsons-prettify.css"
+      "pl-faded-parsons-prettify-light.css",
+      "pl-faded-parsons-prettify-dark.css"
     ]
   }
 }
