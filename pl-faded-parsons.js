@@ -158,7 +158,7 @@ class ParsonsWidget {
           widget.clearFeedback();
         },
         receive: function (_event, ui) {
-          widget.updateIndent(0, ui.item[0].id);
+          widget.updateIndent(0, ui.item[0]);
           widget.addLogEntry(
             { type: "removeOutput", target: ui.item[0].id },
             true,
@@ -203,7 +203,7 @@ class ParsonsWidget {
               } else {
                 // focus on first blank if present
                 const blank = child.find("input.parsons-blank").first();
-                (widget.autoEnterBlank && blank.length ? blank : child).focus();
+                if (widget.autoEnterBlank) blank.or(child).focus();
               }
             }
             e.preventDefault();
@@ -220,7 +220,7 @@ class ParsonsWidget {
               } else {
                 // focus on first blank if present
                 const blank = child.find("input.parsons-blank").first();
-                (widget.autoEnterBlank && blank.length ? blank : child).focus();
+                if (widget.autoEnterBlank) blank.or(child).focus();
               }
             }
             e.preventDefault();
@@ -234,7 +234,7 @@ class ParsonsWidget {
           const topPx = codeline.getBoundingClientRect().top;
           const codeboxIdx = codeboxes
             .toArray()
-            .findIndex((c) => $(c).has(codeline).length);
+            .findIndex((c) => $(c).has(codeline).exists());
           const k =
             (codeboxIdx + (rightward ? +1 : codeboxes.length - 1)) %
             codeboxes.length;
@@ -244,17 +244,14 @@ class ParsonsWidget {
             .filter((_, e) => e.getBoundingClientRect().bottom > topPx)
             .first();
           if (moveCodelineNotCursor) {
-            if (parallelTarget.length) {
+            if (parallelTarget.exists()) {
               $(codeline).insertBefore(parallelTarget);
             } else {
               $(newTray).append(codeline);
             }
             $(codeline).focus();
           } else {
-            const newFocus = parallelTarget.length
-              ? parallelTarget
-              : newTray.children().last();
-            newFocus.focus();
+            parallelTarget.or(newTray.children().last()).focus();
           }
         };
 
@@ -325,7 +322,7 @@ class ParsonsWidget {
 
         /// setup callbacks for the codeline's blanks //////////
         const inputs = $(codeline).find("input.parsons-blank");
-        const n = inputs.length;
+        const nInputs = inputs.length;
         // immediately resize blanks to fit content
         inputs.each((_, input) => widget.autoSizeInput(input));
         // note: because blanks are static, i is always the correct index into inputs.
@@ -347,7 +344,9 @@ class ParsonsWidget {
               // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
               // otherwise advance/retreat blanks on the line
               if (e.key === "Tab") {
-                const [boundary, delta] = e.shiftKey ? [0, -1] : [n - 1, +1];
+                const [boundary, delta] = e.shiftKey
+                  ? [0, -1]
+                  : [nInputs - 1, +1];
                 if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || i == boundary) {
                   e.preventDefault();
                   widget.updateIndent(delta, codeline, false);
@@ -374,12 +373,12 @@ class ParsonsWidget {
                       inputs
                         .eq(i - 1)
                         .focus()
-                        .each((_j, inp) => {
+                        .each((_, inp) =>
                           inp.setSelectionRange(
                             inp.value.length,
                             inp.value.length,
-                          );
-                        });
+                          ),
+                        );
                     }
                   }
                   if (
@@ -387,15 +386,13 @@ class ParsonsWidget {
                     cursorPosition == input.value.length
                   ) {
                     e.preventDefault();
-                    if (i == n - 1) {
+                    if (i == nInputs - 1) {
                       navigateBetweenTrays(false, true);
                     } else {
                       inputs
                         .eq(i + 1)
                         .focus()
-                        .each((_j, inp) => {
-                          inp.setSelectionRange(0, 0);
-                        });
+                        .each((_, inp) => inp.setSelectionRange(0, 0));
                     }
                   }
                 }
@@ -604,20 +601,28 @@ class ParsonsWidget {
     const starterElements = this.getSourceLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    const $$ = (selector) => {
+    const $orAlert = (selector) => {
       const s = $(selector);
-      if (!s.length)
-        alert("Could not save student data!\nStorage missing at: " + selector);
+      if (!s.length) {
+        const msg =
+          "Could not save student data!\nStorage missing at: " + selector;
+        console.error(msg);
+        alert(msg);
+      }
       return s;
     };
-    $$(this.config.starterOrderStorage).val(JSON.stringify(starterElements));
+    $orAlert(this.config.starterOrderStorage).val(
+      JSON.stringify(starterElements),
+    );
 
     const solutionElements = this.getSolutionLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    $$(this.config.solutionOrderStorage).val(JSON.stringify(solutionElements));
+    $orAlert(this.config.solutionOrderStorage).val(
+      JSON.stringify(solutionElements),
+    );
 
-    $$(this.config.solutionSubmissionStorage).val(
+    $orAlert(this.config.solutionSubmissionStorage).val(
       this.getSolutionCode().solution,
     );
   }
@@ -706,6 +711,21 @@ window.ParsonsGlobal = window.ParsonsGlobal || {
     /** Toggles displaying tab stop altogether */
     showTabStops: false,
   },
+  /** The custom methods that are added to jQuery results */
+  jqueryExtension: (function ($) {
+    const extension = {
+      /** True if the query has results */
+      exists: function () {
+        return this.length !== 0;
+      },
+      /** If the query is empty, return alt, otherwise return this */
+      or: function (alt) {
+        return this.exists() ? this : alt;
+      },
+    };
+    $.fn.extend(extension);
+    return extension;
+  })(jQuery),
   charWidthInPx: (function () {
     const context = document.createElement("canvas").getContext("2d");
     context.font = "monospace";
