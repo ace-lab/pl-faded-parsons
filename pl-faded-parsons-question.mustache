@@ -1,3 +1,6 @@
+
+<div id="pl-faded-parsons-aria-descriptor-{{uuid}}" class="aria-descriptor soft-border"></div>
+
 {{! the boxes for starter code and solution area}}
 
 {{! if not vertical (horizontal), keep half size boxes }}
@@ -57,17 +60,19 @@
         ParsonsGlobal.widgets.push(
             new ParsonsWidget({
                 main: '#pl-faded-parsons-{{uuid}}',
+                uuid: '{{uuid}}',
+
+                ariaDescriptor: "#pl-faded-parsons-aria-descriptor-{{uuid}}",
+                solution: '#solution-{{uuid}}',
+                solutionList: '#ul-solution-{{uuid}}',
+                solutionOrderStorage: "#pl-faded-parsons-{{uuid}} > input.solution-tray-order",
+                solutionSubmissionStorage: "#pl-faded-parsons-{{uuid}} > input.student-parsons-solution",
                 {{#scrambled}}
                 starter: '#starter-code-{{uuid}}',
                 starterList: '#ul-starter-code-{{uuid}}',
                 {{/scrambled}}
-                solution: '#solution-{{uuid}}',
-                solutionList: '#ul-solution-{{uuid}}',
                 starterOrderStorage: "#pl-faded-parsons-{{uuid}} > input.starter-tray-order",
-                solutionOrderStorage: "#pl-faded-parsons-{{uuid}} > input.solution-tray-order",
-                solutionSubmissionStorage: "#pl-faded-parsons-{{uuid}} > input.student-parsons-solution",
                 toolbar: "#widget-toolbar-{{uuid}}",
-                uuid: '{{uuid}}',
             })
         )
     );

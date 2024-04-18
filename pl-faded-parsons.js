@@ -178,6 +178,9 @@ class ParsonsWidget {
     const setCodelineInMotion = (codeline, inMotion) =>
       $(codeline).toggleClass("codeline-in-motion", inMotion);
 
+    widget.getCodelineInMotion = (codeline) =>
+      $(codeline).hasClass("codeline-in-motion");
+
     /**
      * Takes a codeline or codeline-query and focuses either on its blanks
      * (if `widget.autoEnterBlank` and if it has one) or on the codeline itself.
@@ -358,7 +361,6 @@ class ParsonsWidget {
     };
 
     const onCodelineKeydown = (e, codeline) => {
-      widget.updateAriaLabel(codeline);
       const { inMotion, backwards } = keyMotionModifiers(e);
       setCodelineInMotion(codeline, inMotion);
 
@@ -450,32 +452,45 @@ class ParsonsWidget {
       }
     };
 
+    // ready the aria accessibility ///////////////////////////////////////////
+    {
+      const descriptor = $(widget.config.ariaDescriptor);
+      descriptor.text("no codeline selected.");
+      if (ParsonsGlobal.uiConfig.showAriaDescriptor) {
+        descriptor.css("display", "inline-block");
+      }
+      $(widget.config.main)
+        .find("li.codeline")
+        .attr("aria-labelledby", descriptor.attr("id"));
+    }
+
     // add interactivity to codelines and blanks //////////////////////////////
 
     $(widget.config.main)
       .find("li.codeline")
-      // fix the aria labels
-      .each((_, codeline) => widget.updateAriaLabel(codeline, false))
       // setup callbacks on each codeline (this)
       .on({
         focus() {
-          widget.updateAriaLabel(this);
+          widget.updateAriaInfo(this);
         },
         blur() {
-          widget.updateAriaLabel(this, false);
           setCodelineInMotion(this, false);
+          widget.updateAriaInfo(this, false);
         },
         click(e) {
           if (e.target != this) return; // if child clicked, return.
           widget.enterBlankOnCodelineFocus = false;
           focusCodeline(this);
+          widget.updateAriaInfo(this);
         },
         keyup(e) {
           const { inMotion } = keyMotionModifiers(e);
           setCodelineInMotion(this, inMotion);
+          widget.updateAriaInfo(this);
         },
         keydown(e) {
           onCodelineKeydown(e, this);
+          widget.updateAriaInfo(this);
         },
       })
       // setup callbacks on each blank (this) in every codeline
@@ -485,9 +500,11 @@ class ParsonsWidget {
           .on({
             focus() {
               widget.enterBlankOnCodelineFocus = true;
+              widget.updateAriaInfo(codeline);
             },
             input(e) {
               widget.autoSizeBlank(this);
+              widget.updateAriaInfo(codeline);
               widget.config.onBlankUpdate(e, this);
             },
             keyup(e) {
@@ -496,6 +513,7 @@ class ParsonsWidget {
             },
             keydown(e) {
               onBlankKeydown(e, codeline, this);
+              widget.updateAriaInfo(codeline);
             },
           }),
       );
@@ -664,7 +682,7 @@ class ParsonsWidget {
 
       this.redrawTabStops();
     }
-    this.updateAriaLabel(codeline);
+    this.updateAriaInfo(codeline);
     return newCodeIndent;
   }
   /** Redraws the tab stops in the solution box if this.config.canIndent */
@@ -735,29 +753,48 @@ class ParsonsWidget {
       .add($(this.config.main))
       .each((_, e) => $(e).toggleClass("dark"));
   }
-  updateAriaLabel(codeline, announce = true) {
+  updateAriaInfo(codeline, hasFocus = true) {
     // todo:
-    //   make each codeline *not* be tagged as a group
-    //   each announcement should not read out other list items
-    //   get the priority level correct with aria-live so announcements are accurate
-    //    - gpt recommends creating an invisible announcement div, and updating its contents as need be
-    const lineNumber = 1 + $(codeline.parentElement).children().index(codeline);
-    const inStarterTray = $(this.config.starterList).has(codeline).length;
-    const indentPrefix = inStarterTray
-      ? "unused"
-      : `indent ${this.getCodelineIndent(codeline)}`;
-    const clone = $(codeline).clone();
-    clone
-      .find("input")
-      .each((_, inp) =>
-        inp.replaceWith(inp.value ? `full-blank(${inp.value})` : "empty-blank"),
+    //   check that this plays nice with screenreaders
+    //   make editing blanks better?
+    if (!hasFocus) {
+      $(this.config.ariaDescriptor).text(
+        "no codeline selected. click a codeline to begin",
       );
-    const text = clone[0].innerText.trim();
-    const label = `line ${lineNumber} ${indentPrefix}: ${text}`;
-    // todo: polite seems to be the wrong setting here.
-    if (announce) $(codeline).attr("aria-live", "polite");
-    $(codeline).attr("aria-label", label);
-    if (announce) $(codeline).attr("aria-live", "off");
+      return;
+    }
+
+    $(this.config.ariaDescriptor).text(this.codelineAriaDescription(codeline));
+  }
+  codelineAriaDetails(codeline) {
+    let indentLevel = this.getCodelineIndent(codeline);
+    const visualDedentParents = $(codeline)
+      .prevAll()
+      .filter((_, sib) => {
+        const sibIndentLevel = this.getCodelineIndent(sib);
+        const sibDedented = sibIndentLevel < indentLevel;
+        indentLevel = Math.min(sibIndentLevel, indentLevel);
+        return sibDedented;
+      })
+      .toArray();
+    return [codeline, ...visualDedentParents]
+      .map((cl) => this.codelineAriaDescription(cl))
+      .join("; Under ");
+  }
+  codelineAriaDescription(codeline) {
+    const motionText = this.getCodelineInMotion(codeline) ? "moving " : "";
+    const lineNumber = 1 + $(codeline).parent().children().index(codeline);
+    const inStarterTray = $(this.config.starterList).has(codeline).length;
+    const rawIndent = this.getCodelineIndent(codeline);
+    const rawIndentText =
+      rawIndent < 2 ? (rawIndent == 0 ? "flush" : "tab") : `${rawIndent} tabs`;
+    const indentPrefix = (inStarterTray ? "unused, " : "") + rawIndentText;
+    const textFormatClone = $(codeline).clone();
+    const formatBlank = (_idx, inp) =>
+      inp.replaceWith(inp.value ? `full-blank(${inp.value})` : "empty-blank");
+    textFormatClone.find("input").each(formatBlank);
+    const text = textFormatClone.text().trim();
+    return `${motionText} line ${lineNumber}, ${indentPrefix}, ${text}`;
   }
   addLogEntry() {}
 }
@@ -813,6 +850,8 @@ window.ParsonsGlobal = window.ParsonsGlobal || {
      * instead of advancing it into the next tray
      */
     allowIndentingInStarterTray: false,
+    /** Toggles the visibility of the aria-describedby div */
+    showAriaDescriptor: true,
   },
   /** The custom methods that are added to jQuery results */
   jqueryExtension: (function ($) {
