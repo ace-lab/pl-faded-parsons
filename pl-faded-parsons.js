@@ -55,31 +55,13 @@ class ParsonsWidget {
 
     widget.validateConfig();
 
-    widget.redrawTabStops();
-
-    $("form.question-form").submit(() => widget.storeStudentProgress());
-
-    // resize blanks to fit text
-    $(widget.config.main)
-      .find("li.codeline input.parsons-blank")
-      .each((_, blank) => widget.autoSizeBlank(blank));
-
-    /** Matches bindings in widget help text! */
-    const keyMotionModifiers = (e) => ({
-      /** Alt key is down */
-      inMotion: e.altKey,
-      /** Super Key is down */
-      moveToEnd: e.ctrlKey || e.metaKey,
-      /** Shift is down */
-      backwards: e.shiftKey,
-    });
-
     // add the toolbar button bindings /////////////////////////////////////////
     {
       $(widget.config.toolbar)
         .find(`.widget-help`)
         .popover({
           content: () =>
+            // changes here should be reflected in keyMotionModifiers!
             [
               "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
               "Arrow Keys: Select",
@@ -171,7 +153,17 @@ class ParsonsWidget {
 
     // make keyboard interactivity helper functions ///////////////////////////
 
-    /** Finds the blanks within a DOM object */
+    /** Matches bindings in widget help text! */
+    const keyMotionModifiers = (e) => ({
+      /** Alt key is down */
+      inMotion: e.altKey,
+      /** Super Key is down */
+      moveToEnd: e.ctrlKey || e.metaKey,
+      /** Shift is down */
+      backwards: e.shiftKey,
+    });
+
+    /** Finds the blanks within a query subject */
     const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
 
     /** Manages the codeline's `.codeline-in-motion` css class */
@@ -297,7 +289,7 @@ class ParsonsWidget {
 
     const jumpToNextBlank = (blank, forward) => {
       const delta = forward ? +1 : -1;
-      const allBlanks = $(widget.config.main).find("input.parsons-blank");
+      const allBlanks = findBlanksIn(widget.config.main);
       const m = allBlanks.length;
       const nextIndex = (allBlanks.index(blank) + m + delta) % m;
       allBlanks.eq(nextIndex).focus();
@@ -310,7 +302,7 @@ class ParsonsWidget {
      * Setting `cursorOnly` does not reorder lines, only moves the cursor.
      */
     const moveVertically = (codeline, downward, moveToEnd, cursorOnly) => {
-      const parent = $(codeline.parentElement);
+      const parent = $(codeline).parent();
       const children = parent.children();
       const index = children.index(codeline);
       const [delta, invalidIdx] = downward
@@ -405,7 +397,7 @@ class ParsonsWidget {
     };
 
     const onBlankKeydown = (e, codeline, blank) => {
-      const blanks = $(codeline).find("input.parsons-blank");
+      const blanks = findBlanksIn(codeline);
       const blankIdx = blanks.index(blank);
       const { backwards } = keyMotionModifiers(e);
       // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
@@ -452,6 +444,18 @@ class ParsonsWidget {
       }
     };
 
+    // init gui ///////////////////////////////////////////////////////////////
+    {
+      widget.redrawTabStops();
+
+      $("form.question-form").submit(() => widget.storeStudentProgress());
+
+      // resize blanks to fit text
+      findBlanksIn(widget.config.main).each((_, blank) =>
+        widget.autoSizeBlank(blank),
+      );
+    }
+
     // ready the aria accessibility ///////////////////////////////////////////
     {
       const descriptor = $(widget.config.ariaDescriptor);
@@ -462,6 +466,10 @@ class ParsonsWidget {
       $(widget.config.main)
         .find("li.codeline")
         .attr("aria-labelledby", descriptor.attr("id"));
+      findBlanksIn(widget.config.main).attr(
+        "aria-labelledby",
+        descriptor.attr("id"),
+      );
     }
 
     // add interactivity to codelines and blanks //////////////////////////////
@@ -495,27 +503,25 @@ class ParsonsWidget {
       })
       // setup callbacks on each blank (this) in every codeline
       .each((_, codeline) =>
-        $(codeline)
-          .find("input.parsons-blank")
-          .on({
-            focus() {
-              widget.enterBlankOnCodelineFocus = true;
-              widget.updateAriaInfo(codeline);
-            },
-            input(e) {
-              widget.autoSizeBlank(this);
-              widget.updateAriaInfo(codeline);
-              widget.config.onBlankUpdate(e, this);
-            },
-            keyup(e) {
-              const { inMotion } = keyMotionModifiers(e);
-              setCodelineInMotion(codeline, inMotion);
-            },
-            keydown(e) {
-              onBlankKeydown(e, codeline, this);
-              widget.updateAriaInfo(codeline);
-            },
-          }),
+        findBlanksIn(codeline).on({
+          focus() {
+            widget.enterBlankOnCodelineFocus = true;
+            widget.updateAriaInfo(codeline);
+          },
+          input(e) {
+            widget.autoSizeBlank(this);
+            widget.updateAriaInfo(codeline);
+            widget.config.onBlankUpdate(e, this);
+          },
+          keyup(e) {
+            const { inMotion } = keyMotionModifiers(e);
+            setCodelineInMotion(codeline, inMotion);
+          },
+          keydown(e) {
+            onBlankKeydown(e, codeline, this);
+            widget.updateAriaInfo(codeline);
+          },
+        }),
       );
   }
   validateConfig() {
