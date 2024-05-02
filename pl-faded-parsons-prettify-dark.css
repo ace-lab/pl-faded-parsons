@@ -1,11 +1,10 @@
+/* from https://github.com/ericwbailey/a11y-syntax-highlighting/blob/main/dist/highlight/a11y-dark.css */
 .dark.fpp-global-defs {
-  --code-background: #000000;
-  --pln-txt-color: #eaeaea;
-  --pln-txt-color-faded: #eaeaea90;
+  --code-background: #2b2b2b;
+  --pln-txt-color: #f8f8f2;
+  --pln-txt-color-faded: #f8f8f290;
 }
 
-/*! Color themes for Google Code Prettify | MIT License | github.com/jmblog/color-themes-for-google-code-prettify */
-/* sourced from https://jmblog.github.io/color-themes-for-google-code-prettify/ */
 .dark.prettyprint {
   background: var(--code-background);
   font-family: Menlo, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco,
@@ -41,86 +40,72 @@ li.dark.L9 {
 
 @media screen {
   /* string content */
-
   .dark.str {
-    color: #b9ca4a;
+    color: #abe338;
   }
 
   /* keyword */
-
   .dark.kwd {
-    color: #c397d8;
+    color: #dcc6e0;
   }
 
   /* comment */
-
   .dark.com {
-    color: #969896;
+    color: #d4d0ab;
   }
 
   /* type name */
-
   .dark.typ {
-    color: #7aa6da;
+    color: #f5ab35;
   }
 
   /* literal value */
-
   .dark.lit {
-    color: #e78c45;
+    color: #f5ab35;
   }
 
   /* punctuation */
-
   .dark.pun {
-    color: #eaeaea;
+    color: var(--pln-txt-color);
   }
 
   /* lisp open bracket */
-
   .dark.opn {
     color: #eaeaea;
   }
 
   /* lisp close bracket */
-
   .dark.clo {
     color: #eaeaea;
   }
 
   /* markup tag name */
-
   .dark.tag {
-    color: #d54e53;
+    color: #ffa07a;
   }
 
   /* markup attribute name */
-
   .dark.atn {
-    color: #e78c45;
+    color: #ffd700;
   }
 
   /* markup attribute value */
-
   .dark.atv {
-    color: #70c0b1;
+    color: #ffd700;
   }
 
   /* declaration */
-
   .dark.dec {
     color: #e78c45;
   }
 
   /* variable name */
-
   .dark.var {
-    color: #d54e53;
+    color: #ffa07a;
   }
 
   /* function name */
-
   .dark.fun {
-    color: #7aa6da;
+    color: #ffa07a;
   }
 }
