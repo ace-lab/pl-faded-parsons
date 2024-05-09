@@ -828,7 +828,7 @@ window.ParsonsGlobal ||= /* singleton! */ {
      */
     allowIndentingInStarterTray: false,
     /** Toggles the visibility of the aria-describedby div */
-    showAriaDescriptor: true,
+    showAriaDescriptor: false,
   },
   /** The custom methods that are added to jQuery results */
   jqueryExtension: (function ($) {
