@@ -7,6 +7,7 @@
  *    -->
  *    <input#{{config.solutionOrderStorage}}
  *    <input#{{config.starterOrderStorage}}
+ *    <input#{{config.solutionSubmissionStorage}}
  *   ...
  *   ( <!-- A starter tray is optional -->
  *      <div#{{config.starter}}.codeline-tray>
@@ -45,7 +46,6 @@ class ParsonsWidget {
         prettyPrint: true,
         onSortableUpdate: (_event, _ui) => {},
         onBlankUpdate: (_event, _input) => {},
-        lang: "en",
       },
       config,
     );
@@ -806,40 +806,11 @@ class ParsonsWidget {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-window.ParsonsGlobal = window.ParsonsGlobal || {
-  // ensure singleton //
+window.ParsonsGlobal ||= /* singleton! */ {
   makeLogger: false,
   widgets: [],
-  prettifyOutputClasses: [
-    "prettyprint",
-    "linenums",
-    "pln",
-    "str",
-    "kwd",
-    "com",
-    "typ",
-    "lit",
-    "dec",
-    "var",
-    "pun",
-    "opn",
-    "clo",
-    "tag",
-    "atn",
-    "atv",
-    "fun",
-    "L0",
-    "L1",
-    "L3",
-    "L4",
-    "L5",
-    "L6",
-    "L7",
-    "L8",
-    "L9",
-  ]
-    .map((cls) => `.${cls}`)
-    .join(","),
+  prettifyOutputClasses:
+    ".prettyprint,.linenums,.pln,.str,.kwd,.com,.typ,.lit,.dec,.var,.pun,.opn,.clo,.tag,.atn,.atv,.fun,.L0,.L1,.L3,.L4,.L5,.L6,.L7,.L8,.L9",
   uiConfig: {
     /**
      * When true, a Tab in a fading blank always indents,
