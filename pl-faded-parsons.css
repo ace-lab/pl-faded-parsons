@@ -13,10 +13,10 @@ code {
 }
 
 .aria-descriptor {
-	display: none;
-	width: 100%;
-	padding: 2px;
-	margin-block-end: 3px;
+  display: none;
+  width: 100%;
+  padding: 2px;
+  margin-block-end: 3px;
 }
 
 .soft-border {
