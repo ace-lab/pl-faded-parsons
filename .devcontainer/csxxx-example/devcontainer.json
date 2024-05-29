@@ -9,7 +9,9 @@
     // "postAttachCommand" : "export HOST_JOBS_DIR=/tmp/pl_jobqueue && sudo docker run -it --rm -p 4000:3000 -v $HOST_JOBS_DIR:/jobs -v /pl-ucb-csxxx/:/course -v /var/run/docker.sock:/var/run/docker.sock ucbcbt/ucb-prairielearn:latest",
 
     "features": {
-        "ghcr.io/devcontainers/features/python:1": {},
+        "ghcr.io/devcontainers/features/python:1": {
+            "version" : "3.10"
+        },
         // "ghcr.io/devcontainers/features/docker-in-docker:2": {}
         "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
     }
