@@ -42,6 +42,8 @@ class Bcolors:
     def info(*args, **kwargs):
         Bcolors.printf(Bcolors.OK_BLUE, *args, **kwargs)
 
+class GenerationError(Exception):
+    pass
 
 TEST_DEFAULT: Final[str] = """# AUTO-GENERATED FILE
 # go to https://prairielearn.readthedocs.io/en/latest/python-grader/#teststestpy for more info
