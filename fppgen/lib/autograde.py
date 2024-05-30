@@ -152,3 +152,45 @@ class RubyAutograder(AutograderConfig):
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
         return super().generate_server(setup_code, answer_code, no_ast=no_ast, tab=tab)
 
+@register_autograder(extension='.rspec')
+class RSpecAutograder(RubyAutograder):
+    def info_json_update(self) -> Dict[str, str | Dict[str, bool | str | int]]:
+        return {
+            'gradingMethod': 'External',
+            'externalGradingOptions': {
+                'enabled': True,
+                'image': 'saasbook/pl-rspec-autograder',
+                'entrypoint': '/grader/run.py',
+                'timeout': 60
+            }
+        }
+
+    def _apply_mutation(self, q_root: str, mutations: str, filename: str, variant_name: str) -> int:
+        """runs `patch` on the filename with patchfile input `mutations` and returns the error code"""
+        in_file = f"{q_root}/tests/common/{filename}"
+        out_file = f"{q_root}/tests/var_{variant_name}/{filename}"
+
+        command = [
+            "patch",
+            "-o", out_file,
+            in_file,
+        ]
+
+        return_code = run(command, input=mutations.encode(), stderr=PIPE).returncode
+        return return_code
+
+    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
+                    pre_code: str = '', post_code: str = '', log_details: bool = True) -> None:
+        # 1) put solution in tests/solution/_submission_file
+        # 2) put application in tests/common/ (e.g. tests/common/file_at_root.rb)
+        # 3) put AG metadata in tests/meta.json
+        # 4) put mutations in tests/var_{variant_name}/file_at_root.rb
+
+        solution_code = "\n".join([pre_code, answer_code, post_code])
+        
+        try:
+            testing_data = yaml_loads(test_region)
+        except YAMLError as e:
+            raise GenerationError(f"Could not parse YAML in `test` region!") from e
+        
+        ...
