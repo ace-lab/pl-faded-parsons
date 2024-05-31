@@ -265,7 +265,10 @@ def generate_fpp_question(
         answer_code,
         setup_code,
         test_region,
-        log_details= options.verbosity > 0
+        source_dir = path.dirname(source_path),
+        pre_code  = prefix_code,
+        post_code = suffix_code,
+        log_details = options.verbosity > 0
     )
 
     if metadata:
@@ -304,6 +307,7 @@ def generate_many(args: Namespace):
         options = Options(args)
         options.force_generate_json = force_json
 
+        source_path = path.abspath(source_path)
         try:
             generate_fpp_question(
                 source_path,
