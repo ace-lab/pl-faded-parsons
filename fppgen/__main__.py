@@ -265,7 +265,7 @@ def generate_fpp_question(
         answer_code,
         setup_code,
         test_region,
-        source_dir = path.dirname(source_path),
+        source_dir= path.dirname(source_path),
         pre_code  = prefix_code,
         post_code = suffix_code,
         log_details = options.verbosity > 0
