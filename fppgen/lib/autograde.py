@@ -24,7 +24,8 @@ class AutograderConfig(ABC):
         pass
 
     @abstractmethod
-    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str, pre_code: str='', post_code: str='', log_details: bool= True) -> None:
+    def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
+                    pre_code: str = '', post_code: str = '', log_details: bool = True) -> None:
         pass
 
     def clean_tests_dir(self, test_dir: str) -> None:
@@ -73,7 +74,7 @@ class PythonAutograder(AutograderConfig):
         }
 
     def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
-                    pre_code: str='', post_code: str='', log_details: bool= True) -> None:
+                    pre_code: str = '', post_code: str = '', log_details: bool = True) -> None:
         test_region = test_region if test_region != "" else TEST_DEFAULT
         try:
             try:
@@ -115,7 +116,7 @@ class RubyAutograder(AutograderConfig):
         }
 
     def populate_tests_dir(self, test_dir: str, answer_code: str, setup_code: str, test_region: str,
-                    pre_code: str='', post_code: str='', log_details: bool= True) -> None:
+                    pre_code: str = '', post_code: str = '', log_details: bool = True) -> None:
         app_dir = path.join(path.dirname(f"{test_dir}/"), "app")
         spec_dir = path.join(path.dirname(f"{app_dir}/"), "spec")
         makedirs(spec_dir, exist_ok=True)
