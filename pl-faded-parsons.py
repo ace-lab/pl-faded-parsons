@@ -158,8 +158,9 @@ def render_question_panel(element_html, data):
     answers_name = get_answers_name(element_html)
 
     format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
+    format = pl.get_string_attrib(element, "solution-placement", format).replace("-", '_')
     if format not in ("bottom", "right", "no_code"):
-        raise Exception(f"Unsupported pl-faded-parsons format: \"{format}\". Please see documentation for supported formats")
+        raise Exception(f"Unsupported pl-faded-parsons solution-placement: \"{format}\". Please see documentation for supported placements")
 
     lang = pl.get_string_attrib(element, "language", None)
 
@@ -235,7 +236,7 @@ def render_question_panel(element_html, data):
     if format == "right":
         if pre_text or post_text:
             raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
-                'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
+                'Add/set `solution-placement="bottom"` or `solution-placement="no-code"` to your element to use this feature.')
         size = "narrow"
     elif format == "bottom":
         size = "wide"
