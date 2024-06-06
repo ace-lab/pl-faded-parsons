@@ -153,14 +153,19 @@ class ParsonsWidget {
 
     // make keyboard interactivity helper functions ///////////////////////////
 
-    /** Matches bindings in widget help text! */
-    const keyMotionModifiers = (e) => ({
-      /** Alt key is down */
-      inMotion: e.altKey,
-      /** Super Key is down */
+    /**
+     * Matches bindings in widget help text!
+     * @param e {KeyboardEvent}
+     */
+    const keyMotionData = (e) => ({
+      /** move the codeline under the cursor */
+      moveCodeline: e.altKey,
+      /** move to the last location */
       moveToEnd: e.ctrlKey || e.metaKey,
-      /** Shift is down */
-      backwards: e.shiftKey,
+      /** shift is not down */
+      jumpForward: !e.shiftKey,
+      /** arrow direction is `"Right"` or `"Down"` */
+      moveForward: e.key === "ArrowRight" || e.key === "ArrowDown",
     });
 
     /** Finds the blanks within a query subject */
@@ -211,7 +216,7 @@ class ParsonsWidget {
     };
 
     /** Move codeline (or just cursor) horizontally across trays */
-    const moveHorizontally = (codeline, rightward, cursorOnly) => {
+    const moveHorizontally = (codeline, { moveForward, moveCodeline }) => {
       // find the tray that we will move the codeline into (works for arbitrary m)
       const codeboxes = $(widget.config.main).find("div.codeline-tray");
       const m = codeboxes.length;
@@ -219,7 +224,7 @@ class ParsonsWidget {
       const codeboxIdx = codeboxes
         .toArray()
         .findIndex((c) => $(c).has(codeline).exists());
-      const k = codeboxIdx + (rightward ? +1 : -1);
+      const k = codeboxIdx + (moveForward ? +1 : -1);
       if (k < 0 || m <= k) return; // don't wrap around!
       const newTray = codeboxes.eq(k).find("ul.codeline-list");
 
@@ -228,8 +233,8 @@ class ParsonsWidget {
         newTray,
       );
 
-      if (cursorOnly) {
-        focusCodeline(target, rightward);
+      if (!moveCodeline) {
+        focusCodeline(target, moveForward);
         return;
       }
 
@@ -252,27 +257,35 @@ class ParsonsWidget {
     /**
      * Navigates cursor horizontally, advancing between blanks and across
      * trays/codelines as necessary. Returns `true` if a special motion
-     * happened and event defaults should be prevented, `false` otherwise.
+     * happened, `false` otherwise.
      */
-    const leaveBlankHorizontally = (codeline, blankIdx, rightward) => {
+    const moveCursorInBlankHorizontally = (
+      e,
+      codeline,
+      blankIdx,
+      { moveForward },
+    ) => {
       const codelineBlanks = findBlanksIn(codeline);
       const blank = codelineBlanks.get(blankIdx);
-      // if user selecting text, return.
+      // if user selecting text, return allowing default
       if (blank.selectionEnd != blank.selectionStart) return false;
 
       const cursorIdx = blank.selectionStart;
-      const [lastTextIdx, lastBlankIdx, blankDelta] = rightward
-        ? // not (blank.value.length - 1) b/c want cursor after text end
-          [blank.value.length, codelineBlanks.length - 1, +1]
+      const [lastTextIdx, lastBlankIdx, blankDelta] = moveForward
+        ? [blank.value.length, codelineBlanks.length - 1, +1]
         : [0, 0, -1];
 
-      // if cursor not on the edge of a blank, return.
+      // if cursor not on the edge of a blank, return allowing default
       if (cursorIdx != lastTextIdx) return false;
+
+      // we are on the edge of a blank, and not selecting text,
+      // so we don't want the cursor to move normally.
+      e.preventDefault();
 
       // if the blank is the first/last in the row...
       if (blankIdx == lastBlankIdx) {
         // then move cursor between codelines
-        moveHorizontally(codeline, rightward, true);
+        moveHorizontally(codeline, { moveForward, moveCodeline: true });
       } else {
         // otherwise move cursor between blanks within the codeline.
         // if exitting rightward, then enter on left, and vice-versa
@@ -280,15 +293,15 @@ class ParsonsWidget {
           .eq(blankIdx + blankDelta)
           .focus()
           .each((_, input) => {
-            const l = rightward ? 0 : input.value.length;
+            const l = moveForward ? 0 : input.value.length;
             input.setSelectionRange(l, l);
           });
       }
       return true;
     };
 
-    const jumpToNextBlank = (blank, forward) => {
-      const delta = forward ? +1 : -1;
+    const jumpToNextBlank = (blank, { jumpForward }) => {
+      const delta = jumpForward ? +1 : -1;
       const allBlanks = findBlanksIn(widget.config.main);
       const m = allBlanks.length;
       const nextIndex = (allBlanks.index(blank) + m + delta) % m;
@@ -301,19 +314,22 @@ class ParsonsWidget {
      * Setting `moveToEnd` will jump a codeline to the top/bottom.
      * Setting `cursorOnly` does not reorder lines, only moves the cursor.
      */
-    const moveVertically = (codeline, downward, moveToEnd, cursorOnly) => {
+    const moveVertically = (
+      codeline,
+      { moveForward, moveToEnd, moveCodeline },
+    ) => {
       const parent = $(codeline).parent();
       const children = parent.children();
       const index = children.index(codeline);
-      const [delta, invalidIdx] = downward
+      const [delta, invalidIdx] = moveForward
         ? [+1, children.length - 1]
         : [-1, 0];
       if (index === invalidIdx) return;
 
       const nextChild = children.eq(index + delta);
 
-      if (cursorOnly) {
-        const extremeChild = downward ? children.last() : children.first();
+      if (!moveCodeline) {
+        const extremeChild = moveForward ? children.last() : children.first();
         focusCodeline(moveToEnd ? extremeChild : nextChild);
         return;
       }
@@ -322,39 +338,25 @@ class ParsonsWidget {
       const selection = $(document.activeElement).or(codeline);
 
       if (moveToEnd) {
-        if (downward) {
+        if (moveForward) {
           parent.append(codeline);
         } else {
           parent.prepend(codeline);
         }
       } else {
-        if (downward) {
-          nextChild.insertBefore(codeline); // move next behind me
+        if (moveForward) {
+          nextChild.insertBefore(codeline);
         } else {
-          nextChild.insertAfter(codeline); // move prev in front of me
+          nextChild.insertAfter(codeline);
         }
       }
 
       $(selection).focus();
     };
 
-    /**
-     * A light wrapper around moveVertically. Returns
-     * `true` if the event was indeed for a vertical arrow key,
-     * `false` otherwise.
-     */
-    const handleVerticalArrowKeys = (e, codeline) => {
-      const downward = e.key.endsWith("Down");
-      if (!downward && !e.key.endsWith("Up")) return false;
-      const { inMotion, moveToEnd } = keyMotionModifiers(e);
-      moveVertically(codeline, downward, moveToEnd, !inMotion);
-      e.preventDefault();
-      return true;
-    };
-
     const onCodelineKeydown = (e, codeline) => {
-      const { inMotion, backwards } = keyMotionModifiers(e);
-      setCodelineInMotion(codeline, inMotion);
+      const motionData = keyMotionData(e);
+      setCodelineInMotion(codeline, motionData.moveCodeline);
 
       if (!$(codeline).is(":focus")) return;
 
@@ -364,15 +366,20 @@ class ParsonsWidget {
         e.preventDefault();
         const moveInsteadOfIndent =
           !ParsonsGlobal.uiConfig.allowIndentingInStarterTray &&
-          !backwards &&
+          motionData.jumpForward &&
           $(widget.config.starter).has(codeline).exists(); // in starter tray?
         if (moveInsteadOfIndent) {
-          moveHorizontally(codeline, true, false);
+          moveHorizontally(codeline, {
+            moveForward: true,
+            moveCodeline: false,
+          });
         } else {
-          widget.updateIndent(codeline, backwards ? -1 : +1, false);
+          const delta = motionData.jumpForward ? +1 : -1;
+          widget.updateIndent(codeline, delta, false);
         }
         return;
       }
+
       // Enter to refocus on the blanks
       if (e.key === "Enter") {
         e.preventDefault();
@@ -380,6 +387,7 @@ class ParsonsWidget {
         widget.enterBlankOnCodelineFocus = true;
         return;
       }
+
       // Escape removes focus
       if (e.key === "Escape") {
         e.preventDefault();
@@ -387,23 +395,32 @@ class ParsonsWidget {
         widget.enterBlankOnCodelineFocus = false;
         return;
       }
+
       // (Alt/Option)+Arrow to Reorder Lines, Arrow to Navigate
-      if (e.key.startsWith("Arrow")) {
-        if (handleVerticalArrowKeys(e, codeline)) return;
-        e.preventDefault();
-        moveHorizontally(codeline, e.key.endsWith("Right"), !inMotion);
-        return;
+      switch (e.key) {
+        case "ArrowLeft":
+        case "ArrowRight":
+          e.preventDefault();
+          moveHorizontally(codeline, motionData);
+          return;
+        case "ArrowUp":
+        case "ArrowDown":
+          e.preventDefault();
+          moveVertically(codeline, motionData);
+          return;
       }
     };
 
     const onBlankKeydown = (e, codeline, blank) => {
       const blanks = findBlanksIn(codeline);
       const blankIdx = blanks.index(blank);
-      const { backwards } = keyMotionModifiers(e);
+      const motionData = keyMotionData(e);
       // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
       // otherwise advance/retreat blanks on the line
       if (e.key === "Tab") {
-        const [boundary, delta] = backwards ? [0, -1] : [blanks.length - 1, +1];
+        const [boundary, delta] = motionData.jumpForward
+          ? [blanks.length - 1, +1]
+          : [0, -1];
         if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || blankIdx == boundary) {
           e.preventDefault();
           widget.updateIndent(codeline, delta, false);
@@ -421,26 +438,27 @@ class ParsonsWidget {
       if (e.key === "Enter") {
         e.preventDefault();
         widget.enterBlankOnCodelineFocus = true;
-        jumpToNextBlank(blank, !backwards);
+        jumpToNextBlank(blank, motionData);
         return;
       }
       // (Alt/Option)+Arrow to Reorder Lines
       // Arrow Up/Down to Navigate Lines
       // Arrow Right/Left to move cursor (including between input boxes)
-      if (e.key.startsWith("Arrow")) {
-        if (handleVerticalArrowKeys(e, codeline)) return;
-        const rightward = e.key.endsWith("Right");
-        if (e.altKey) {
-          moveHorizontally(codeline, rightward, false);
+      switch (e.key) {
+        case "ArrowUp":
+        case "ArrowDown":
           e.preventDefault();
-        } else {
-          if (leaveBlankHorizontally(codeline, blankIdx, rightward)) {
+          moveVertically(codeline, motionData);
+          return;
+        case "ArrowRight":
+        case "ArrowLeft":
+          if (motionData.moveCodeline) {
             e.preventDefault();
+            moveHorizontally(codeline, motionData);
           } else {
-            // perform default motion (cursor moves left/right inside blank)
+            moveCursorInBlankHorizontally(e, codeline, blankIdx, motionData);
           }
-        }
-        return;
+          return;
       }
     };
 
@@ -478,8 +496,8 @@ class ParsonsWidget {
           widget.updateAriaLabel(this);
         },
         keyup(e) {
-          const { inMotion } = keyMotionModifiers(e);
-          setCodelineInMotion(this, inMotion);
+          const { moveCodeline } = keyMotionData(e);
+          setCodelineInMotion(this, moveCodeline);
           widget.updateAriaLabel(this);
         },
         keydown(e) {
@@ -500,8 +518,8 @@ class ParsonsWidget {
             widget.config.onBlankUpdate(e, this);
           },
           keyup(e) {
-            const { inMotion } = keyMotionModifiers(e);
-            setCodelineInMotion(codeline, inMotion);
+            const { moveCodeline } = keyMotionData(e);
+            setCodelineInMotion(codeline, moveCodeline);
           },
           keydown(e) {
             onBlankKeydown(e, codeline, this);
