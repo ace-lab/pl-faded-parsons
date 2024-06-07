@@ -319,16 +319,12 @@ class ParsonsWidget {
       { moveForward, moveToEnd, moveCodeline },
     ) => {
       const parent = $(codeline).parent();
-      const children = parent.children();
-      const index = children.index(codeline);
-      const [delta, invalidIdx] = moveForward
-        ? [+1, children.length - 1]
-        : [-1, 0];
-      if (index === invalidIdx) return;
+      const nextChild = moveForward ? $(codeline).next() : $(codeline).prev();
 
-      const nextChild = children.eq(index + delta);
+      if (!nextChild.exists()) return;
 
       if (!moveCodeline) {
+        const children = parent.children();
         const extremeChild = moveForward ? children.last() : children.first();
         focusCodeline(moveToEnd ? extremeChild : nextChild);
         return;
