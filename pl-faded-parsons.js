@@ -312,7 +312,7 @@ class ParsonsWidget {
      * Moves a codeline up/down in its own tray.
      * Will not move if the codeline is stuck at the top/bottom.
      * Setting `moveToEnd` will jump a codeline to the top/bottom.
-     * Setting `cursorOnly` does not reorder lines, only moves the cursor.
+     * Setting `moveCodeline` does not reorder lines, only moves the cursor.
      */
     const moveVertically = (
       codeline,
