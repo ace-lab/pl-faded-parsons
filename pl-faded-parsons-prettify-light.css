@@ -1,0 +1,111 @@
+/* from https://github.com/ericwbailey/a11y-syntax-highlighting/blob/main/dist/highlight/a11y-light.css */
+.fpp-global-defs {
+  --code-background: #fefefe;
+  --pln-txt-color: #545454;
+  --pln-txt-color-faded: #54545490;
+}
+
+.prettyprint {
+  background: var(--code-background);
+  font-family: Menlo, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco,
+    Consolas, monospace;
+  /* border: 0 !important; */
+}
+
+.pln {
+  color: var(--pln-txt-color);
+}
+
+/* Specify class=linenums on a pre to get line numbering */
+ol.linenums {
+  margin-top: 0;
+  margin-bottom: 0;
+  color: #202746;
+}
+
+li.L0,
+li.L1,
+li.L2,
+li.L3,
+li.L4,
+li.L5,
+li.L6,
+li.L7,
+li.L8,
+li.L9 {
+  padding-left: 1em;
+  background-color: var(--code-background);
+  list-style-type: decimal;
+}
+
+@media screen {
+  /* string content */
+  .str {
+    color: #008000;
+  }
+
+  /* keyword */
+  .kwd {
+    color: #7928a1;
+  }
+
+  /* comment */
+  .com {
+    color: #696969;
+  }
+
+  /* type name */
+  .typ {
+    color: #aa5d00;
+  }
+
+  /* literal value */
+  .lit {
+    color: #aa5d00;
+  }
+
+  /* punctuation */
+  .pun {
+    color: var(--pln-txt-color);
+  }
+
+  /* lisp open bracket */
+  .opn {
+    color: #202746;
+  }
+
+  /* lisp close bracket */
+  .clo {
+    color: #202746;
+  }
+
+  /* markup tag name */
+  .tag {
+    color: #c94922;
+  }
+
+  /* markup attribute name */
+  .atn {
+    color: #aa5d00;
+  }
+
+  /* markup attribute value */
+  .atv {
+    color: #aa5d00;
+  }
+
+  /* declaration */
+  .dec {
+    color: #c76b29;
+  }
+
+  /* variable name */
+  .var {
+    color: #d91e18;
+  }
+
+  /* function name */
+  .fun {
+    color: #d91e18;
+  }
+}

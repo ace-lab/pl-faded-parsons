@@ -1,4 +1,5 @@
 # [The Faded Parsons Element](https://github.com/ace-lab/pl-faded-parsons)
+
 This repository contains the Berkeley Faded Parson's element and is designed to be used as a submodule.
 **Note, however, that the PrairieLearn server doesn't handle submodules properly when syncing a GitHub repo,**
 so to use this in a course, either the course's `elements/` subdirectory will need to contain a **copy** of this repo,
@@ -7,7 +8,8 @@ or the top-level `elements/` directory of the PrairieLearn build itself will nee
 ## Adding to Your Projects (for development only)
 
 This command will add the element to your project in the **properly-named** directory for PrairieLearn to use this element.
-``` bash
+
+```bash
 git submodule add https://github.com/ace-lab/pl-faded-parsons.git ./elements/pl-faded-parsons/
 ```
 
@@ -18,16 +20,18 @@ The main branch is the most recent public release.
 As detailed [in the "Working on a Project with Submodules" section of the git book](https://git-scm.com/book/en/v2/Git-Tools-Submodules), pulling must be done with a different command.
 
 From the top-level of your directory run:
-``` bash
+
+```bash
 git submodule update --remote ./elements/pl-faded-parsons/
 ```
 
 ## The RSpec Autograder
 
-If your Parsons problems test students' ability to write unit tests in RSpec, 
+If your Parsons problems test students' ability to write unit tests in RSpec,
 we have developed an autograder companion to this tool ![which can be found here](https://hub.docker.com/r/saasbook/pl-fpp-ruby-autograder).
 
 ## Work around `pl-faded-parsons`
+
 [Nathaniel Weinman, Armando Fox, and Marti A. Hearst. 2021. Improving Instruction of Programming Patterns with Faded Parsons Problems. In Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems (CHI '21). Association for Computing Machinery, New York, NY, USA, Article 53, 1–4. https://doi.org/10.1145/3411764.3445228](https://dl.acm.org/doi/10.1145/3411764.3445228)
 
 [Logan Caraco, Nate Weinman, Stanley Ko and Armando Fox. 2022. Automatically Converting Code-Writing Exercises to Variably-Scaffolded Parsons Problems. EECS Department University of California, Berkeley Technical Report No. UCB/EECS-2022-173. June 27, 2022. http://www2.eecs.berkeley.edu/Pubs/TechRpts/2022/EECS-2022-173.pdf](http://www2.eecs.berkeley.edu/Pubs/TechRpts/2022/EECS-2022-173.pdf)

@@ -1,0 +1,111 @@
+/* from https://github.com/ericwbailey/a11y-syntax-highlighting/blob/main/dist/highlight/a11y-dark.css */
+.dark.fpp-global-defs {
+  --code-background: #2b2b2b;
+  --pln-txt-color: #f8f8f2;
+  --pln-txt-color-faded: #f8f8f290;
+}
+
+.dark.prettyprint {
+  background: var(--code-background);
+  font-family: Menlo, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco,
+    Consolas, monospace;
+  /* border: 0 !important; */
+}
+
+.dark.pln {
+  color: var(--pln-txt-color);
+}
+
+/* Specify class=linenums on a pre to get line numbering */
+ol.dark.linenums {
+  margin-top: 0;
+  margin-bottom: 0;
+  color: #969896;
+}
+
+li.dark.L0,
+li.dark.L1,
+li.dark.L2,
+li.dark.L3,
+li.dark.L4,
+li.dark.L5,
+li.dark.L6,
+li.dark.L7,
+li.dark.L8,
+li.dark.L9 {
+  padding-left: 1em;
+  background-color: var(--code-background);
+  list-style-type: decimal;
+}
+
+@media screen {
+  /* string content */
+  .dark.str {
+    color: #abe338;
+  }
+
+  /* keyword */
+  .dark.kwd {
+    color: #dcc6e0;
+  }
+
+  /* comment */
+  .dark.com {
+    color: #d4d0ab;
+  }
+
+  /* type name */
+  .dark.typ {
+    color: #f5ab35;
+  }
+
+  /* literal value */
+  .dark.lit {
+    color: #f5ab35;
+  }
+
+  /* punctuation */
+  .dark.pun {
+    color: var(--pln-txt-color);
+  }
+
+  /* lisp open bracket */
+  .dark.opn {
+    color: #eaeaea;
+  }
+
+  /* lisp close bracket */
+  .dark.clo {
+    color: #eaeaea;
+  }
+
+  /* markup tag name */
+  .dark.tag {
+    color: #ffa07a;
+  }
+
+  /* markup attribute name */
+  .dark.atn {
+    color: #ffd700;
+  }
+
+  /* markup attribute value */
+  .dark.atv {
+    color: #ffd700;
+  }
+
+  /* declaration */
+  .dark.dec {
+    color: #e78c45;
+  }
+
+  /* variable name */
+  .dark.var {
+    color: #ffa07a;
+  }
+
+  /* function name */
+  .dark.fun {
+    color: #ffa07a;
+  }
+}
