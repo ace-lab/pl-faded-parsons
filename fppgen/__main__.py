@@ -131,7 +131,6 @@ def generate_question_html(
 </pl-question-panel>
 
 <!-- see README for where the various parts of question live -->
-
 <pl-faded-parsons {xml_tags}>
 {tab}{indented}
 </pl-faded-parsons>""".format(question_text=question_text, tab=tab, indented=indented, xml_tags=xml_tags)
