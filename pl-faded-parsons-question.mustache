@@ -22,7 +22,7 @@
         </div>
         {{/scrambled}}
         {{#pre_text}}
-            <pl-code {{#language}}language="{{{language}}}"{{/language}}> {{{text}}} </pl-code>
+        <pre class="prettyprint" {{#language}}language="{{{language}}}"{{/language}}> {{{text}}} </pre>
         {{/pre_text}}
         {{#given}}
         <div id="solution-{{uuid}}" class="solution-code-tray codeline-tray soft-border col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}}">
@@ -34,7 +34,7 @@
         </div>
         {{/given}}
         {{#post_text}}
-            <pl-code {{#language}}language="{{{language}}}"{{/language}}> {{{text}}} </pl-code>
+            <pre class="prettyprint" {{#language}}language="{{{language}}}"{{/language}}> {{{text}}} </pre>
         {{/post_text}}
     </div>
 
