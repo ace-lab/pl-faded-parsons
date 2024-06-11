@@ -1,5 +1,5 @@
 {
-  "name": "csxxx-example-devcontainer",
+  "name": "Produce workable ",
   "build": { "dockerfile": "Dockerfile" },
   "workspaceFolder": "/pl-ucb-csxxx",
 
