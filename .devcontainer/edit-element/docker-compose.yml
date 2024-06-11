@@ -1,0 +1,29 @@
+services:
+  prairielearn:
+    image: prairielearn/prairielearn:latest
+    platform: linux/amd64
+    environment:
+      HOST_JOBS_DIR: /tmp/dir-for-ag-jobqueue
+    ports:
+      - 3000:3000
+    build:
+      dockerfile_inline: |
+        FROM prairielearn/prairielearn:latest
+        RUN rm -r /course
+        RUN git clone https://github.com/ace-lab/pl-ucb-csxxx.git /course
+        RUN cd /course && git checkout b9ddf6afc0ba654844ca8cf7019ae5e586e933cc
+        RUN rm -r /course/elements/pl-faded-parsons
+    volumes:
+      - /tmp/dir-for-ag-jobqueue:/jobs
+      - ../..:/course/elements/pl-faded-parsons:ro
+      - /var/run/docker.sock:/var/run/docker.sock # this is still needed for external AG spawning
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/universal
+    platform: linux/amd64
+    links:
+      - prairielearn
+    volumes: # Mount the root folder that contains .git
+      - ../..:/workspaces/pl-faded-parsons:rw

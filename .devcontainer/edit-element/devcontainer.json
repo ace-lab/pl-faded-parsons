@@ -1,0 +1,30 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/universal
+{
+	"name": "View element in course",
+
+    "dockerComposeFile": [ "docker-compose.yml" ],
+    "service" : "devcontainer",
+    "workspaceFolder": "/workspaces/pl-faded-parsons",
+
+    "forwardPorts": [ 3000 ],
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+        "ghcr.io/devcontainers/features/python:1": {
+            "version" : "3.10"
+        },
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+    },
+
+	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"esbenp.prettier-vscode",
+				"dawhite.mustache"
+			]
+		}
+	}
+}
