@@ -549,6 +549,8 @@ class ParsonsWidget {
             });
           }),
       );
+
+      widget.addLogEntry("problemOpened", {});
   }
   validateConfig() {
     if (this.config.prettyPrint) {
