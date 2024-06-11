@@ -14,7 +14,7 @@ from yaml import (
 )
 
 from lib.name_visitor import AnnotatedName, generate_server, SERVER_DEFAULT
-from lib.consts import TEST_DEFAULT, GenerationError
+from lib.consts import TEST_DEFAULT
 from lib.io_helpers import write_to, Bcolors
 from lib.generate_test import make_test_file
 
@@ -86,7 +86,7 @@ class PythonAutograder(AutograderConfig):
         test_region = test_region if test_region != "" else TEST_DEFAULT
         try:
             try:
-                json = json_loads(test_region)
+                json = loads(test_region)
                 success, test_file = True, make_test_file(json)
             except Exception as e:
                 success, test_file = False, test_region
@@ -132,7 +132,7 @@ class RubyAutograder(AutograderConfig):
         if log_details:
             Bcolors.info('  - Generating grader metadata')
 
-        metadata = json_dumps({
+        metadata = dumps({
             "submission_file": "script.rb",
             "submission_root": "",
             "submit_to_line" : -1,
