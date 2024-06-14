@@ -169,7 +169,7 @@ class ParsonsWidget {
     });
 
     /** Finds the blanks within a query subject */
-    const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
+    const findBlanksIn = (parent) => $(parent).find("input.parsons-blank");
 
     /** Manages the codeline's `.codeline-in-motion` css class */
     const setCodelineInMotion = (codeline, inMotion) =>
@@ -525,7 +525,6 @@ class ParsonsWidget {
       );
     
     // add uids to each line and blank for logging ////////////////////////////
-    //  + add logging hooks for blank edits       ////////////////////////////
     $(widget.config.main)
       .find(".codeline-tray")
       .each((trayNumber, tray) =>
@@ -537,18 +536,19 @@ class ParsonsWidget {
             $(codeline).attr("logging-id", codelineId);
             findBlanksIn(codeline).each((blankNumber, blank) => {
               $(blank).attr("logging-id", `${codelineId}.${blankNumber}`);
-
-              $(blank).on({ // logging hooks for blank edits
-                input(e) {
-                  widget.addLogEntry("editBlank", {
-                    value: $(e.target).val(),
-                    id : $(e.target).attr("logging-id")
-                  });
-                }
-              });
             });
           }),
       );
+
+      //  add logging hooks for blank edits  //////////////////////////////////
+      findBlanksIn(widget.config.main).on({ 
+        input(e) {
+          widget.addLogEntry("editBlank", {
+            value: $(e.target).val(),
+            id : $(e.target).attr("logging-id")
+          });
+        }
+      });
 
       widget.addLogEntry("problemOpened", {});
   }
@@ -606,13 +606,12 @@ class ParsonsWidget {
     };
   }
   codelineSummary(line, idx) {
-    // this schema is used in pl-faded-parsons.py `read_lines`!
 
     if (idx == null) {
       idx = line.index();
     }
 
-    return {
+    return { // this schema is used in pl-faded-parsons.py `read_lines`!
       content: this.getCodelineText(line),
       indent: this.getCodelineIndent(line),
       segments: this.getCodelineSegments(line),
@@ -823,11 +822,7 @@ class ParsonsWidget {
   addLogEntry(tag, data) {
     const timestamp = new Date();
 
-    const entry = {
-      timestamp: timestamp,
-      tag: tag,
-      data: data
-    }
+    const entry = { timestamp, tag, data };
 
     const s = $(this.config.logStorage);
     if (!s.exists()) {
