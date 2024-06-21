@@ -222,7 +222,7 @@ def render_question_panel(element_html, data):
     html_params.update({
         "given" : given,
         "uuid": pl.get_uuid(),
-        "previous_log" : json.dumps(data['submitted_answers'].get('log', []))
+        "previous_log" : data['submitted_answers'].get('log', "[]")
     })
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
