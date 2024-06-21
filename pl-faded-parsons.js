@@ -787,6 +787,8 @@ class ParsonsWidget {
     $orAlert(this.config.solutionSubmissionStorage).val(
       this.getSolutionCode().solution,
     );
+
+    this.addLogEntry("storeProgress", {});
   }
   toggleDarkmode() {
     $(this.config.main)
