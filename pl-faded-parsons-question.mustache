@@ -7,7 +7,7 @@
     <input class="starter-tray-order" name="{{answers-name}}starter-tray-order" type="hidden" value=""/>
     <input class="solution-tray-order" name="{{answers-name}}solution-tray-order" type="hidden" value=""/>
     <input class="student-parsons-solution" name="{{answers-name}}student-parsons-solution" type="hidden" value=""/>
-    <input class="log" name="{{answers-name}}log" type="hidden" value="[]" />
+    <input class="log" name="{{answers-name}}log" type="hidden" value="{{previous_log}}" />
 
     <div class="row" style="margin:0px">
         {{! note: by entering the {#scrambled} {/scrambled} section, the mustache renderer dereferences
