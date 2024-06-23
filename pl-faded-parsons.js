@@ -119,13 +119,13 @@ class ParsonsWidget {
         connectWith: solutionTray,
         start: (_, ui) => setCodelineInMotion(ui.item, true),
         receive: (_, ui) =>
-          widget.addLogEntry({ type: "removeOutput", target: ui.item }, true),
+          widget.addLogEntry("removeOutput", widget.codelineSummary(ui.item)),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
 
           if (landedInAnotherTray(event, ui)) return;
 
-          widget.addLogEntry({ type: "moveInput", target: ui.item }, true);
+          widget.addLogEntry("moveInput", widget.codelineSummary(ui.item));
         },
         grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
       });
@@ -140,11 +140,11 @@ class ParsonsWidget {
 
           updateIndentAfterDrag(ui);
 
-          widget.addLogEntry({ type: "moveOutput", target: ui.item }, true);
+          widget.addLogEntry("moveOutput", widget.codelineSummary(ui.item));
         },
         receive: (_, ui) => {
           updateIndentAfterDrag(ui);
-          widget.addLogEntry({ type: "addOutput", target: ui.item }, true);
+          widget.addLogEntry("addOutput", widget.codelineSummary(ui.item));
         },
         update: (e, ui) => widget.config.onSortableUpdate(e, ui),
         grid: grid,
@@ -169,7 +169,7 @@ class ParsonsWidget {
     });
 
     /** Finds the blanks within a query subject */
-    const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
+    const findBlanksIn = (parent) => $(parent).find("input.parsons-blank");
 
     /** Manages the codeline's `.codeline-in-motion` css class */
     const setCodelineInMotion = (codeline, inMotion) =>
@@ -523,6 +523,34 @@ class ParsonsWidget {
           },
         }),
       );
+    
+    // add uids to each line and blank for logging ////////////////////////////
+    $(widget.config.main)
+      .find(".codeline-tray")
+      .each((trayNumber, tray) =>
+        $(tray)
+          .find("li.codeline")
+          .each((codelineNumber, codeline) => {
+            if ($(codeline).attr("logging-id")) return;
+            const codelineId = `${trayNumber}.${codelineNumber}`;
+            $(codeline).attr("logging-id", codelineId);
+            findBlanksIn(codeline).each((blankNumber, blank) => {
+              $(blank).attr("logging-id", `${codelineId}.${blankNumber}`);
+            });
+          }),
+      );
+
+      //  add logging hooks for blank edits  //////////////////////////////////
+      findBlanksIn(widget.config.main).on({ 
+        input(e) {
+          widget.addLogEntry("editBlank", {
+            value: $(e.target).val(),
+            id : $(e.target).attr("logging-id")
+          });
+        }
+      });
+
+      widget.addLogEntry("problemOpened", {});
   }
   validateConfig() {
     if (this.config.prettyPrint) {
@@ -542,6 +570,7 @@ class ParsonsWidget {
       "starterOrderStorage",
       "solutionOrderStorage",
       "solutionSubmissionStorage",
+      "logStorage",
     ]
       .filter((f) => this.config[f] == null)
       .join(", ");
@@ -555,6 +584,7 @@ class ParsonsWidget {
   getCodelineIndent(codeline) {
     // for some reason, $.css and $.cssUnit report values only in px in amounts
     // that do not align with ParsonsGlobal.charWidthInPx... just use DOM API.
+    codeline = $(codeline).get(0);
     const indentChar = parseInt(
       codeline.style && codeline.style.marginLeft,
       10,
@@ -576,11 +606,16 @@ class ParsonsWidget {
     };
   }
   codelineSummary(line, idx) {
-    // this schema is used in pl-faded-parsons.py `read_lines`!
-    return {
+
+    if (idx == null) {
+      idx = line.index();
+    }
+
+    return { // this schema is used in pl-faded-parsons.py `read_lines`!
       content: this.getCodelineText(line),
       indent: this.getCodelineIndent(line),
       segments: this.getCodelineSegments(line),
+      id: $(line).attr("logging-id"),
       index: idx,
     };
   }
@@ -752,6 +787,8 @@ class ParsonsWidget {
     $orAlert(this.config.solutionSubmissionStorage).val(
       this.getSolutionCode().solution,
     );
+
+    this.addLogEntry("storeProgress", {});
   }
   toggleDarkmode() {
     $(this.config.main)
@@ -783,7 +820,32 @@ class ParsonsWidget {
     $(codeline).attr("aria-label", label);
     if (announce) $(codeline).attr("aria-live", "off");
   }
-  addLogEntry() {}
+  /** Add a tagged, timestamped log entry to `this.config.logStorage` */
+  addLogEntry(tag, data) {
+    const timestamp = new Date();
+
+    const entry = { timestamp, tag, data };
+
+    const s = $(this.config.logStorage);
+    if (!s.exists()) {
+      const msg =
+        "Could not save log!\nStorage missing at: " + selector;
+      console.error(msg);
+      alert(msg);
+      return;
+    };
+
+    let prev_log = s.val();
+    prev_log = JSON.parse(prev_log);
+    if (prev_log == null) {
+      prev_log = [ ];
+    } else if (!(Array.isArray(prev_log))) {
+      prev_log = [ prev_log ];
+    }
+
+    prev_log.push(entry);
+    s.val(JSON.stringify(prev_log));
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
