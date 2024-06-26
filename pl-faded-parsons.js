@@ -285,7 +285,7 @@ class ParsonsWidget {
       // if the blank is the first/last in the row...
       if (blankIdx == lastBlankIdx) {
         // then move cursor between codelines
-        moveHorizontally(codeline, { moveForward, moveCodeline: true });
+        moveHorizontally(codeline, { moveForward, moveCodeline: false });
       } else {
         // otherwise move cursor between blanks within the codeline.
         // if exitting rightward, then enter on left, and vice-versa
@@ -367,7 +367,7 @@ class ParsonsWidget {
         if (moveInsteadOfIndent) {
           moveHorizontally(codeline, {
             moveForward: true,
-            moveCodeline: false,
+            moveCodeline: true,
           });
         } else {
           const delta = motionData.jumpForward ? +1 : -1;
@@ -523,7 +523,7 @@ class ParsonsWidget {
           },
         }),
       );
-    
+
     // add uids to each line and blank for logging ////////////////////////////
     $(widget.config.main)
       .find(".codeline-tray")
@@ -541,7 +541,7 @@ class ParsonsWidget {
       );
 
       //  add logging hooks for blank edits  //////////////////////////////////
-      findBlanksIn(widget.config.main).on({ 
+      findBlanksIn(widget.config.main).on({
         input(e) {
           widget.addLogEntry("editBlank", {
             value: $(e.target).val(),
