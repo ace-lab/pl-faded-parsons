@@ -517,6 +517,7 @@ class ParsonsWidget {
           input(e) {
             widget.autoSizeBlank(this);
             widget.updateAriaLabel(codeline);
+            widget.storeStudentProgress();
             widget.config.onBlankUpdate(e, this);
           },
           keyup(e) {
