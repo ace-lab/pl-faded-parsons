@@ -125,6 +125,7 @@ class ParsonsWidget {
 
           if (landedInAnotherTray(event, ui)) return;
 
+          widget.storeStudentProgress();
           widget.addLogEntry("moveInput", widget.codelineSummary(ui.item));
         },
         grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
@@ -140,6 +141,7 @@ class ParsonsWidget {
 
           updateIndentAfterDrag(ui);
 
+          widget.storeStudentProgress();
           widget.addLogEntry("moveOutput", widget.codelineSummary(ui.item));
         },
         receive: (_, ui) => {
@@ -462,7 +464,10 @@ class ParsonsWidget {
     {
       widget.redrawTabStops();
 
-      $("form.question-form").submit(() => widget.storeStudentProgress());
+      // attaching to submit causes "Warning: Unsaved Changes" alerts
+      // even when there's no unsaved changes...
+      // $("form.question-form").submit(() => widget.storeStudentProgress());
+      widget.storeStudentProgress();
 
       // resize blanks to fit text
       findBlanksIn(widget.config.main).each((_, blank) =>
@@ -499,6 +504,7 @@ class ParsonsWidget {
         keydown(e) {
           onCodelineKeydown(e, this);
           widget.updateAriaLabel(this);
+          widget.storeStudentProgress();
         },
       })
       // setup callbacks on each blank (this) in every codeline
@@ -520,6 +526,7 @@ class ParsonsWidget {
           keydown(e) {
             onBlankKeydown(e, codeline, this);
             widget.updateAriaLabel(codeline);
+            widget.storeStudentProgress();
           },
         }),
       );
@@ -763,32 +770,29 @@ class ParsonsWidget {
     const starterElements = this.getSourceLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    const $orAlert = (selector) => {
+    const $orErr = (selector) => {
       const s = $(selector);
       if (!s.exists()) {
-        const msg =
-          "Could not save student data!\nStorage missing at: " + selector;
-        console.error(msg);
-        alert(msg);
+        console.error(
+          "Could not save student data!\nStorage missing at: " + selector
+        );
       }
       return s;
     };
-    $orAlert(this.config.starterOrderStorage).val(
+    $orErr(this.config.starterOrderStorage).val(
       JSON.stringify(starterElements),
     );
 
     const solutionElements = this.getSolutionLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    $orAlert(this.config.solutionOrderStorage).val(
+    $orErr(this.config.solutionOrderStorage).val(
       JSON.stringify(solutionElements),
     );
 
-    $orAlert(this.config.solutionSubmissionStorage).val(
+    $orErr(this.config.solutionSubmissionStorage).val(
       this.getSolutionCode().solution,
     );
-
-    this.addLogEntry("storeProgress", {});
   }
   toggleDarkmode() {
     $(this.config.main)
