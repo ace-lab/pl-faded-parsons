@@ -122,10 +122,10 @@ class ParsonsWidget {
           widget.addLogEntry("removeOutput", widget.codelineSummary(ui.item)),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
+          widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
 
-          widget.storeStudentProgress();
           widget.addLogEntry("moveInput", widget.codelineSummary(ui.item));
         },
         grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
@@ -136,12 +136,12 @@ class ParsonsWidget {
         start: (_, ui) => setCodelineInMotion(ui.item, true),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
+          widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
 
           updateIndentAfterDrag(ui);
 
-          widget.storeStudentProgress();
           widget.addLogEntry("moveOutput", widget.codelineSummary(ui.item));
         },
         receive: (_, ui) => {
