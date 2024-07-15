@@ -732,6 +732,7 @@ class ParsonsWidget {
       this.redrawTabStops();
     }
     this.updateAriaLabel(codeline);
+    this.storeStudentProgress();
     return newCodeIndent;
   }
   /** Redraws the tab stops in the solution box if this.config.canIndent */
