@@ -122,6 +122,7 @@ class ParsonsWidget {
           widget.addLogEntry("removeOutput", widget.codelineSummary(ui.item)),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
+          widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
 
@@ -135,6 +136,7 @@ class ParsonsWidget {
         start: (_, ui) => setCodelineInMotion(ui.item, true),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
+          widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
 
@@ -462,7 +464,10 @@ class ParsonsWidget {
     {
       widget.redrawTabStops();
 
-      $("form.question-form").submit(() => widget.storeStudentProgress());
+      // attaching to submit causes "Warning: Unsaved Changes" alerts
+      // even when there's no unsaved changes...
+      // $("form.question-form").submit(() => widget.storeStudentProgress());
+      widget.storeStudentProgress();
 
       // resize blanks to fit text
       findBlanksIn(widget.config.main).each((_, blank) =>
@@ -499,6 +504,7 @@ class ParsonsWidget {
         keydown(e) {
           onCodelineKeydown(e, this);
           widget.updateAriaLabel(this);
+          widget.storeStudentProgress();
         },
       })
       // setup callbacks on each blank (this) in every codeline
@@ -511,6 +517,7 @@ class ParsonsWidget {
           input(e) {
             widget.autoSizeBlank(this);
             widget.updateAriaLabel(codeline);
+            widget.storeStudentProgress();
             widget.config.onBlankUpdate(e, this);
           },
           keyup(e) {
@@ -520,6 +527,7 @@ class ParsonsWidget {
           keydown(e) {
             onBlankKeydown(e, codeline, this);
             widget.updateAriaLabel(codeline);
+            widget.storeStudentProgress();
           },
         }),
       );
@@ -724,6 +732,7 @@ class ParsonsWidget {
       this.redrawTabStops();
     }
     this.updateAriaLabel(codeline);
+    this.storeStudentProgress();
     return newCodeIndent;
   }
   /** Redraws the tab stops in the solution box if this.config.canIndent */
@@ -763,32 +772,29 @@ class ParsonsWidget {
     const starterElements = this.getSourceLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    const $orAlert = (selector) => {
+    const $orErr = (selector) => {
       const s = $(selector);
       if (!s.exists()) {
-        const msg =
-          "Could not save student data!\nStorage missing at: " + selector;
-        console.error(msg);
-        alert(msg);
+        console.error(
+          "Could not save student data!\nStorage missing at: " + selector
+        );
       }
       return s;
     };
-    $orAlert(this.config.starterOrderStorage).val(
+    $orErr(this.config.starterOrderStorage).val(
       JSON.stringify(starterElements),
     );
 
     const solutionElements = this.getSolutionLines().map((line, idx) =>
       this.codelineSummary(line, idx),
     );
-    $orAlert(this.config.solutionOrderStorage).val(
+    $orErr(this.config.solutionOrderStorage).val(
       JSON.stringify(solutionElements),
     );
 
-    $orAlert(this.config.solutionSubmissionStorage).val(
+    $orErr(this.config.solutionSubmissionStorage).val(
       this.getSolutionCode().solution,
     );
-
-    this.addLogEntry("storeProgress", {});
   }
   toggleDarkmode() {
     $(this.config.main)
