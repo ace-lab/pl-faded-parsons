@@ -11,16 +11,16 @@
  *   ...
  *   ( <!-- A starter tray is optional -->
  *      <div#{{config.starter}}.codeline-tray>
- *         <ul#{{config.starterList}}.codeline-list>
+ *         <ol#{{config.starterList}}.codeline-list>
  *           <li.codeline> ... <input.parsons-blank>* ... </li>*
- *         </ul>
+ *         </ol>
  *       </div>
  *   )?
  *    ...
  *    <div#{{config.solution}}.codeline-tray>
- *       <ul#{{config.solutionList}}.codeline-list>
+ *       <ol#{{config.solutionList}}.codeline-list>
  *         <li.codeline> ... <input.parsons-blank>* ... </li>*
- *       </ul>
+ *       </ol>
  *    </div>
  *     ...
  *    <div#{{config.toolbar}>
@@ -171,11 +171,15 @@ class ParsonsWidget {
     });
 
     /** Finds the blanks within a query subject */
-    const findBlanksIn = (parent) => $(parent).find("input.parsons-blank");
+    const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
 
-    /** Manages the codeline's `.codeline-in-motion` css class */
+    widget.findBlanksIn = findBlanksIn;
+
+    /** Manages the codeline's drag state */
     const setCodelineInMotion = (codeline, inMotion) =>
-      $(codeline).toggleClass("codeline-in-motion", inMotion);
+      $(codeline)
+        .attr("aria-grabbed", inMotion)
+        .toggleClass("codeline-in-motion", inMotion);
 
     widget.getCodelineInMotion = (codeline) =>
       $(codeline).hasClass("codeline-in-motion");
@@ -220,7 +224,7 @@ class ParsonsWidget {
     /** Move codeline (or just cursor) horizontally across trays */
     const moveHorizontally = (codeline, { moveForward, moveCodeline }) => {
       // find the tray that we will move the codeline into (works for arbitrary m)
-      const codeboxes = $(widget.config.main).find("div.codeline-tray");
+      const codeboxes = $(widget.config.main).find(".codeline-tray");
       const m = codeboxes.length;
       if (m < 2) return;
       const codeboxIdx = codeboxes
@@ -228,7 +232,7 @@ class ParsonsWidget {
         .findIndex((c) => $(c).has(codeline).exists());
       const k = codeboxIdx + (moveForward ? +1 : -1);
       if (k < 0 || m <= k) return; // don't wrap around!
-      const newTray = codeboxes.eq(k).find("ul.codeline-list");
+      const newTray = codeboxes.eq(k).find(".codeline-list");
 
       const { found, targetIsLower, target } = findHorizontalTarget(
         codeline,
@@ -475,35 +479,53 @@ class ParsonsWidget {
       );
     }
 
+    // ready the aria accessibility ///////////////////////////////////////////
+    {
+      const descriptor = $(widget.config.ariaDescriptor);
+      const details = $(widget.config.ariaDetails);
+      if (ParsonsGlobal.uiConfig.showAriaDescriptor) {
+        descriptor.css("display", "inline-block");
+        details.css("display", "inline-block");
+      }
+
+      $(widget.config.main)
+        .find("li.codeline")
+        .attr("aria-labelledby", descriptor.attr("id"))
+        .attr("aria-details", details.attr("id"));
+
+      findBlanksIn(widget.config.main)
+        .attr("aria-labelledby", descriptor.attr("id"))
+        .attr("aria-details", details.attr("id"));
+    }
+
     // add interactivity to codelines and blanks //////////////////////////////
 
     $(widget.config.main)
       .find("li.codeline")
       // fix the aria labels
-      .each((_, codeline) => widget.updateAriaLabel(codeline, false))
+      .each((_, codeline) => widget.updateAriaInfo(codeline, false))
       // setup callbacks on each codeline (this)
       .on({
         focus() {
-          widget.updateAriaLabel(this);
+          widget.updateAriaInfo(this);
         },
         blur() {
-          widget.updateAriaLabel(this, false);
           setCodelineInMotion(this, false);
+          widget.updateAriaInfo(this, false);
         },
         click(e) {
           if (e.target != this) return; // if child clicked, return.
           widget.enterBlankOnCodelineFocus = false;
           focusCodeline(this);
-          widget.updateAriaLabel(this);
         },
         keyup(e) {
           const { moveCodeline } = keyMotionData(e);
           setCodelineInMotion(this, moveCodeline);
-          widget.updateAriaLabel(this);
+          widget.updateAriaInfo(this);
         },
         keydown(e) {
           onCodelineKeydown(e, this);
-          widget.updateAriaLabel(this);
+          widget.updateAriaInfo(this);
           widget.storeStudentProgress();
         },
       })
@@ -512,21 +534,15 @@ class ParsonsWidget {
         findBlanksIn(codeline).on({
           focus() {
             widget.enterBlankOnCodelineFocus = true;
-            widget.updateAriaLabel(codeline);
+            widget.updateAriaInfo(codeline);
           },
           input(e) {
             widget.autoSizeBlank(this);
-            widget.updateAriaLabel(codeline);
             widget.storeStudentProgress();
             widget.config.onBlankUpdate(e, this);
           },
-          keyup(e) {
-            const { moveCodeline } = keyMotionData(e);
-            setCodelineInMotion(codeline, moveCodeline);
-          },
           keydown(e) {
             onBlankKeydown(e, codeline, this);
-            widget.updateAriaLabel(codeline);
             widget.storeStudentProgress();
           },
         }),
@@ -548,17 +564,17 @@ class ParsonsWidget {
           }),
       );
 
-      //  add logging hooks for blank edits  //////////////////////////////////
-      findBlanksIn(widget.config.main).on({
-        input(e) {
-          widget.addLogEntry("editBlank", {
-            value: $(e.target).val(),
-            id : $(e.target).attr("logging-id")
-          });
-        }
-      });
+    //  add logging hooks for blank edits  //////////////////////////////////
+    findBlanksIn(widget.config.main).on({
+      input(e) {
+        widget.addLogEntry("editBlank", {
+          value: $(e.target).val(),
+          id: $(e.target).attr("logging-id"),
+        });
+      },
+    });
 
-      widget.addLogEntry("problemOpened", {});
+    widget.addLogEntry("problemOpened", {});
   }
   validateConfig() {
     if (this.config.prettyPrint) {
@@ -603,7 +619,7 @@ class ParsonsWidget {
   getCodelineSegments(codeline) {
     let elemClone = $(codeline).clone();
     let blankValues = [];
-    elemClone.find("input").each(function (_, inp) {
+    this.findBlanksIn(elemClone).each(function (_, inp) {
       blankValues.push(inp.value);
       inp.replaceWith("!BLANK");
     });
@@ -614,12 +630,12 @@ class ParsonsWidget {
     };
   }
   codelineSummary(line, idx) {
-
     if (idx == null) {
       idx = line.index();
     }
 
-    return { // this schema is used in pl-faded-parsons.py `read_lines`!
+    return {
+      // this schema is used in pl-faded-parsons.py `read_lines`!
       content: this.getCodelineText(line),
       indent: this.getCodelineIndent(line),
       segments: this.getCodelineSegments(line),
@@ -647,7 +663,7 @@ class ParsonsWidget {
       const lineClone = $(line).clone();
 
       blankText = "";
-      lineClone.find("input").each(function (_, inp) {
+      this.findBlanksIn(lineClone).each(function (_, inp) {
         inp.replaceWith("!BLANK");
         blankText += " #blank" + inp.value;
       });
@@ -669,7 +685,7 @@ class ParsonsWidget {
   /** Reads a codeline element and interpolates the blanks with their value */
   getCodelineText(codeline) {
     let elemClone = $(codeline).clone();
-    elemClone.find("input").each(function (_, inp) {
+    this.findBlanksIn(elemClone).each(function (_, inp) {
       inp.replaceWith(inp.value);
     });
     elemClone[0].innerText = elemClone[0].innerText.trimRight();
@@ -731,7 +747,8 @@ class ParsonsWidget {
 
       this.redrawTabStops();
     }
-    this.updateAriaLabel(codeline);
+    this.updateAriaInfo(codeline);
+    console.log("update indent");
     this.storeStudentProgress();
     return newCodeIndent;
   }
@@ -776,7 +793,7 @@ class ParsonsWidget {
       const s = $(selector);
       if (!s.exists()) {
         console.error(
-          "Could not save student data!\nStorage missing at: " + selector
+          "Could not save student data!\nStorage missing at: " + selector,
         );
       }
       return s;
@@ -802,29 +819,73 @@ class ParsonsWidget {
       .add($(this.config.main))
       .each((_, e) => $(e).toggleClass("dark"));
   }
-  updateAriaLabel(codeline, announce = true) {
-    // todo:
-    //   make each codeline *not* be tagged as a group
-    //   each announcement should not read out other list items
-    //   get the priority level correct with aria-live so announcements are accurate
-    //    - gpt recommends creating an invisible announcement div, and updating its contents as need be
-    const lineNumber = 1 + $(codeline.parentElement).children().index(codeline);
-    const inStarterTray = $(this.config.starterList).has(codeline).length;
-    const indentPrefix = inStarterTray
-      ? "unused"
-      : `indent ${this.getCodelineIndent(codeline)}`;
-    const clone = $(codeline).clone();
-    clone
-      .find("input")
-      .each((_, inp) =>
-        inp.replaceWith(inp.value ? `full-blank(${inp.value})` : "empty-blank"),
+  updateAriaInfo(codeline, hasFocus = true) {
+    const defaultText = "no codeline selected. select a codeline to begin. ";
+
+    $(this.config.ariaDescriptor).text(
+      hasFocus ? this.codelineAriaDescription(codeline) : defaultText,
+    );
+
+    $(this.config.ariaDetails).text(
+      hasFocus
+        ? this.codelineAriaDetails(codeline)
+        : defaultText +
+            "use arrow keys, tab, and enter to navigate and indent." +
+            "use shift to reverse motion, and option/ctrl to jump.",
+    );
+  }
+  codelineAriaDetails(codeline) {
+    const trays = $(this.config.main).find(".codeline-tray");
+    const tray =
+      1 + trays.toArray().findIndex((t) => $(t).has(codeline).exists());
+    const trayText =
+      trays > 1 ? `; All in tray ${tray} of ${trays.length}.` : ".";
+    let indentLevel = this.getCodelineIndent(codeline);
+    const visualDedentParents = $(codeline)
+      .prevAll()
+      .filter((_, sib) => {
+        const sibIndentLevel = this.getCodelineIndent(sib);
+        const sibDedented = sibIndentLevel < indentLevel;
+        indentLevel = Math.min(sibIndentLevel, indentLevel);
+        return sibDedented;
+      })
+      .toArray();
+    return (
+      [codeline, ...visualDedentParents]
+        .map((cl) => this.codelineAriaDescription(cl))
+        .join("; Under ") + trayText
+    );
+  }
+  codelineAriaDescription(codeline) {
+    const lineUiDescription = (codeline) => {
+      const motionText = this.getCodelineInMotion(codeline) ? "moving " : "";
+      const lineNumber = 1 + $(codeline).parent().children().index(codeline);
+      return `${motionText} line ${lineNumber}`;
+    };
+    const indentDescription = (codeline) => {
+      const inStarterTray = $(this.config.starterList).has(codeline).exists();
+      const prefix = inStarterTray ? "unused, " : "";
+      const tabs = this.getCodelineIndent(codeline);
+      return (
+        prefix + (tabs === 0 ? "flush" : tabs === 1 ? "tab" : `${tabs} tabs`)
       );
-    const text = clone[0].innerText.trim();
-    const label = `line ${lineNumber} ${indentPrefix}: ${text}`;
-    // todo: polite seems to be the wrong setting here.
-    if (announce) $(codeline).attr("aria-live", "polite");
-    $(codeline).attr("aria-label", label);
-    if (announce) $(codeline).attr("aria-live", "off");
+    };
+    const bodyDescription = (codeline) => {
+      const fIdx = this.findBlanksIn(codeline).index(document.activeElement);
+      const formatBlank = (idx, inp) => {
+        const value = inp.value ? `(${inp.value})` : "";
+        const header = idx === fIdx ? "active" : value ? "full" : "empty";
+        return inp.replaceWith(`${header}-blank${value}`);
+      };
+
+      const clone = $(codeline).clone();
+      this.findBlanksIn(clone).each(formatBlank);
+      return clone.text().trim();
+    };
+    const lineUIDesc = lineUiDescription(codeline);
+    const indentDesc = indentDescription(codeline);
+    const bodyDesc = bodyDescription(codeline);
+    return `${lineUIDesc}, ${indentDesc}, ${bodyDesc}`;
   }
   /** Add a tagged, timestamped log entry to `this.config.logStorage` */
   addLogEntry(tag, data) {
@@ -834,19 +895,18 @@ class ParsonsWidget {
 
     const s = $(this.config.logStorage);
     if (!s.exists()) {
-      const msg =
-        "Could not save log!\nStorage missing at: " + selector;
+      const msg = "Could not save log!\nStorage missing at: " + selector;
       console.error(msg);
       alert(msg);
       return;
-    };
+    }
 
     let prev_log = s.val();
     prev_log = JSON.parse(prev_log);
     if (prev_log == null) {
-      prev_log = [ ];
-    } else if (!(Array.isArray(prev_log))) {
-      prev_log = [ prev_log ];
+      prev_log = [];
+    } else if (!Array.isArray(prev_log)) {
+      prev_log = [prev_log];
     }
 
     prev_log.push(entry);
@@ -876,6 +936,8 @@ window.ParsonsGlobal ||= /* singleton! */ {
      * instead of advancing it into the next tray
      */
     allowIndentingInStarterTray: false,
+    /** Toggles the visibility of the aria-describedby and aria-details divs */
+    showAriaDescriptor: false,
   },
   /** The custom methods that are added to jQuery results */
   jqueryExtension: (function ($) {

@@ -12,6 +12,18 @@ code {
   padding: 10px;
 }
 
+.aria-descriptor, .aria-details {
+  display: none;
+  width: 100%;
+  padding: 2px;
+  margin-block-end: 3px;
+}
+
+.aria-details {
+  font-style: italic;
+  font-size: 90%;
+}
+
 .soft-border {
   border: 2px solid grey;
   border-radius: 5px;
@@ -27,7 +39,7 @@ code {
   background: #4448;
 }
 
-.codeline-tray ul {
+.codeline-tray ol {
   font-size: smaller;
   font-family: monospace;
   list-style: none;
@@ -36,7 +48,7 @@ code {
   margin-left: 0;
 }
 
-.codeline-tray ul:empty {
+.codeline-tray ol:empty {
   padding-bottom: 80px;
 }
 
