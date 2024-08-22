@@ -11,7 +11,7 @@ from unittest.mock import patch, mock_open
 
 from lib.consts import DEFAULT_BLANK_PATTERN, BLANK_SUBSTITUTE
 from lib.tokens import Lexer, lex
-from generate_fpp import parse_fpp_regions
+from lib.parse import parse_fpp_regions
 
 def flatten_into_region_map(tokens: Lexer) -> dict[str, list[str]]:
     col = defaultdict(list)
