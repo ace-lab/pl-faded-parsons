@@ -1,6 +1,6 @@
 from typing import Final
 from re import compile, Pattern
-
+import os.path
 
 class Bcolors:
     # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
@@ -43,56 +43,17 @@ class Bcolors:
         Bcolors.printf(Bcolors.OK_BLUE, *args, **kwargs)
 
 
-TEST_DEFAULT: Final[str] = """# AUTO-GENERATED FILE
-# go to https://prairielearn.readthedocs.io/en/latest/python-grader/#teststestpy for more info
+TEMPLATE_DIRECTORY = os.path.join(os.path.dirname(__file__), 'template')
 
-from pl_helpers import name, points
-from pl_unit_test import PLTestCase
-from code_feedback import Feedback
+def read_template(path):
+    with open(os.path.join(TEMPLATE_DIRECTORY, path), 'r') as f:
+        return f.read()
 
+TEST_DEFAULT: Final[str] = read_template('test.py')
 
-class Test(PLTestCase):
-    @points(1)
-    @name("test 0")
-    def test_0(self):
-        points = 0
-        # ex: calling a student defined function det
-        #     with args=(1, 2, 3, 4)
-        # case = [1, 2, 3, 4]
-        # user_val = Feedback.call_user(self.st.det, *case)
+SETUP_CODE_DEFAULT: Final[str] = read_template('setup.py')
 
-        # ex: calling a function defined in ans.py called det
-        #     with the same arguments
-        # ref_val = self.ref.det(*case)
-
-        # ex: test correctness, update points
-        # if Feedback.check_scalar('case: ' + case, ref_val, user_val):
-        #     points += 1
-
-        Feedback.set_score(points)\n"""
-
-SETUP_CODE_DEFAULT: Final[str] = """# AUTO-GENERATED FILE
-# go to https://prairielearn.readthedocs.io/en/latest/python-grader/#testssetup_codepy for more info\n"""
-
-SERVER_DEFAULT: Final[str] = """# AUTO-GENERATED FILE
-# go to https://prairielearn.readthedocs.io/en/latest/python-grader/#serverpy for more info
-
-def generate(data):
-    # Define incoming variables here
-    names_for_user = [
-        # ex: student receives a matrix m
-        # {"name": "m", "description": "a 2x2 matrix", "type": "numpy array"}
-    ]
-    # Define outgoing variables here
-    names_from_user = [
-        # ex: student defines a determinant function name det
-        # {"name": "det", "description": "determinant for a 2x2 matrix", "type": "python function"}
-    ]
-
-    data["params"]["names_for_user"] = names_for_user
-    data["params"]["names_from_user"] = names_from_user
-
-    return data\n"""
+SERVER_DEFAULT: Final[str] = read_template('server.py')
 
 # Matches, with precedence in listed order:
 MAIN_PATTERN: Final[Pattern] = compile('|'.join((
