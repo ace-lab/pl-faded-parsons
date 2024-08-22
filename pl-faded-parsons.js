@@ -25,7 +25,7 @@
  *     ...
  *    <div#{{config.toolbar}>
  *       ...
- *       <div.fpp-help data-toggle="popover"></div>
+ *       <div.fpp-help></div>
  *       <div.fpp-copy></div>
  *       <div.fpp-dark></div>
  *       ...
@@ -60,7 +60,11 @@ class ParsonsWidget {
       $(widget.config.toolbar)
         .find(`.widget-help`)
         .popover({
-          content: () =>
+          placement: "auto",
+          trigger: "focus",
+          html: true,
+          title: "Faded Parsons Help",
+          content:
             // changes here should be reflected in keyMotionModifiers!
             [
               "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
@@ -73,6 +77,11 @@ class ParsonsWidget {
 
       $(widget.config.toolbar)
         .find(`.widget-copy`)
+        .popover({
+          placement: "auto",
+          trigger: "focus",
+          content: "Copied to Clipboard!",
+        })
         .on({
           click: () => {
             if (navigator.clipboard) {

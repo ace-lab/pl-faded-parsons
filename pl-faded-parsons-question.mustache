@@ -44,15 +44,15 @@
     </div>
 
     {{! the help and settings toolbar }}
-    <div id="widget-toolbar-{{uuid}}" class="row card toolbar">
+    <div id="widget-toolbar-{{uuid}}" class="card toolbar">
         {{! not using <button> is an accessibility anti-pattern that is forced by prairielearn }}
-        <a role="button" aria-label="help text" class="widget-help btn btn-light border d-flex align-items-center" data-toggle="popover" data-html="true" title="Faded Parsons Help" data-placement="auto" data-trigger="focus" tabindex="0">
+        <a role="button" aria-label="help text" class="widget-help btn btn-light border d-flex align-items-center" tabindex="0">
             <i class="fa fa-question-circle" aria-hidden="true"></i>
         </a>
-        <a role="button" aria-label="copy to clipboard" class="widget-copy btn btn-light border d-flex align-items-center" data-toggle="popover" data-content="Copy to Clipboard" data-html="true" data-placement="auto" data-trigger="hover" tabindex="0">
+        <a role="button" aria-label="copy to clipboard" class="widget-copy btn btn-light border d-flex align-items-center" tabindex="0">
             <svg fill="#000000" width="16px" height="16px" viewBox="0 0 32 32" data-name="Layer 1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M27.2,8.22H23.78V5.42A3.42,3.42,0,0,0,20.36,2H5.42A3.42,3.42,0,0,0,2,5.42V20.36a3.43,3.43,0,0,0,3.42,3.42h2.8V27.2A2.81,2.81,0,0,0,11,30H27.2A2.81,2.81,0,0,0,30,27.2V11A2.81,2.81,0,0,0,27.2,8.22ZM5.42,21.91a1.55,1.55,0,0,1-1.55-1.55V5.42A1.54,1.54,0,0,1,5.42,3.87H20.36a1.55,1.55,0,0,1,1.55,1.55v2.8H11A2.81,2.81,0,0,0,8.22,11V21.91ZM28.13,27.2a.93.93,0,0,1-.93.93H11a.93.93,0,0,1-.93-.93V11a.93.93,0,0,1,.93-.93H27.2a.93.93,0,0,1,.93.93Z"/></svg>
         </a>
-        <a role="button" aria-label="toggle theme" class="widget-dark btn btn-light border d-flex align-items-center" data-toggle="popover" data-trigger="hover" data-content="Toggle Theme" tabindex="0">
+        <a role="button" aria-label="toggle theme" class="widget-dark btn btn-light border d-flex align-items-center" tabindex="0">
             <svg width="16px" height="16px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"> <g id="Lager_94" data-name="Lager 94" transform="translate(0)"> <path id="Path_70" data-name="Path 70" d="M12.516,4.509A12,12,0,0,0,22.3,19.881,12.317,12.317,0,0,0,24,20a11.984,11.984,0,0,0,3.49-.514,12.1,12.1,0,0,1-9.963,8.421A12.679,12.679,0,0,1,16,28,12,12,0,0,1,12.516,4.509M16,0a16.5,16.5,0,0,0-2.212.15A16,16,0,0,0,16,32a16.526,16.526,0,0,0,2.01-.123A16.04,16.04,0,0,0,31.85,18.212,16.516,16.516,0,0,0,32,15.944,1.957,1.957,0,0,0,30,14a2.046,2.046,0,0,0-1.23.413A7.942,7.942,0,0,1,24,16a8.35,8.35,0,0,1-1.15-.08,7.995,7.995,0,0,1-5.264-12.7A2.064,2.064,0,0,0,16.056,0Z" fill="#040505"/> </g> </svg>
         </a>
     </div>

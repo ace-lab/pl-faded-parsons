@@ -1,5 +1,5 @@
 .fpp-global-defs {
-  --focus-border-color: var(--green);
+  --focus-border-color: var(--bs-primary, var(--primary, #007bff));
   --motion-border-color: #d0a62a;
   background: var(--code-background);
 }
@@ -73,7 +73,7 @@ code {
 .codeline-tray li.codeline-in-motion {
   outline: 4px solid var(--motion-border-color) !important;
   border-color: var(--motion-border-color);
-  margin: 15px;
+  margin: 12px;
   rotate: -2deg;
 }
 
@@ -83,6 +83,7 @@ code {
   border-radius: 10px;
   border-right: 2px solid var(--pln-txt-color);
   border-left: 2px solid var(--pln-txt-color);
+  background-color: var(--code-background);
   padding: 2px;
   padding-left: 3ch;
   text-indent: -2ch;
@@ -120,4 +121,5 @@ code {
   font-size: 90%;
   align-items: flex-end;
   flex-direction: row-reverse;
+  border-radius: 0;
 }
