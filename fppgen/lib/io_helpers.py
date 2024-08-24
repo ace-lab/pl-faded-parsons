@@ -1,9 +1,11 @@
 from os.path import *
 from typing import *
 
+from glob import glob
+from fnmatch import filter as fnfilter
 from argparse import Namespace, ArgumentParser, RawTextHelpFormatter, BooleanOptionalAction
 from functools import partial
-from os import getcwd, listdir, makedirs, PathLike
+from os import listdir, makedirs, PathLike
 from re import compile
 
 from lib.consts import Bcolors, PROGRAM_DESCRIPTION
@@ -63,9 +65,7 @@ def auto_detect_sources(questions_dir: Optional[PathLike[AnyStr]] = None) -> lis
             Bcolors.fail(*e.args)
 
     resolve = partial(join, questions_dir)
-    def is_valid(f):
-        return isfile(f) and file_ext(f).endswith('py')
-    return list(filter(is_valid, map(resolve, listdir(questions_dir))))
+    return list(map(resolve, fnfilter(listdir(questions_dir), "*.fpp*")))
 
 
 def resolve_path(path: str, *,
@@ -79,7 +79,7 @@ def resolve_path(path: str, *,
         + <course>
         | ...        << search here 3rd
         |-+ elements/pl-faded-parsons
-        | |-generate_fpp.py
+        | |-fppgen/
         | | ...      << search here 1st
         |
         |-+ questions
@@ -88,42 +88,34 @@ def resolve_path(path: str, *,
         ```
         Will search ./questions/ 4th, in case this is run from <course>/
     """
+    glob_pat = path
     if not path_is_dir and (isdir(path) or not file_ext(path)):
-        path += '.py'
+        glob_pat += '.fpp*'
 
-    if exists(path):
-        return path
+    glob_patterns = [
+        glob_pat,
+        join('..', '..', 'questions', glob_pat),
+        join('..', '..', glob_pat),
+        join('questions', glob_pat),
+    ]
 
-    def warn():
+    def warn(msg: str):
         if not silent:
-            Bcolors.warn('- Could not find', original,
-                         'in current directory. Proceeding with detected file.')
+            Bcolors.warn(f'- {msg}')
 
-    original = path
+    for glob_pattern in glob_patterns:
+        matches = glob(glob_pattern)
+        if len(matches) == 0:
+            warn(f"Could not find source files that match {glob_pattern}")
+            continue
 
-    # if this is in 'elements/pl-faded-parsons', back up to course directory
-    h, t0 = split(getcwd())
-    _, t1 = split(h)
-    if t0 == 'pl-faded-parsons' and t1 == 'elements':
-        # try original in a questions directory on the course level
-        new_path = join('..', '..', 'questions', original)
-        if exists(new_path):
-            warn()
-            return new_path
-
-        # try original in course directory
-        new_path = join('..', '..', original)
-        if exists(new_path):
-            warn()
-            return new_path
-
-    new_path = join('questions', original)
-    if exists(new_path):
-        warn()
-        return new_path
+        if len(matches) > 1:
+            warn(f"Found multiple source files that match {glob_pattern}")
+        
+        return matches[0]
 
     raise FileNotFoundError('Could not find ' +
-                            ('directory ' if path_is_dir else 'file ') + original)
+                            ('directory ' if path_is_dir else 'file ') + path)
 
 
 def make_blank_re(config):
@@ -204,7 +196,7 @@ def parse_args(arg_text: str = None) -> Namespace:
                              'default is next to the source path')
     parser.add_argument('source_path', action='append', nargs='*', metavar='paths')
     parser.add_argument('--questions-dir', action='append', metavar='path',
-                        help='target all .py files in directory as sources')
+                        help='target all .fpp files in directory as sources')
     parser.add_argument('--force-json', action='append', metavar='path',
                         help='will overwrite the question\'s info.json file with auto-generated content')
 
