@@ -1,229 +1,325 @@
-import prairielearn as pl
-import lxml.html as xml
-import chevron
-import os
+try:
+    import prairielearn as pl
+except ModuleNotFoundError:
+    print('<!> pl not loaded! <!>')
+
 import base64
+import chevron
+import itertools
 import json
-import re
+import os.path
 import random
+import typing
+import lxml.html as xml
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+#
+# Common Datatypes for Parsing External Data
+#
+class Mustachable(ABC):
+    'An interface for classes that export to .mustache'
+    @abstractmethod
+    def to_mustache(self, language) -> dict:
+        pass
+
+
+@dataclass(frozen=True, slots=True)
+class Segment(Mustachable, ABC):
+    '''
+    Segments match what is used in pl-faded-parsons-code-line.mustache:
+    ``` ts
+    type Segment =
+        | { code: { content: string, language: string } }
+        | { blank: { default: string, width: number } };
+    ```
+    '''
+    value: str
+
+    def get_text(self):
+        return self.value
+
+
+class BlankSegment(Segment):
+    def to_mustache(self, _):
+        width = max(len(self.value) + 1, 4)
+        return { "blank" : { "default" : self.value, "width": width } }
+
+
+class CodeSegment(Segment):
+    def to_mustache(self, language):
+        return { "code" : { "content" : self.value, "language": language } }
+
+
+@dataclass(frozen=True, slots=True)
+class Line(Mustachable):
+    '''
+    A helper class for reading, storing, and writing common line data.
+
+    Import/export uses the schema in pl-faded-parsons.js `codelineSummary`.
+    Expects a line to have the type:
+    ``` ts
+    type CodelineSummary = {
+        indent: number,
+        segments: { givenSegments: string[], blankValues: string[], },
+        content: string,
+    };
+    ```
+    where `givenSegments.length() == 1 + blankValues.length()`
+    '''
+    indent: int
+    segments: list[Segment]
+    content: str | None = None
+
+    @staticmethod
+    def _import(line: dict) -> 'Line':
+        # from pl-faded-parsons.js `codelineSummary` and `getCodelineSegments`
+        indent = line.get('indent', 0)
+        segments = code_and_blanks_to_segments(
+            line['segments']['givenSegments'], line['segments']['blankValues']
+        )
+        content = line.get('content', None)
+        return Line(indent, segments, content)
+
+    def _export(self) -> dict:
+        def text_list(ls): return list(map(Segment.get_text, ls))
+        given = text_list(self.segments[0::2])
+        blank = text_list(self.segments[1::2])
+        return {
+            "indent": self.indent,
+            "segments": { "givenSegments": given, "blankValues": blank },
+            "content": self.content,
+        }
+
+    def to_mustache(self, language, *, indent_size=4) -> dict:
+        return {
+            "indent": self.indent * indent_size,
+            "segments": [s.to_mustache(language) for s in self.segments]
+        }
+
+    def get_text(self) -> str:
+        if self.content is not None: return self.content
+        ind = self.indent * ' '
+        return ind + ''.join(map(Segment.get_text, self.segments))
+
+
+@dataclass(frozen=True, slots=True)
+class Submission:
+    '''
+    Record that loads submission data from the PL `data` param. Save locations
+    set by the `input` elements in pl-faded-parsons-question.mustache.
+    `answers_name` is the problem name passed in the `element_html`.
+    '''
+    answers_name: str
+    starter_lines: list[Line]
+    solution_lines: list[Line]
+    log: list[dict]
+
+    @staticmethod
+    def make_key(answers_name, input_name): return f'{answers_name}.{input_name}'
+
+    @staticmethod
+    def _import(answers_name: str, answers_data: dict):
+        'works for `data["raw_submitted_answers"]` and `data["submitted_answers"]`'
+        def load_input_field(input_name, default):
+            k = Submission.make_key(answers_name, input_name)
+            v = answers_data.get(k, default)
+            return json.loads(v) if type(v) is str else v
+
+        def import_lines(mem: dict, entry: str):
+            return [Line._import(l) for l in mem.get(entry, [])]
+
+        main_memory = load_input_field('main', {})
+
+        return Submission(
+            answers_name,
+            import_lines(main_memory, 'starter'),
+            import_lines(main_memory, 'solution'),
+            load_input_field('log', []),
+        )
+
+    def _export(self) -> dict[str, str]:
+        main_mem = {
+            'starter': [l._export() for l in self.starter_lines],
+            'solution': [l._export() for l in self.solution_lines],
+        }
+        return {
+            Submission.make_key(self.answers_name, 'main'): json.dumps(main_mem),
+            Submission.make_key(self.answers_name, 'log'): json.dumps(self.log),
+        }
+
+    def get_student_code(self):
+        if not self.solution_lines: return ''
+        return '\n'.join(map(Line.get_text, self.solution_lines)) + '\n'
+
+    def __bool__(self):
+        return bool(self.solution_lines or self.starter_lines)
 
 
 #
 # Helper functions
 #
-def read_file_lines(data, filename, error_if_not_found=True):
-    """Return a string of newline-separated lines of code from some file in serverFilesQuestion."""
-    path = os.path.join(data["options"]["question_path"], 'serverFilesQuestion', filename)
-    try:
-        f = open(path, 'r')
-        return f.read()
-    except FileNotFoundError as e:
-        if error_if_not_found:
-            raise e
-        else:
-            return False
+def alternate(xs: typing.Iterable, ys: typing.Iterable):
+    'alternates between `xs` and `ys` until an empty iter would be polled'
+    iters, stop = itertools.cycle((iter(xs), iter(ys))), object()
+    while (x := next(next(iters), stop)) is not stop:
+        yield x
 
 
-def get_answers_name(element_html):
-    # use answers-name to namespace multiple pl-faded-parsons elements on a page
-    element = xml.fragment_fromstring(element_html)
+def code_and_blanks_to_segments(code_snippets, blank_values) -> list[dict]:
+    'generates a list of segments by interleaving the code snippets and blank values'
+    code_segments  = map(CodeSegment,  code_snippets)
+    blank_segments = map(BlankSegment, blank_values)
+    return list(alternate(code_segments, blank_segments))
+
+
+def get_answers_name(element):
+    'answers-name namespaces answers for multiple elements on a page'
     return pl.get_string_attrib(element, 'answers-name', '')
 
 
-def get_student_code(element_html, data):
-    answers_name = get_answers_name(element_html)
-    student_code = data['submitted_answers'].get(answers_name + 'student-parsons-solution', None)
-    return student_code
+def parse_new_state(raw_lines, *, max_distractors=10) -> tuple[list[Line], list[Line]]:
+    import re
 
+    blank_pattern = re.compile(r'#blank [^#]*')
+    given_pattern = re.compile(r'#(\d+)given')
 
-def parse_lines(language, lines):
-    'Reads lines structured by pl-faded-parsons.js codelineSummary'
-    for line in lines:
-        old_segments = line['segments']['givenSegments']
-        segments = [{ "code" : { "content" : old_segments[0] }}]
+    def get_blank_values(segments):
+        values = [''] * (len(segments) - 1)
+        for i, e in enumerate(re.findall(blank_pattern, segments[-1])):
+            values[i] = e.replace('#blank', '').strip()
+        return values
 
-        for segment, fill in zip(old_segments[1:], line['segments']['blankValues']):
-            segments.append({ "blank" : { "default" : fill    }})
-            segments.append({ "code"  : { "content" : segment }})
+    def parse_line(line: str) -> tuple[list[dict], str]:
+        segments = line.strip().split('!BLANK')
 
-        yield {
-            "language" : language,
-            "segments" : segments,
-            "indent": line.get('indent', 0)
-        }
+        # get the starting placeholder text, then remove those special comments
+        blanks = get_blank_values(segments)
+        tail = segments[-1] = re.sub(blank_pattern, '', segments[-1])
 
+        return code_and_blanks_to_segments(segments, blanks), tail
 
-def load_previous_state(language, old_starter, old_submission, indent_size=4):
-    scrambled = list(parse_lines(language, old_starter))
-    given = []
+    split_lines = raw_lines.strip().split('\n')
+    parsed_lines = map(parse_line, split_lines)
 
-    for data in parse_lines(language, old_submission):
-        data['indent'] *= indent_size
-        given.append(data)
+    # clean, mint, and sort the lines based on special comments
+    starter, given, distractors = [], [], []
+    for segments, tail in parsed_lines:
+        indent = 0
 
-    return scrambled, given
-
-
-def load_starter_and_given(raw_lines, language, indent_size=4, max_distractors=10):
-    line_segments = [ line.strip().split('!BLANK') for line in raw_lines.strip().split('\n') ]
-
-    scrambled = []
-    given = []
-    distractors = []
-
-    for segments in line_segments:
-        new_line = { "language": language }
-
-        matches = re.findall(r'#blank [^#]*', segments[-1])
-        tail = re.sub(r'#blank [^#]*', '', segments[-1])
-        blank_count = len(segments) - 1
-        fills = list(map(lambda e: e.replace('#blank ', ""), matches)) + [""] * (blank_count-len(matches))
-        segments[-1] = tail
-
-        parsed_segments = [{ "code" : { "content" : segments[0] } }]
-        for segment, pre_fill in zip(segments[1:], fills):
-            width = str(len(pre_fill)+1) if pre_fill != "" else "4"
-            parsed_segments.append({ "blank" : { "default" : pre_fill, "width" : width } })
-            parsed_segments.append({ "code"  : { "content" : segment  } })
-
-        matches = re.search(r'#([0-9]+)given', tail)
-        if matches is not None:
+        if matches := re.search(given_pattern, tail):
             indent = int(matches.group(1))
-            new_line['indent'] = indent * indent_size
-            parsed_segments[-1] = {
-                "code" : { "content" : re.sub(r'#([0-9]+)given', '', tail).rstrip() }
-            }
-            new_line['segments'] = parsed_segments
-            given.append(new_line)
-            continue
+            segments[-1] = CodeSegment(re.sub(given_pattern, '', tail).rstrip())
+            target = given
+        elif '#distractor' in tail:
+            segments[-1] = CodeSegment(tail.replace('#distractor', '').rstrip())
+            target = distractors
+        else:
+            target = starter
 
-        if re.match(r'#distractor', tail):
-            parsed_segments[-1] = {
-                "code" : { "content" : re.sub(r'#distractor', '', tail).rstrip() }
-            }
-            new_line['segments'] = parsed_segments
-            distractors.append(new_line)
-            continue
+        target.append(Line(indent, segments))
 
-        new_line['segments'] = parsed_segments
-        scrambled.append(new_line)
+    distractor_count = min(len(distractors), max_distractors)
+    starter.extend(random.sample(distractors, k=distractor_count))
 
-
-    for _ in range(max_distractors):
-        if len(distractors) == 0:
-            break
-        index = random.randint(len(distractors))
-        scrambled.append(distractors.pop(index))
-
-    return scrambled, given
-
-
-def base64_encode(s):
-    return base64.b64encode(s.encode("ascii")).decode("ascii")
+    return starter, given
 
 
 def render_question_panel(element_html, data):
     """Render the panel that displays the question (from code_lines.txt) and interaction boxes"""
-    element = xml.fragment_fromstring(element_html)
-    answers_name = get_answers_name(element_html)
-
-    format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
-    if format not in ("bottom", "right", "no_code"):
-        raise Exception(f"Unsupported pl-faded-parsons format: \"{format}\". Please see documentation for supported formats")
-
-    lang = pl.get_string_attrib(element, "language", None)
-
-    html_params = {
-        "code_lines": str(element.text),
-    }
-
     def get_child_text_by_tag(element, tag: str) -> str:
         """get the innerHTML of the first child of `element` that has the tag `tag`
         default value is empty string"""
         return next((elem.text for elem in element if elem.tag == tag), "")
 
-    def get_code_lines():
-        code_lines = get_child_text_by_tag(element, "code-lines") or \
-            read_file_lines(data, 'code_lines.txt', error_if_not_found=False)
+    def code_context_to_mustache(element, tag, lang):
+        if text := get_child_text_by_tag(element, tag).strip("\n"):
+            return { "text": text, "language": lang }
+        return None
 
-        if not code_lines:
-            raise Exception("A non-empty code_lines.txt or <code-lines> child must be provided in right (horizontal) placement.")
+    def load_new_state(element, *, shuffle_solution):
+        raw_lines = get_child_text_by_tag(element, "code-lines")
 
-        return code_lines
+        if not raw_lines:
+            try:
+                path = os.path.join(data["options"]["question_path"], 'serverFilesQuestion', 'code_lines.txt')
+                with open(path, 'r') as f:
+                    raw_lines = f.read()
+            except:
+                raw_lines = str(element.text)
 
-    # pre + post text
-    pre_text = get_child_text_by_tag(element, "pre-text") \
-        .strip("\n") # trim newlines
-    post_text = get_child_text_by_tag(element, "post-text") \
-        .strip("\n") # trim newlines
+        starter_lines, solution_lines = parse_new_state(raw_lines)
 
-    pre  = { "text" : pre_text  }
-    post = { "text" : post_text }
-
-    if lang:
-        pre.update({ "language" : lang })
-        post.update({ "language" : lang })
-
-    if pre_text:
-        html_params.update({
-            "pre_text" : pre,
-        })
-    if post_text:
-        html_params.update({
-            "post_text" : post,
-        })
-
-    try:
-        raw_lines = get_code_lines()
-    except:
-        raw_lines = str(element.text)
-
-
-    starter_lines_data_available    = 'starter-lines' in data['submitted_answers'] and \
-        data['submitted_answers']['starter-lines'] != []
-    submission_lines_data_available = 'submission-lines' in data['submitted_answers'] and \
-        data['submitted_answers']['submission-lines'] != []
-
-    if starter_lines_data_available or submission_lines_data_available:
-        start_lines = data['submitted_answers']['starter-lines'] if starter_lines_data_available else []
-        old_submission = data['submitted_answers']['submission-lines']
-        scrambled_lines, solution_lines = load_previous_state(lang, start_lines, old_submission)
-    else:
-        starter_lines, given_lines = load_starter_and_given(raw_lines, lang)
-        scrambled_lines = starter_lines.copy()
-        solution_lines = given_lines.copy()
-
-        if format in ("right", "bottom", "no_code", ):
-            random.shuffle(scrambled_lines)
-        if format in ("no_code", ):
+        random.shuffle(starter_lines)
+        if shuffle_solution:
             random.shuffle(solution_lines)
 
-    scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
-    given     = { "lines" : solution_lines , "answers_name" : answers_name }
+        return starter_lines, solution_lines
 
-    if format == "right":
-        if pre_text or post_text:
-            raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
-                'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
-        size = "narrow"
-    elif format == "bottom":
+    def get_current_state(element, past_submission: Submission, separate_starter: bool):
+        if past_submission:
+            starter_lines, solution_lines = \
+                submission.starter_lines, submission.solution_lines
+        else:
+            starter_lines, solution_lines = \
+                load_new_state(element, shuffle_solution=not separate_starter)
+
+        if not separate_starter:
+            return None, solution_lines + starter_lines
+
+        return starter_lines, solution_lines
+
+    def get_format_and_size(element, has_pre_or_post_text):
+        format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
+        if format not in ("bottom", "right", "no_code"):
+            raise Exception(f"Unsupported pl-faded-parsons format: {repr(format)}. Please see documentation for supported formats")
+
         size = "wide"
-    elif format == "no_code":
-        size = "wide"
-        given["lines"] = given['lines'] + scrambled['lines']
 
-    scrambled[size] = {"non_empty" : "non_empty"}
-    given    [size] = {"non_empty" : "non_empty"}
+        if format == "right":
+            if has_pre_or_post_text:
+                raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
+                    'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
+            size = "narrow"
 
-    if format != "no_code":
-        html_params.update({
-            "scrambled" : scrambled,
-        })
-    html_params.update({
-        "given" : given,
+        return format, size
+
+
+    element = xml.fragment_fromstring(element_html)
+
+    answers_name = get_answers_name(element)
+    lang = pl.get_string_attrib(element, "language", None)
+
+    pre_text  = code_context_to_mustache(element, "pre-text",  lang)
+    post_text = code_context_to_mustache(element, "post-text", lang)
+
+    format, size = get_format_and_size(element, pre_text or post_text)
+    use_starter_tray = format != 'no_code'
+
+    submission = Submission._import(answers_name, data['submitted_answers'])
+    starter_lines, given_lines = get_current_state(element, submission, use_starter_tray)
+
+    tray_lines_to_mustache = lambda lines: {
+        "lines": [Line.to_mustache(l, lang) for l in lines],
+        size: True # any truthy value will do
+    }
+
+    # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
+    html_params = {
+        # main element config
+        "answers-name": answers_name,
+        "language": lang,
+        "previous-log" : json.dumps(submission.log),
         "uuid": pl.get_uuid(),
-        "previous_log" : data['submitted_answers'].get('log', "[]")
-    })
+
+        # trays and code context
+        "starter": use_starter_tray and tray_lines_to_mustache(starter_lines),
+        "pre-text": pre_text,
+        "given": tray_lines_to_mustache(given_lines),
+        "post-text": post_text,
+    }
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
@@ -231,8 +327,11 @@ def render_question_panel(element_html, data):
 
 def render_submission_panel(element_html, data):
     """Show student what they submitted"""
+    element = xml.fragment_fromstring(element_html)
+    answers_name = get_answers_name(element)
+    submission = Submission._import(answers_name, data['submitted_answers'])
     html_params = {
-        'code': get_student_code(element_html, data),
+        'code': submission.get_student_code(),
     }
     with open('pl-faded-parsons-submission.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
@@ -270,45 +369,23 @@ def render(element_html, data):
 
 def parse(element_html, data):
     """Parse student's submitted answer (HTML form submission)"""
-    # make an XML fragment that can be passed around to other PL functions,
-    # parsed/walked, etc
+    def base64_encode(s):
+        return base64.b64encode(s.encode("ascii")).decode("ascii")
 
     element = xml.fragment_fromstring(element_html)
-    format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
-
-    def load_json_if_present(key: str, default=[]):
-        if key in data['raw_submitted_answers']:
-            return json.loads(data['raw_submitted_answers'][key])
-        return default
-
-    if format != "no_code":
-        starter_lines = load_json_if_present('starter-tray-order')
-    submission_lines = load_json_if_present('solution-tray-order')
-
-    submission_code = "\n".join([
-        line.get("content", "")
-        for line in submission_lines
-    ]) + "\n"
-
-    data['submitted_answers']['student-parsons-solution'] = submission_code
-    if format != "no_code":
-        data['submitted_answers']['starter-lines'] = starter_lines
-    data['submitted_answers']['submission-lines'] = submission_lines
-
-    # `element` is now an XML data structure - see docs for LXML library at lxml.de
-
-    # only Python problems are allowed right now (lang MUST be "py")
-    # lang = pl.get_string_attrib(element, 'language') # TODO: commenting is a stop gap for the pilot study, find a better solution
-
+    answers_name = get_answers_name(element)
     file_name = pl.get_string_attrib(element, 'file-name', 'user_code.py')
 
-    data['submitted_answers']['_files'] = [
-        {
-            "name": file_name,
-            "contents": base64_encode(get_student_code(element_html, data))
-        }
-    ]
+    submission = Submission._import(answers_name, data['raw_submitted_answers'])
 
-    # TBD do error checking here for other attribute values....
-    # set data['format_errors']['elt'] to an error message indicating an error with the
-    # contents/format of the HTML element named 'elt'
+    data['submitted_answers'].update({
+        '_files': [
+            {
+                "name": file_name,
+                "contents": base64_encode(submission.get_student_code())
+            }
+        ],
+        # provide the answer to users of pl-faded-parsons in classic PL style
+        answers_name: submission.get_student_code(),
+        **submission._export()
+    })

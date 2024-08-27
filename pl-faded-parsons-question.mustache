@@ -6,18 +6,16 @@
 
 {{! if not vertical (horizontal), keep half size boxes }}
 {{! if vertical (or no-code), full size boxes }}
-<div id="pl-faded-parsons-{{uuid}}" role="application" class="col fpp-global-defs pl-faded-parsons soft-border" language="{{{language}}}">
+<div id="pl-faded-parsons-{{uuid}}" role="application" class="col fpp-global-defs pl-faded-parsons soft-border" language="{{language}}">
     {{! form field to be filled with order to save the current submission }}
-    <input class="starter-tray-order" name="{{answers-name}}starter-tray-order" type="hidden" value=""/>
-    <input class="solution-tray-order" name="{{answers-name}}solution-tray-order" type="hidden" value=""/>
-    <input class="student-parsons-solution" name="{{answers-name}}student-parsons-solution" type="hidden" value=""/>
-    <input class="log" name="{{answers-name}}log" type="hidden" value="{{previous_log}}" />
+    <input class="main" name="{{answers-name}}.main" type="hidden" value=""/>
+    <input class="log" name="{{answers-name}}.log" type="hidden" value="{{previous-log}}" />
 
     <div class="row" style="margin:0px">
-        {{! note: by entering the {#scrambled} {/scrambled} section, the mustache renderer dereferences
-              all tags as children of the `scrambled` node, which has a duplicate of the
+        {{! note: by entering the {#starter} {/starter} section, the mustache renderer dereferences
+              all tags as children of the `starter` node, which has a duplicate of the
               `answers_name` data dereferenced elsewhere }}
-        {{#scrambled}}
+        {{#starter}}
         <div id="starter-code-{{uuid}}" class="starter-code-tray codeline-tray soft-border col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} px-1">
             <ol id="ol-starter-code-{{uuid}}" class="ui-sortable codeline-list">
                 {{#lines}}
@@ -25,9 +23,9 @@
                 {{/lines}}
             </ol>
         </div>
-        {{/scrambled}}
+        {{/starter}}
         {{#pre_text}}
-        <pre class="prettyprint" language="{{{language}}}"> {{{text}}} </pre>
+        <pre class="prettyprint" language="{{language}}"> {{{text}}} </pre>
         {{/pre_text}}
         {{#given}}
         <div id="solution-{{uuid}}" class="solution-code-tray codeline-tray soft-border col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}}">
@@ -39,7 +37,7 @@
         </div>
         {{/given}}
         {{#post_text}}
-        <pre class="prettyprint" language="{{{language}}}"> {{{text}}} </pre>
+        <pre class="prettyprint" language="{{language}}"> {{{text}}} </pre>
         {{/post_text}}
     </div>
 
@@ -65,19 +63,19 @@
                 main: '#pl-faded-parsons-{{uuid}}',
                 uuid: '{{uuid}}',
 
+                logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
+                storage: "#pl-faded-parsons-{{uuid}} > input.main",
+
                 ariaDescriptor: "#pl-faded-parsons-aria-descriptor-{{uuid}}",
                 ariaDetails: "#pl-faded-parsons-aria-details-{{uuid}}",
+                toolbar: "#widget-toolbar-{{uuid}}",
+
                 solution: '#solution-{{uuid}}',
                 solutionList: '#ol-solution-{{uuid}}',
-                solutionOrderStorage: "#pl-faded-parsons-{{uuid}} > input.solution-tray-order",
-                solutionSubmissionStorage: "#pl-faded-parsons-{{uuid}} > input.student-parsons-solution",
                 {{#scrambled}}
                 starter: '#starter-code-{{uuid}}',
                 starterList: '#ol-starter-code-{{uuid}}',
                 {{/scrambled}}
-                starterOrderStorage: "#pl-faded-parsons-{{uuid}} > input.starter-tray-order",
-                logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
-                toolbar: "#widget-toolbar-{{uuid}}",
             })
         )
     );

@@ -600,9 +600,7 @@ class ParsonsWidget {
       "solutionList",
       "main",
       "toolbar",
-      "starterOrderStorage",
-      "solutionOrderStorage",
-      "solutionSubmissionStorage",
+      "storage",
       "logStorage",
     ]
       .filter((f) => this.config[f] == null)
@@ -632,7 +630,7 @@ class ParsonsWidget {
       blankValues.push(inp.value);
       inp.replaceWith("!BLANK");
     });
-    // this schema is used in pl-faded-parsons.py `read_lines`!
+    // this schema is used in pl-faded-parsons.py `Line._import`!
     return {
       givenSegments: elemClone.text().split("!BLANK"),
       blankValues: blankValues,
@@ -644,7 +642,7 @@ class ParsonsWidget {
     }
 
     return {
-      // this schema is used in pl-faded-parsons.py `read_lines`!
+      // this schema is used in pl-faded-parsons.py `Line._import`!
       content: this.getCodelineText(line),
       indent: this.getCodelineIndent(line),
       segments: this.getCodelineSegments(line),
@@ -660,36 +658,6 @@ class ParsonsWidget {
   }
   getSolutionLines() {
     return $(this.config.solutionList).children().toArray();
-  }
-  getSolutionCode() {
-    const solution_lines = this.getSolutionLines();
-
-    let solutionCode = "";
-    let codeMetadata = "";
-    let blankText = "";
-    let originalLine = "";
-    for (const line of solution_lines) {
-      const lineClone = $(line).clone();
-
-      blankText = "";
-      this.findBlanksIn(lineClone).each(function (_, inp) {
-        inp.replaceWith("!BLANK");
-        blankText += " #blank" + inp.value;
-      });
-      lineClone[0].innerText = lineClone[0].innerText.trimRight();
-      const lineText = this.getCodelineText(line);
-
-      if (lineClone[0].innerText != lineText) {
-        originalLine = " #!ORIGINAL" + lineClone[0].innerText + blankText;
-      } else {
-        originalLine = lineClone[0].innerText + blankText;
-      }
-
-      solutionCode += lineText + "\n";
-      codeMetadata += originalLine + "\n";
-    }
-
-    return { solution: solutionCode, metadata: codeMetadata };
   }
   /** Reads a codeline element and interpolates the blanks with their value */
   getCodelineText(codeline) {
@@ -795,31 +763,20 @@ class ParsonsWidget {
     });
   }
   storeStudentProgress() {
-    const starterElements = this.getSourceLines().map((line, idx) =>
-      this.codelineSummary(line, idx),
-    );
-    const $orErr = (selector) => {
-      const s = $(selector);
-      if (!s.exists()) {
-        console.error(
-          "Could not save student data!\nStorage missing at: " + selector,
-        );
-      }
-      return s;
-    };
-    $orErr(this.config.starterOrderStorage).val(
-      JSON.stringify(starterElements),
-    );
+    const storage = $(this.config.storage);
+    if (!storage.exists()) {
+      alert("Could not save student data!");
+      return;
+    }
 
-    const solutionElements = this.getSolutionLines().map((line, idx) =>
-      this.codelineSummary(line, idx),
-    );
-    $orErr(this.config.solutionOrderStorage).val(
-      JSON.stringify(solutionElements),
-    );
+    const linesSummary = (lines) =>
+          lines.map((line, idx) => this.codelineSummary(line, idx));
 
-    $orErr(this.config.solutionSubmissionStorage).val(
-      this.getSolutionCode().solution,
+    storage.val(
+      JSON.stringify({
+        'starter': linesSummary(this.getSourceLines()),
+        'solution': linesSummary(this.getSolutionLines()),
+      }),
     );
   }
   toggleDarkmode() {
@@ -920,6 +877,17 @@ class ParsonsWidget {
 
     prev_log.push(entry);
     s.val(JSON.stringify(prev_log));
+  }
+  generateMockPLData() {
+    const txInputs = [
+      $(this.config.storage),
+      $(this.config.logStorage),
+    ];
+    const data = {};
+    for (let inp of txInputs) {
+      data[inp.attr('name')] = inp.val();
+    }
+    return JSON.stringify({ "raw_submitted_answers": data });
   }
 }
 
