@@ -9,222 +9,238 @@ import itertools
 import json
 import os.path
 import random
+import re
 import typing
 import lxml.html as xml
 
+
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 #
-# Common Datatypes for Parsing External Data
+# Common Interfaces for Parsing External Data
 #
-class Mustachable(ABC):
-    'An interface for classes that export to .mustache'
+Jsonish = typing.Union[bool, float, int, str, list['Jsonish'], dict[str, 'Jsonish']]
+
+
+class FromPrairieLearn(ABC):
+    '''
+    an interface for serializing data transmitted through the input elements in
+    pl-faded-parsons-question.mustache, by way of pl's data dict
+    '''
+    @staticmethod
     @abstractmethod
-    def to_mustache(self, language) -> dict:
+    def from_pl_data(data: dict[str, Jsonish], *args):
+        '''
+        import this record from prairielearn submission storage (either
+        `data["raw_submitted_answers"]` or `data["submitted_answers"]`)
+        '''
+        pass
+
+    def to_pl_data(self) -> dict[str, Jsonish]:
+        'export this for pl-faded-parsons-question.mustache input storage'
+        return asdict(self)
+
+    @staticmethod
+    def make_key(answers_name: str, input_name: str): return f'{answers_name}.{input_name}'
+
+    @staticmethod
+    def read_pl_data(answers_data: dict, answers_name: str, input_name: str, default: Jsonish) -> Jsonish:
+        key = FromPrairieLearn.make_key(answers_name, input_name)
+        if key not in answers_data: return default
+
+        value = answers_data[key]
+        default_type = type(default)
+
+        # if we aren't expecting a str out, then attempt parsing
+        if type(value) is str and default_type is not str:
+            if not value: return default
+            value = json.loads(value)
+
+        if type(value) is default_type: return value
+
+        raise TypeError(f'expected input.{input_name} to store a {default_type} but got:\n{repr(value)}')
+
+
+class FromUser(ABC):
+    '''
+    an interface for reading in data from a use of the pl-faded-parsons
+    element by a question content author (usually an instructor)
+    '''
+    @staticmethod
+    @abstractmethod
+    def from_fpp_str(raw: str):
+        'parse raw low-level fpp markup'
+        pass
+
+    @abstractmethod
+    def to_code_str(self) -> str:
+        'flatten this representation into raw student code'
         pass
 
 
+#
+# Helpful Record Types
+#
 @dataclass(frozen=True, slots=True)
-class Segment(Mustachable, ABC):
-    '''
-    Segments match what is used in pl-faded-parsons-code-line.mustache:
-    ``` ts
-    type Segment =
-        | { code: { content: string, language: string } }
-        | { blank: { default: string, width: number } };
-    ```
-    '''
-    value: str
-
-    def get_text(self):
-        return self.value
-
-
-class BlankSegment(Segment):
-    def to_mustache(self, _):
-        width = max(len(self.value) + 1, 4)
-        return { "blank" : { "default" : self.value, "width": width } }
-
-
-class CodeSegment(Segment):
-    def to_mustache(self, language):
-        return { "code" : { "content" : self.value, "language": language } }
-
-
-@dataclass(frozen=True, slots=True)
-class Line(Mustachable):
+class Line(FromPrairieLearn, FromUser):
     '''
     A helper class for reading, storing, and writing common line data.
 
-    Import/export uses the schema in pl-faded-parsons.js `codelineSummary`.
+    Import/export uses the schema in pl-faded-parsons.js `storeStudentProgress`.
     Expects a line to have the type:
     ``` ts
-    type CodelineSummary = {
+    type Codeline = {
         indent: number,
-        segments: { givenSegments: string[], blankValues: string[], },
-        content: string,
+        codeSnippets: string[],
+        blankValues: string[],
     };
     ```
-    where `givenSegments.length() == 1 + blankValues.length()`
+    where `codeSnippets.length() == 1 + blankValues.length()`
     '''
     indent: int
-    segments: list[Segment]
-    content: str | None = None
+    codeSnippets: list[str]
+    blankValues: list[str]
 
-    @staticmethod
-    def _import(line: dict) -> 'Line':
-        # from pl-faded-parsons.js `codelineSummary` and `getCodelineSegments`
-        indent = line.get('indent', 0)
-        segments = code_and_blanks_to_segments(
-            line['segments']['givenSegments'], line['segments']['blankValues']
-        )
-        content = line.get('content', None)
-        return Line(indent, segments, content)
+    def __post_init__(self):
+        if len(self.codeSnippets) != len(self.blankValues) + 1:
+            raise ValueError('codeSnippets must have one more element than blankValues')
 
-    def _export(self) -> dict:
-        def text_list(ls): return list(map(Segment.get_text, ls))
-        given = text_list(self.segments[0::2])
-        blank = text_list(self.segments[1::2])
-        return {
-            "indent": self.indent,
-            "segments": { "givenSegments": given, "blankValues": blank },
-            "content": self.content,
-        }
+    def from_pl_data(line: dict) -> 'Line':
+        # using Line(**line) breaks when any extra info is passed in
+        return Line(line['indent'], line['codeSnippets'], line['blankValues'])
 
-    def to_mustache(self, language, *, indent_size=4) -> dict:
+    def from_fpp_str(raw_line: str):
+        BLANK = re.compile(r'#blank [^#]*')
+        GIVEN = re.compile(r'#(\d+)given')
+        DISTRACTOR = re.compile(r'#distractor')
+
+        snippets = raw_line.strip().split('!BLANK')
+
+        def remove_special_comment(parser, pattern):
+            nonlocal snippets
+            if match := parser(pattern, snippets[-1]):
+                snippets[-1] = re.sub(pattern, '', snippets[-1]).rstrip()
+            return match
+
+        blanks = [''] * (len(snippets) - 1)
+        if blank_defaults := remove_special_comment(re.findall, BLANK):
+            for i, val in enumerate(blank_defaults):
+                blanks[i] = val.replace('#blank', '').strip()
+
+        if match := remove_special_comment(re.search, GIVEN):
+            return 'given', Line(int(match.group(1)), snippets, blanks)
+
+        if remove_special_comment(re.search, DISTRACTOR):
+            return 'distractor', Line(0, snippets, blanks)
+
+        return 'starter', Line(0, snippets, blanks)
+
+    def to_code_str(self) -> str:
+        indent = self.indent * ' '
+        return indent + ''.join(s for _, s in self)
+
+    def to_mustache(self, language, *, indent_size=4) -> dict[str, Jsonish]:
+        'matches schemas in pl-faded-parsons-code-line.mustache'
         return {
             "indent": self.indent * indent_size,
-            "segments": [s.to_mustache(language) for s in self.segments]
+            "segments": [
+                { 'code': { 'content': value, 'language': language } } \
+                    if is_code else \
+                { 'blank': { 'default': value, 'width': max(4, len(value) + 1) } }
+                    for is_code, value in self
+            ],
         }
 
-    def get_text(self) -> str:
-        if self.content is not None: return self.content
-        ind = self.indent * ' '
-        return ind + ''.join(map(Segment.get_text, self.segments))
+    def __iter__(self):
+        for x, y in zip(self.codeSnippets, self.blankValues):
+            yield True,  x
+            yield False, y
+        yield True, self.codeSnippets[-1]
 
 
 @dataclass(frozen=True, slots=True)
-class Submission:
+class ProblemState(FromPrairieLearn, FromUser):
+    '''
+    Loads the contents of input.main in pl-faded-parsons-question.mustache
+    according to the schema in pl-faded-parsons.js `storeStudentProgress`,
+    or parses the low-level faded parsons markdown generated by FPPgen or
+    an end user.
+    '''
+    starter: list[Line]
+    solution: list[Line]
+
+    def from_pl_data(answers_data: dict, answers_name: str) -> 'ProblemState':
+        'works for `data["raw_submitted_answers"]` and `data["submitted_answers"]`'
+
+        def import_lines(mem: dict, entry: str):
+            return [Line.from_pl_data(l) for l in mem.get(entry, [])]
+
+        main_memory = FromPrairieLearn.read_pl_data(answers_data, answers_name, 'main', {})
+
+        return ProblemState(
+            import_lines(main_memory, 'starter'),
+            import_lines(main_memory, 'solution'),
+        )
+
+    def from_fpp_str(raw_text: str, *, max_distractors=10) -> 'ProblemState':
+        parsed_lines = map(Line.from_fpp_str, raw_text.strip().split('\n'))
+
+        starters, givens, distractors = [], [], []
+        for kind, line in parsed_lines:
+            if kind == 'given':
+                givens.append(line)
+            elif kind == 'distractor':
+                distractors.append(line)
+            elif kind == 'starter':
+                starters.append(line)
+            else:
+                raise ValueError(f'unrecognized line kind: {kind}')
+
+        distractor_count = min(len(distractors), max_distractors)
+        starters.extend(random.sample(distractors, k=distractor_count))
+
+        return ProblemState(starters, givens)
+
+    def to_code_str(self):
+        return '\n'.join(map(Line.to_code_str, self.solution))
+
+    def __bool__(self): return bool(self.starter or self.solution)
+
+
+@dataclass(frozen=True, slots=True)
+class Submission(FromPrairieLearn):
     '''
     Record that loads submission data from the PL `data` param. Save locations
     set by the `input` elements in pl-faded-parsons-question.mustache.
     `answers_name` is the problem name passed in the `element_html`.
     '''
     answers_name: str
-    starter_lines: list[Line]
-    solution_lines: list[Line]
+    problem_state: ProblemState
     log: list[dict]
 
-    @staticmethod
-    def make_key(answers_name, input_name): return f'{answers_name}.{input_name}'
-
-    @staticmethod
-    def _import(answers_name: str, answers_data: dict):
-        'works for `data["raw_submitted_answers"]` and `data["submitted_answers"]`'
-        def load_input_field(input_name, default):
-            k = Submission.make_key(answers_name, input_name)
-            v = answers_data.get(k, default)
-            return json.loads(v) if type(v) is str else v
-
-        def import_lines(mem: dict, entry: str):
-            return [Line._import(l) for l in mem.get(entry, [])]
-
-        main_memory = load_input_field('main', {})
-
+    def from_pl_data(answers_name: str, answers_data: dict):
         return Submission(
             answers_name,
-            import_lines(main_memory, 'starter'),
-            import_lines(main_memory, 'solution'),
-            load_input_field('log', []),
+            ProblemState.from_pl_data(answers_data, answers_name),
+            FromPrairieLearn.read_pl_data(answers_data, answers_name, 'log', []),
         )
 
-    def _export(self) -> dict[str, str]:
-        main_mem = {
-            'starter': [l._export() for l in self.starter_lines],
-            'solution': [l._export() for l in self.solution_lines],
-        }
-        return {
-            Submission.make_key(self.answers_name, 'main'): json.dumps(main_mem),
-            Submission.make_key(self.answers_name, 'log'): json.dumps(self.log),
-        }
-
-    def get_student_code(self):
-        if not self.solution_lines: return ''
-        return '\n'.join(map(Line.get_text, self.solution_lines)) + '\n'
-
-    def __bool__(self):
-        return bool(self.solution_lines or self.starter_lines)
+    def to_pl_data(self) -> dict[str, str]:
+        def entry(k, v): return FromPrairieLearn.make_key(self.answers_name, k), json.dumps(v)
+        return dict((
+            entry('main', self.problem_state.to_pl_data()),
+            entry('log', self.log),
+        ))
 
 
 #
 # Helper functions
 #
-def alternate(xs: typing.Iterable, ys: typing.Iterable):
-    'alternates between `xs` and `ys` until an empty iter would be polled'
-    iters, stop = itertools.cycle((iter(xs), iter(ys))), object()
-    while (x := next(next(iters), stop)) is not stop:
-        yield x
-
-
-def code_and_blanks_to_segments(code_snippets, blank_values) -> list[dict]:
-    'generates a list of segments by interleaving the code snippets and blank values'
-    code_segments  = map(CodeSegment,  code_snippets)
-    blank_segments = map(BlankSegment, blank_values)
-    return list(alternate(code_segments, blank_segments))
-
-
 def get_answers_name(element):
     'answers-name namespaces answers for multiple elements on a page'
     return pl.get_string_attrib(element, 'answers-name', '')
-
-
-def parse_new_state(raw_lines, *, max_distractors=10) -> tuple[list[Line], list[Line]]:
-    import re
-
-    blank_pattern = re.compile(r'#blank [^#]*')
-    given_pattern = re.compile(r'#(\d+)given')
-
-    def get_blank_values(segments):
-        values = [''] * (len(segments) - 1)
-        for i, e in enumerate(re.findall(blank_pattern, segments[-1])):
-            values[i] = e.replace('#blank', '').strip()
-        return values
-
-    def parse_line(line: str) -> tuple[list[dict], str]:
-        segments = line.strip().split('!BLANK')
-
-        # get the starting placeholder text, then remove those special comments
-        blanks = get_blank_values(segments)
-        tail = segments[-1] = re.sub(blank_pattern, '', segments[-1])
-
-        return code_and_blanks_to_segments(segments, blanks), tail
-
-    split_lines = raw_lines.strip().split('\n')
-    parsed_lines = map(parse_line, split_lines)
-
-    # clean, mint, and sort the lines based on special comments
-    starter, given, distractors = [], [], []
-    for segments, tail in parsed_lines:
-        indent = 0
-
-        if matches := re.search(given_pattern, tail):
-            indent = int(matches.group(1))
-            segments[-1] = CodeSegment(re.sub(given_pattern, '', tail).rstrip())
-            target = given
-        elif '#distractor' in tail:
-            segments[-1] = CodeSegment(tail.replace('#distractor', '').rstrip())
-            target = distractors
-        else:
-            target = starter
-
-        target.append(Line(indent, segments))
-
-    distractor_count = min(len(distractors), max_distractors)
-    starter.extend(random.sample(distractors, k=distractor_count))
-
-    return starter, given
 
 
 def render_question_panel(element_html, data):
@@ -239,7 +255,7 @@ def render_question_panel(element_html, data):
             return { "text": text, "language": lang }
         return None
 
-    def load_new_state(element, *, shuffle_solution):
+    def load_new_state(element, use_starter_tray) -> ProblemState:
         raw_lines = get_child_text_by_tag(element, "code-lines")
 
         if not raw_lines:
@@ -250,26 +266,14 @@ def render_question_panel(element_html, data):
             except:
                 raw_lines = str(element.text)
 
-        starter_lines, solution_lines = parse_new_state(raw_lines)
+        state: ProblemState = ProblemState.from_fpp_str(raw_lines)
 
-        random.shuffle(starter_lines)
-        if shuffle_solution:
-            random.shuffle(solution_lines)
+        random.shuffle(state.starter)
 
-        return starter_lines, solution_lines
+        if use_starter_tray:
+            return state
 
-    def get_current_state(element, past_submission: Submission, separate_starter: bool):
-        if past_submission:
-            starter_lines, solution_lines = \
-                submission.starter_lines, submission.solution_lines
-        else:
-            starter_lines, solution_lines = \
-                load_new_state(element, shuffle_solution=not separate_starter)
-
-        if not separate_starter:
-            return None, solution_lines + starter_lines
-
-        return starter_lines, solution_lines
+        return ProblemState([], state.solution + state.starter)
 
     def get_format_and_size(element, has_pre_or_post_text):
         format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
@@ -298,8 +302,8 @@ def render_question_panel(element_html, data):
     format, size = get_format_and_size(element, pre_text or post_text)
     use_starter_tray = format != 'no_code'
 
-    submission = Submission._import(answers_name, data['submitted_answers'])
-    starter_lines, given_lines = get_current_state(element, submission, use_starter_tray)
+    prev_submission: Submission = Submission.from_pl_data(answers_name, data['submitted_answers'])
+    state = prev_submission.problem_state or load_new_state(element, use_starter_tray)
 
     tray_lines_to_mustache = lambda lines: {
         "lines": [Line.to_mustache(l, lang) for l in lines],
@@ -311,13 +315,13 @@ def render_question_panel(element_html, data):
         # main element config
         "answers-name": answers_name,
         "language": lang,
-        "previous-log" : json.dumps(submission.log),
+        "previous-log" : json.dumps(prev_submission.log),
         "uuid": pl.get_uuid(),
 
         # trays and code context
-        "starter": use_starter_tray and tray_lines_to_mustache(starter_lines),
+        "starter": use_starter_tray and tray_lines_to_mustache(state.starter),
         "pre-text": pre_text,
-        "given": tray_lines_to_mustache(given_lines),
+        "given": tray_lines_to_mustache(state.solution),
         "post-text": post_text,
     }
 
@@ -329,9 +333,9 @@ def render_submission_panel(element_html, data):
     """Show student what they submitted"""
     element = xml.fragment_fromstring(element_html)
     answers_name = get_answers_name(element)
-    submission = Submission._import(answers_name, data['submitted_answers'])
+    problem_state: ProblemState = ProblemState.from_pl_data(data['submitted_answers'], answers_name)
     html_params = {
-        'code': submission.get_student_code(),
+        'code': problem_state.to_code_str(),
     }
     with open('pl-faded-parsons-submission.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
@@ -376,16 +380,17 @@ def parse(element_html, data):
     answers_name = get_answers_name(element)
     file_name = pl.get_string_attrib(element, 'file-name', 'user_code.py')
 
-    submission = Submission._import(answers_name, data['raw_submitted_answers'])
+    submission: Submission = Submission.from_pl_data(answers_name, data['raw_submitted_answers'])
+    student_code = submission.problem_state.to_code_str()
 
+    data['submitted_answers'].update(submission.to_pl_data())
     data['submitted_answers'].update({
         '_files': [
             {
                 "name": file_name,
-                "contents": base64_encode(submission.get_student_code())
+                "contents": base64_encode(student_code)
             }
         ],
         # provide the answer to users of pl-faded-parsons in classic PL style
-        answers_name: submission.get_student_code(),
-        **submission._export()
+        answers_name: student_code,
     })
