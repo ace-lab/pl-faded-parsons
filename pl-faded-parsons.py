@@ -3,6 +3,8 @@ try:
 except ModuleNotFoundError:
     print('<!> pl not loaded! <!>')
 
+from typing import Union, List, Dict
+
 import base64
 import chevron
 import itertools
@@ -10,7 +12,6 @@ import json
 import os.path
 import random
 import re
-import typing
 import lxml.html as xml
 
 
@@ -21,7 +22,188 @@ from dataclasses import asdict, dataclass
 #
 # Common Interfaces for Parsing External Data
 #
-Jsonish = typing.Union[bool, float, int, str, list['Jsonish'], dict[str, 'Jsonish']]
+Jsonish = Union[bool, float, int, str, List['Jsonish'], Dict[str, 'Jsonish']] # TODO: make sure this is possible in 3.8
+
+@dataclass
+class Submission:
+
+    @dataclass
+    class Line:
+        indent: int
+        codeSnippets: list[str]
+        blankValues: list[str]
+
+    @dataclass
+    class Trays:
+        solution: List["Submission.Line"]
+        starter: Union[List["Submission.Line"], None] = None
+
+    @dataclass
+    class LogEntry:
+        timestamp: 
+        tag: 
+        data: 
+
+
+    main: Trays
+    log: List[LogEntry] = field(default_factory=list)
+
+class FadedParsonsProblem:
+
+    class Formats:
+        BOTTOM = "bottom"
+        RIGHT = "right"
+        NO_CODE = "no_code"
+
+    def __init__(self, element_html):
+
+        def get_child_text_by_tag(element, tag: str) -> str:
+            """get the innerHTML of the first child of `element` that has the tag `tag`
+            default value is empty string"""
+            return next((elem.text for elem in element if elem.tag == tag), "")
+
+        element = xml.fragment_fromstring(element_html)
+
+        self.answers_name = pl.get_string_attrib(element, 'answers-name', '')
+        if self.answers_name == "":
+            raise ValueError() # FIXME: fill error message
+
+        self.format = FadedParsonsProblem.Formats(
+            pl.get_string_attrib(element, "format", "right")
+                .replace("-", '_')
+        )
+
+        self.pre_text  = get_child_text_by_tag(element, "pre-text").strip("\n")
+        self.post_text = get_child_text_by_tag(element, "post-text").strip("\n")
+
+        self.language = pl.get_string_attrib(element, "language", None)
+
+        self.size = "narrow" if self.format == FadedParsonsProblem.Formats.RIGHT else "wide"
+
+        if self.format == FadedParsonsProblem.Formats.RIGHT and pre_text or post_text:
+            raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
+                'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
+
+
+        raw_lines = get_child_text_by_tag(element, "code-lines")
+
+        if not raw_lines:
+            try:
+                path = os.path.join(data["options"]["question_path"], 'serverFilesQuestion', 'code_lines.txt') # TODO: fix dict accessing
+                with open(path, 'r') as f:
+                    raw_lines = f.read()
+            except:
+                raw_lines = str(element.text)
+
+        
+        ############ here
+
+        state: ProblemState = ProblemState.from_fpp_str(raw_lines)
+
+        random.shuffle(state.starter)
+
+        if format != 'no_code':
+            return state
+
+        state = ProblemState([], state.solution + state.starter)
+
+        tray_lines_to_mustache = lambda lines: {
+            "lines": [Line.to_mustache(l, lang) for l in lines],
+            size: True # any truthy value will do
+        }
+
+        # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
+        html_params = {
+            # main element config
+            "answers-name": answers_name,
+            "language": lang,
+            "previous-log" : json.dumps(prev_submission.log),
+            "uuid": pl.get_uuid(),
+
+            # trays and code context
+            "starter": use_starter_tray and tray_lines_to_mustache(state.starter),
+            "pre-text": pre_text,
+            "given": tray_lines_to_mustache(state.solution),
+            "post-text": post_text,
+        }
+
+        with open('pl-faded-parsons-question.mustache', 'r') as f:
+            return chevron.render(f, html_params).strip()
+
+@dataclass
+class ProblemState:
+    
+    @dataclass
+    class Metadata:
+        answers_name: str
+        ...
+    
+    @dataclass
+    class Line:
+        ...
+
+        @dataclass
+        class Schema:
+            # using Line(**line) breaks when any extra info is passed in, which is desirable to enforce the schema
+            indent: int
+            codeSnippets: list[str]
+            blankValues: list[str]
+
+            def __post_init__(self):
+                if len(self.codeSnippets) != len(self.blankValues) + 1:
+                    raise ValueError('codeSnippets must have one more element than blankValues')
+
+        @staticmethod
+        def from_markup(markup: str) -> Tuple[str, "Line"]:
+            BLANK = re.compile(r'#blank [^#]*')
+            GIVEN = re.compile(r'#(\d+)given')
+            DISTRACTOR = re.compile(r'#distractor')
+
+            snippets = markup.strip().split('!BLANK')
+
+            def remove_special_comment(parser, pattern):
+                nonlocal snippets
+                if match := parser(pattern, snippets[-1]):
+                    snippets[-1] = re.sub(pattern, '', snippets[-1]).rstrip()
+                return match
+
+            blanks = [''] * (len(snippets) - 1)
+            if blank_defaults := remove_special_comment(re.findall, BLANK):
+                for i, val in enumerate(blank_defaults):
+                    blanks[i] = val.replace('#blank', '').strip()
+
+            if match := remove_special_comment(re.search, GIVEN):
+                return 'given', Line(int(match.group(1)), snippets, blanks)
+
+            if remove_special_comment(re.search, DISTRACTOR):
+                return 'distractor', Line(0, snippets, blanks)
+
+            return 'starter', Line(0, snippets, blanks)
+
+        @staticmethod
+        def from_submission(raw_submission_data: dict) -> "Line":
+            # raw sub data should already be indexed into the answers_name and this should be a Line
+            s = recursive_instantiate(Submission.Line.Schema, raw_submission_data)
+
+        
+        def to_display_code(self):
+            ...
+
+    metadata: Metadata
+    starter_lines: Union[List[Line], None] = None
+    s_lines: Union[List[Line], None] = None
+
+
+    @staticmethod
+    def from_xml(element_html) -> "ProblemState":
+        ...
+
+    def load_submission_data(self, data: dict) -> "ProblemState":
+        ...
+
+    def to_mustache(self) -> dict[str, Jsonish]:
+        ...
+
 
 
 class FromPrairieLearn(ABC):
@@ -47,6 +229,11 @@ class FromPrairieLearn(ABC):
 
     @staticmethod
     def read_pl_data(answers_data: dict, answers_name: str, input_name: str, default: Jsonish) -> Jsonish:
+        """
+        Retrieve the value of `input_name` under `answers_name` in `answers_data`.
+        If not found, return `default`.
+        If found, parse the retrieved value to match the type of `default`, raising an error on failure.
+        """
         key = FromPrairieLearn.make_key(answers_name, input_name)
         if key not in answers_data: return default
 
@@ -108,7 +295,7 @@ class Line(FromPrairieLearn, FromUser):
             raise ValueError('codeSnippets must have one more element than blankValues')
 
     def from_pl_data(line: dict) -> 'Line':
-        # using Line(**line) breaks when any extra info is passed in
+        # using Line(**line) breaks when any extra info is passed in 
         return Line(line['indent'], line['codeSnippets'], line['blankValues'])
 
     def from_fpp_str(raw_line: str):
