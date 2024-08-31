@@ -8,8 +8,8 @@
 {{! if vertical (or no-code), full size boxes }}
 <div id="pl-faded-parsons-{{uuid}}" role="application" class="col fpp-global-defs pl-faded-parsons soft-border" language="{{language}}">
     {{! form field to be filled with order to save the current submission }}
-    <input class="main" name="{{answers-name}}.main" type="hidden" value=""/>
-    <input class="log" name="{{answers-name}}.log" type="hidden" value="{{previous-log}}" />
+    <input class="main" name="{{answers_name}}.main" type="hidden" value=""/>
+    <input class="log" name="{{answers_name}}.log" type="hidden" value="{{previous_log}}" />
 
     <div class="row" style="margin:0px">
         {{! note: by entering the {#starter} {/starter} section, the mustache renderer dereferences

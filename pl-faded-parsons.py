@@ -4,6 +4,7 @@ except ModuleNotFoundError:
     print('<!> pl not loaded! <!>')
 
 from typing import Union, List, Dict
+from datetime import datetime
 
 import base64
 import chevron
@@ -40,13 +41,59 @@ class Submission:
 
     @dataclass
     class LogEntry:
-        timestamp: 
-        tag: 
-        data: 
-
+        timestamp: datetime
+        tag: str # this is technically an enum of string literals ... Maybe enumerate eventually?
+        data: dict # TODO: expand this, the "tag" tells us the type of JSON object this is
 
     main: Trays
     log: List[LogEntry] = field(default_factory=list)
+
+@dataclass
+class Mustache:
+
+    @dataclass
+    class Line:
+
+        @dataclass
+        class CodeSegment:
+            @dataclass
+            class InnerData:
+                content: str
+                language: str
+            
+            code: InnerData
+            # { 'code': { 'content': value, 'language': language } }
+
+        @dataclass
+        class BlankSegment:
+            @dataclass
+            class InnerData:
+                default: str
+                width: str # max(4, len(value) + 1)
+            
+            blank: InnerData
+
+        indent: int
+        segments: List[Union[CodeSegment, BlankSegment]]
+
+    @dataclass
+    class TrayLines:
+        lines: List[Mustache.Line] # [Line.to_mustache(l, lang) for l in lines]
+        size: bool = True # any truthy value will do
+
+    # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
+
+    # main element config
+    answers_name : str
+    language : str
+    previous_log : str # json.dumps(prev_submission.log)
+    uuid: pl.get_uuid()
+
+    # trays and code context
+    "starter": use_starter_tray and tray_lines_to_mustache(state.starter),
+    pre_text: str
+    "given": tray_lines_to_mustache(state.solution),
+    post_text: str
 
 class FadedParsonsProblem:
 
@@ -85,47 +132,45 @@ class FadedParsonsProblem:
                 'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
 
 
-        raw_lines = get_child_text_by_tag(element, "code-lines")
-
-        if not raw_lines:
+        if not (markup := get_child_text_by_tag(element, "code-lines")):
             try:
                 path = os.path.join(data["options"]["question_path"], 'serverFilesQuestion', 'code_lines.txt') # TODO: fix dict accessing
                 with open(path, 'r') as f:
-                    raw_lines = f.read()
+                    markup = f.read()
             except:
-                raw_lines = str(element.text)
+                markup = str(element.text)
 
-        
         ############ here
 
-        state: ProblemState = ProblemState.from_fpp_str(raw_lines)
+        parsed_lines = map(Line.from_fpp_str, markup.strip().split('\n'))
+
+        starters, givens, distractors = [], [], []
+        for kind, line in parsed_lines:
+            if kind == 'given':
+                givens.append(line)
+            elif kind == 'distractor':
+                distractors.append(line)
+            elif kind == 'starter':
+                starters.append(line)
+            else:
+                raise ValueError(f'unrecognized line kind: {kind}')
+
+        distractor_count = min(len(distractors), max_distractors)
+        starters.extend(random.sample(distractors, k=distractor_count))
+
+        state = ProblemState(starters, givens)
 
         random.shuffle(state.starter)
 
-        if format != 'no_code':
-            return state
-
-        state = ProblemState([], state.solution + state.starter)
+        if format == 'no_code':
+            state = ProblemState([], state.solution + state.starter)
 
         tray_lines_to_mustache = lambda lines: {
             "lines": [Line.to_mustache(l, lang) for l in lines],
             size: True # any truthy value will do
         }
 
-        # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
-        html_params = {
-            # main element config
-            "answers-name": answers_name,
-            "language": lang,
-            "previous-log" : json.dumps(prev_submission.log),
-            "uuid": pl.get_uuid(),
-
-            # trays and code context
-            "starter": use_starter_tray and tray_lines_to_mustache(state.starter),
-            "pre-text": pre_text,
-            "given": tray_lines_to_mustache(state.solution),
-            "post-text": post_text,
-        }
+        html_params = asdict(Mustache(...))
 
         with open('pl-faded-parsons-question.mustache', 'r') as f:
             return chevron.render(f, html_params).strip()
@@ -203,7 +248,6 @@ class ProblemState:
 
     def to_mustache(self) -> dict[str, Jsonish]:
         ...
-
 
 
 class FromPrairieLearn(ABC):
