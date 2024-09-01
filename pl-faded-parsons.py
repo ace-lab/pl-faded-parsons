@@ -105,15 +105,55 @@ class Mustache:
     post_text: str
 
 class FadedParsonsProblem:
-    """
+    """A mutable instance of an FPP
+    
     Instantiate an FPP from an html tag and populate the trays with
-    either submitted state or the provided markup 
+    either submitted state or the provided markup.
+
+    Attributes
+    ----------
+    `answers_name` : `str`
+        This problem's identifier. Specified with `answers-name="..."`. Raises error if `ValueError` if empty.
+    `format` : `FadedParsonsProblem.Formats`
+        The provided format of the problem. Specified with `format="..."`. Defaults to "right".
+    `pre_text` : `str`
+        The text that will be shown directly before the solution tray. Will be an empty string if omitted. Cannot be used with format="right".
+    `post_text` : `str`
+        The text that will be shown directly after the solution tray. Will be an empty string if omitted. Cannot be used with format="right".
+    `language` : `str`
+        The language to pass on for syntax highlighting.
+    `out_filename` : `str`
+        The file to which to include the student's submission. Specified with `file-name="..."`. Defaults to `user_code.py`.
+    `size` : `Literal["narrow", "wide"]`
+        The size of the solution tray. `"narrow"` indicates it should take approximately half the width of the problem pane. `"wide"` indicates it should take the full width of the problem pane.
+    `solution` : `str`
+        The solution. Specified with `solution-path="./relative/path/to/solution"`. Raises `FileNotFoundError` on access if not found. Defaults to `./solution`.
+    `trays` : `Submission.Trays`
+        The trays used in this problem. MUST CALL `.load(...)` TO DEFINE.
+    `log` : `List[Submission.LogEntry]`
+        The log of events for this problem. MUST CALL `.load(...)` TO DEFINE.
+
+    Methods
+    -------
+    ...
+
     """
 
     class Formats(StrEnum):
         BOTTOM = "bottom"
         RIGHT = "right"
         NO_CODE = "no_code"
+
+    @property
+    def solution() -> str:
+        if not os.path.exists(self._solution_path):
+            raise FileNotFoundError('\n'
+                f'\tCorrect answer not found at `{self.solution_path}`! \n'
+                 '\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`'
+            )
+
+        with open(self._solution_path, "r") as f:
+            return f.read()
 
     def __init__(self, element_html):
 
@@ -124,6 +164,7 @@ class FadedParsonsProblem:
 
         element = xml.fragment_fromstring(element_html)
         self._element = element
+        self._solution_path = pl.get_string_attrib(element, 'solution-path', './solution')
 
         self.answers_name: str = pl.get_string_attrib(element, 'answers-name', '')
         if self.answers_name == "":
@@ -141,13 +182,6 @@ class FadedParsonsProblem:
         self.out_filename = pl.get_string_attrib(element, 'file-name', 'user_code.py')
 
         self.size = "narrow" if self.format == FadedParsonsProblem.Formats.RIGHT else "wide"
-
-        self.solution_path = pl.get_string_attrib(element, 'solution-path', './solution')
-        if not os.path.exists(path):
-            raise FileNotFoundError('\n'
-                f'\tCorrect answer not found at `{self.solution_path}`! \n'
-                 '\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`'
-            )
 
         if self.format == FadedParsonsProblem.Formats.RIGHT and pre_text or post_text:
             raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
@@ -200,7 +234,7 @@ class FadedParsonsProblem:
 
         random.shuffle(starters)
 
-        self.trays: Submission.Trays 
+        self.trays: Submission.Trays
         if format == 'no_code':
             self.trays = Submission.Trays(
                 solution = givens + starters,
@@ -282,7 +316,7 @@ def parse(element_html, data):
     data['submitted_answers'].update({
         '_files': [
             {
-                "name": fpp.file_name,
+                "name": fpp.out_filename,
                 "contents": base64_encode(student_code)
             }
         ],
