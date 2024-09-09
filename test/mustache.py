@@ -3,24 +3,26 @@ import os
 import chevron
 
 from dataclasses import dataclass, field, replace
-from typing import Any, Optional, Type, Union
+from typing import Optional, Type, Union
 
 
 
 JsonValue = Union[float, int, bool, str, list['JsonValue'], dict[str, 'JsonValue']]
-JsonType = Union[bool, Type[str], Type[bool], dict[str, Union['Maybe', 'JsonType']], type['NoEscapeStr'], 'Many']
+JsonType = Union[bool, Type[str], Type[bool], type['NoEscapeStr'], dict[str, Union['Maybe', 'JsonType']], 'Many']
 
 
+# replace with Optional
 @dataclass(frozen=True)
 class Maybe:
     inner: JsonType
 
+# replace with list
 @dataclass(frozen=True)
 class Many:
     inner: JsonType
 
-
 class NoEscapeStr(str): pass
+
 
 @dataclass(slots=True, frozen=True)
 class Symbol(ABC):
@@ -49,7 +51,7 @@ class Scope(Symbol):
     def reify(self) -> JsonType:
         fields_type = {k: v.reify() for k, v in self.fields.items()}
         for v in self.partials.values():
-            fields_type.update(v)
+            fields_type.update(v.reify())
         return fields_type
 
 
@@ -75,28 +77,31 @@ class Section(Scope):
                 raise ValueError('incoherent non-section section!', self)
 
 
+
 def read_mustache_params_type(template: str, working_dir) -> Scope:
     top = current = Scope(parent=None)
 
-    for typ, value in chevron.tokenizer.tokenize(template):
-        match typ:
+    def update_section_field(name, **kwargs) -> Section:
+        if name not in current.fields:
+            current.fields[name] = Section(current, **kwargs)
+        else:
+            assert isinstance(current.fields[name], Section)
+            current.fields[name] = current.fields[name].update(**kwargs)
+        return current.fields[name]
+
+    for kind, value in chevron.tokenizer.tokenize(template):
+        match kind:
             case 'literal': pass
-            case 'variable' | 'no escape':
-                current.fields[value] = Variable(current, no_escape='no escape' == typ)
+            case 'variable':
+                current.fields[value] = Variable(current)
+            case 'no escape':
+                current.fields[value] = Variable(current, no_escape=True)
             case 'section':
-                if value not in current.fields:
-                    current.fields[value] = Section(current, section=True)
-                else:
-                    current.fields[value] = current.fields[value].udpate(section=True)
-                current = current.fields[value]
+                current = update_section_field(value, section=True)
             case 'inverted section':
-                if value not in current.fields:
-                    current.fields[value] = Section(current, inverse=True)
-                else:
-                    current.fields[value] = current.fields[value].update(inverse=True)
-                current = current.fields[value]
+                current = update_section_field(value, inverted=True)
             case 'end':
-                assert current.parent
+                assert current.parent, f'section "{value}" ended before it began'
                 current = current.parent
             case 'partial':
                 with open(os.path.join(working_dir, value + '.mustache'), 'r') as f:
@@ -106,16 +111,14 @@ def read_mustache_params_type(template: str, working_dir) -> Scope:
             case x:
                 raise ValueError(x)
 
-    t = top.reify()
-    while type(t) is Many or type(t) is Maybe: t = t.inner
-    return t
+    return top
 
 
-def json_type_to_json_schema(t: JsonType, require_falsies=True) -> JsonValue:
+def json_type_to_json_schema(t: JsonType, allow_implicit_falsy=False) -> JsonValue:
     if type(t) is Maybe:
         raise ValueError('cannot generate schema for maybe type')
     if type(t) is Many:
-        return { "type": "array", "items": json_type_to_json_schema(t.inner, require_falsies) }
+        return { "type": "array", "items": json_type_to_json_schema(t.inner, allow_implicit_falsy) }
     if type(t) is bool:
         return { "enum": [t] }
     if t is bool:
@@ -128,10 +131,10 @@ def json_type_to_json_schema(t: JsonType, require_falsies=True) -> JsonValue:
         return {
             "type": "object",
             "properties": {
-                k: json_type_to_json_schema(v if type(v) is not Maybe else v.inner, require_falsies) \
+                k: json_type_to_json_schema(v if type(v) is not Maybe else v.inner, allow_implicit_falsy) \
                     for k, v in t.items()
             },
-            "required": [k for k, v in t.items() if require_falsies and type(v) is not Maybe]
+            "required": [k for k, v in t.items() if not allow_implicit_falsy and type(v) is not Maybe]
         }
     raise ValueError(f'{t}')
 
@@ -191,11 +194,12 @@ def __main__():
         with open(path, 'r') as f:
             template = f.read()
 
-        jtype = read_mustache_params_type(template, working_dir)
-        # print(typish)
+        scope = read_mustache_params_type(template, working_dir)
+        print(scope)
+        jtype = scope.reify()
         print_typish(jtype)
 
-        print(json.dumps(json_type_to_json_schema(jtype, require_falsies=True), indent=2))
+        print(json.dumps(json_type_to_json_schema(jtype, allow_implicit_falsy=True), indent=2))
 
 
 if __name__ == '__main__':
