@@ -5,7 +5,6 @@ except ModuleNotFoundError:
 
 import base64
 import chevron
-import itertools
 import json
 import os.path
 import random
@@ -240,10 +239,10 @@ class Submission(FromPrairieLearn):
 #
 def get_answers_name(element):
     'answers-name namespaces answers for multiple elements on a page'
-    return pl.get_string_attrib(element, 'answers-name', '')
+    return pl.get_string_attrib(element, 'answers-name')
 
 
-def render_question_panel(element_html, data):
+def render_question_panel(element, data):
     """Render the panel that displays the question (from code_lines.txt) and interaction boxes"""
     def get_child_text_by_tag(element, tag: str) -> str:
         """get the innerHTML of the first child of `element` that has the tag `tag`
@@ -291,8 +290,6 @@ def render_question_panel(element_html, data):
         return format, size
 
 
-    element = xml.fragment_fromstring(element_html)
-
     answers_name = get_answers_name(element)
     lang = pl.get_string_attrib(element, "language", None)
 
@@ -329,9 +326,8 @@ def render_question_panel(element_html, data):
         return chevron.render(f, html_params).strip()
 
 
-def render_submission_panel(element_html, data):
+def render_submission_panel(element, data):
     """Show student what they submitted"""
-    element = xml.fragment_fromstring(element_html)
     answers_name = get_answers_name(element)
     problem_state: ProblemState = ProblemState.from_pl_data(data['submitted_answers'], answers_name)
     html_params = {
@@ -341,9 +337,8 @@ def render_submission_panel(element_html, data):
         return chevron.render(f, html_params).strip()
 
 
-def render_answer_panel(element_html, data):
+def render_answer_panel(element, data):
     """Show the instructor's reference solution"""
-    element = xml.fragment_fromstring(element_html)
     path = pl.get_string_attrib(element, 'solution-path', './solution')
 
     if not os.path.exists(path):
@@ -360,13 +355,20 @@ def render_answer_panel(element_html, data):
 # Main functions
 #
 def render(element_html, data):
+    element = xml.fragment_fromstring(element_html)
+    pl.check_attribs(
+        element,
+        required_attribs=["answers-name"],
+        optional_attribs=["format", "language"],
+    )
+
     panel_type = data['panel']
     if panel_type == 'question':
-        return render_question_panel(element_html, data)
+        return render_question_panel(element, data)
     elif panel_type == 'submission':
-        return render_submission_panel(element_html, data)
+        return render_submission_panel(element, data)
     elif panel_type == 'answer':
-        return render_answer_panel(element_html, data)
+        return render_answer_panel(element, data)
     else:
         raise Exception(f'Invalid panel type: {panel_type}')
 
