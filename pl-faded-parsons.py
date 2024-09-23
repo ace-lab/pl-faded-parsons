@@ -310,16 +310,16 @@ def render_question_panel(element, data):
     # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
     html_params = {
         # main element config
-        "answers-name": answers_name,
+        "answers_name": answers_name,
         "language": lang,
-        "previous-log" : json.dumps(prev_submission.log),
+        "previous_log" : json.dumps(prev_submission.log),
         "uuid": pl.get_uuid(),
 
         # trays and code context
         "starter": use_starter_tray and tray_lines_to_mustache(state.starter),
-        "pre-text": pre_text,
+        "pre_text": pre_text,
         "given": tray_lines_to_mustache(state.solution),
-        "post-text": post_text,
+        "post_text": post_text,
     }
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
@@ -359,7 +359,7 @@ def render(element_html, data):
     pl.check_attribs(
         element,
         required_attribs=["answers-name"],
-        optional_attribs=["format", "language"],
+        optional_attribs=["format", "language", "file-name"],
     )
 
     panel_type = data['panel']
