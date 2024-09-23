@@ -196,8 +196,13 @@ def render_question_panel(element_html, data):
         if format in ("right", "bottom", "no_code", ):
             random.shuffle(scrambled_lines)
 
+    visual_indent = pl.get_string_attrib(element, "visual-indent", 0)
+
+    if visual_indent is not None and format == "no_code":
+        raise ValueError(f"Cannot have a non-zero visual indent for format `{format}`! Accepted format(s): no-code")
+
     scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
-    given     = { "lines" : solution_lines , "answers_name" : answers_name }
+    given     = { "lines" : solution_lines , "answers_name" : answers_name, "visual_indent" : visual_indent }
 
     if format == "right":
         if pre_text or post_text:
