@@ -195,8 +195,6 @@ def render_question_panel(element_html, data):
 
         if format in ("right", "bottom", "no_code", ):
             random.shuffle(scrambled_lines)
-        if format in ("no_code", ):
-            random.shuffle(solution_lines)
 
     scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
     given     = { "lines" : solution_lines , "answers_name" : answers_name }
