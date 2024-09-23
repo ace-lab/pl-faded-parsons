@@ -128,14 +128,14 @@ class ParsonsWidget {
         connectWith: solutionTray,
         start: (_, ui) => setCodelineInMotion(ui.item, true),
         receive: (_, ui) =>
-          widget.addLogEntry("removeOutput", widget.codelineSummary(ui.item)),
+          widget.addLogEntry("removeOutput", widget.codelineLogEntry(ui.item)),
         stop: (event, ui) => {
           setCodelineInMotion(ui.item, false);
           widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
 
-          widget.addLogEntry("moveInput", widget.codelineSummary(ui.item));
+          widget.addLogEntry("moveInput", widget.codelineLogEntry(ui.item));
         },
         grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
       });
@@ -151,11 +151,11 @@ class ParsonsWidget {
 
           updateIndentAfterDrag(ui);
 
-          widget.addLogEntry("moveOutput", widget.codelineSummary(ui.item));
+          widget.addLogEntry("moveOutput", widget.codelineLogEntry(ui.item));
         },
         receive: (_, ui) => {
           updateIndentAfterDrag(ui);
-          widget.addLogEntry("addOutput", widget.codelineSummary(ui.item));
+          widget.addLogEntry("addOutput", widget.codelineLogEntry(ui.item));
         },
         update: (e, ui) => widget.config.onSortableUpdate(e, ui),
         grid: grid,
@@ -600,9 +600,7 @@ class ParsonsWidget {
       "solutionList",
       "main",
       "toolbar",
-      "starterOrderStorage",
-      "solutionOrderStorage",
-      "solutionSubmissionStorage",
+      "storage",
       "logStorage",
     ]
       .filter((f) => this.config[f] == null)
@@ -632,24 +630,18 @@ class ParsonsWidget {
       blankValues.push(inp.value);
       inp.replaceWith("!BLANK");
     });
-    // this schema is used in pl-faded-parsons.py `read_lines`!
+    // this schema is used in pl-faded-parsons.py `Line.from_pl_data`
     return {
-      givenSegments: elemClone.text().split("!BLANK"),
+      codeSnippets: elemClone.text().split("!BLANK"),
       blankValues: blankValues,
     };
   }
-  codelineSummary(line, idx) {
-    if (idx == null) {
-      idx = line.index();
-    }
-
+  codelineLogEntry(line) {
     return {
-      // this schema is used in pl-faded-parsons.py `read_lines`!
-      content: this.getCodelineText(line),
       indent: this.getCodelineIndent(line),
       segments: this.getCodelineSegments(line),
       id: $(line).attr("logging-id"),
-      index: idx,
+      index: line.index(),
     };
   }
   autoSizeBlank(el) {
@@ -660,36 +652,6 @@ class ParsonsWidget {
   }
   getSolutionLines() {
     return $(this.config.solutionList).children().toArray();
-  }
-  getSolutionCode() {
-    const solution_lines = this.getSolutionLines();
-
-    let solutionCode = "";
-    let codeMetadata = "";
-    let blankText = "";
-    let originalLine = "";
-    for (const line of solution_lines) {
-      const lineClone = $(line).clone();
-
-      blankText = "";
-      this.findBlanksIn(lineClone).each(function (_, inp) {
-        inp.replaceWith("!BLANK");
-        blankText += " #blank" + inp.value;
-      });
-      lineClone[0].innerText = lineClone[0].innerText.trimRight();
-      const lineText = this.getCodelineText(line);
-
-      if (lineClone[0].innerText != lineText) {
-        originalLine = " #!ORIGINAL" + lineClone[0].innerText + blankText;
-      } else {
-        originalLine = lineClone[0].innerText + blankText;
-      }
-
-      solutionCode += lineText + "\n";
-      codeMetadata += originalLine + "\n";
-    }
-
-    return { solution: solutionCode, metadata: codeMetadata };
   }
   /** Reads a codeline element and interpolates the blanks with their value */
   getCodelineText(codeline) {
@@ -708,7 +670,7 @@ class ParsonsWidget {
       lines.map(
         (line) =>
           " ".repeat(this.config.xIndent * this.getCodelineIndent(line)) +
-          this.getCodelineSegments(line).givenSegments.join("BLANK"),
+          this.getCodelineSegments(line).codeSnippets.join("BLANK"),
       );
     const lang = ($(this.config.main).attr("language") || "").toLowerCase();
     const commentPrefix = [
@@ -795,31 +757,23 @@ class ParsonsWidget {
     });
   }
   storeStudentProgress() {
-    const starterElements = this.getSourceLines().map((line, idx) =>
-      this.codelineSummary(line, idx),
-    );
-    const $orErr = (selector) => {
-      const s = $(selector);
-      if (!s.exists()) {
-        console.error(
-          "Could not save student data!\nStorage missing at: " + selector,
-        );
-      }
-      return s;
-    };
-    $orErr(this.config.starterOrderStorage).val(
-      JSON.stringify(starterElements),
-    );
+    // this schema is used in pl-faded-parsons.py `ProblemState.from_pl_data`!
+    const storage = $(this.config.storage);
+    if (!storage.exists()) {
+      alert("Could not save student data!");
+      return;
+    }
 
-    const solutionElements = this.getSolutionLines().map((line, idx) =>
-      this.codelineSummary(line, idx),
-    );
-    $orErr(this.config.solutionOrderStorage).val(
-      JSON.stringify(solutionElements),
-    );
+    const pythonSummary = line => ({
+      indent: this.getCodelineIndent(line),
+      ...this.getCodelineSegments(line),
+    });
 
-    $orErr(this.config.solutionSubmissionStorage).val(
-      this.getSolutionCode().solution,
+    storage.val(
+      JSON.stringify({
+        'starter': this.getSourceLines().map(pythonSummary),
+        'solution': this.getSolutionLines().map(pythonSummary),
+      }),
     );
   }
   toggleDarkmode() {
@@ -920,6 +874,17 @@ class ParsonsWidget {
 
     prev_log.push(entry);
     s.val(JSON.stringify(prev_log));
+  }
+  generateMockPLData() {
+    const txInputs = [
+      $(this.config.storage),
+      $(this.config.logStorage),
+    ];
+    const data = {};
+    for (let inp of txInputs) {
+      data[inp.attr('name')] = inp.val();
+    }
+    return JSON.stringify({ "raw_submitted_answers": data });
   }
 }
 
