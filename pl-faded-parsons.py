@@ -240,6 +240,7 @@ def render_answer_panel(element_html, data):
     """Show the instructor's reference solution"""
     element = xml.fragment_fromstring(element_html)
     path = pl.get_string_attrib(element, 'solution-path', './solution')
+    path = os.path.join(data["options"]["question_path"], path)
 
     if not os.path.exists(path):
         raise FileNotFoundError(f'\n\tCorrect answer not found at `{path}`! \n\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`')
