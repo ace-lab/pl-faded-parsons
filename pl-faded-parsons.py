@@ -24,8 +24,14 @@ def read_file_lines(data, filename, error_if_not_found=True):
             return False
 
 
-def get_student_code(element, data):
-    answers_name = pl.get_string_attrib(element, 'answers-name')
+def get_answers_name(element_html):
+    # use answers-name to namespace multiple pl-faded-parsons elements on a page
+    element = xml.fragment_fromstring(element_html)
+    return pl.get_string_attrib(element, 'answers-name', '')
+
+
+def get_student_code(element_html, data):
+    answers_name = get_answers_name(element_html)
     student_code = data['submitted_answers'].get(answers_name + 'student-parsons-solution', None)
     return student_code
 
@@ -116,9 +122,10 @@ def base64_encode(s):
     return base64.b64encode(s.encode("ascii")).decode("ascii")
 
 
-def render_question_panel(element, data):
+def render_question_panel(element_html, data):
     """Render the panel that displays the question (from code_lines.txt) and interaction boxes"""
-    answers_name = pl.get_string_attrib(element, 'answers-name')
+    element = xml.fragment_fromstring(element_html)
+    answers_name = get_answers_name(element_html)
 
     format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
     if format not in ("bottom", "right", "no_code"):
@@ -172,11 +179,15 @@ def render_question_panel(element, data):
         raw_lines = str(element.text)
 
 
-    starter_lines    = data['submitted_answers'].get(answers_name + 'starter-lines', [])
-    submission_lines = data['submitted_answers'].get(answers_name + 'submission-lines', [])
+    starter_lines_data_available    = 'starter-lines' in data['submitted_answers'] and \
+        data['submitted_answers']['starter-lines'] != []
+    submission_lines_data_available = 'submission-lines' in data['submitted_answers'] and \
+        data['submitted_answers']['submission-lines'] != []
 
-    if starter_lines or submission_lines:
-        scrambled_lines, solution_lines = load_previous_state(lang, starter_lines, submission_lines)
+    if starter_lines_data_available or submission_lines_data_available:
+        start_lines = data['submitted_answers']['starter-lines'] if starter_lines_data_available else []
+        old_submission = data['submitted_answers']['submission-lines']
+        scrambled_lines, solution_lines = load_previous_state(lang, start_lines, old_submission)
     else:
         starter_lines, given_lines = load_starter_and_given(raw_lines, lang)
         scrambled_lines = starter_lines.copy()
@@ -207,27 +218,27 @@ def render_question_panel(element, data):
             "scrambled" : scrambled,
         })
     html_params.update({
-        "answers-name": answers_name,
         "given" : given,
         "uuid": pl.get_uuid(),
-        "previous_log" : data['submitted_answers'].get(answers_name + 'log', "[]")
+        "previous_log" : data['submitted_answers'].get('log', "[]")
     })
 
     with open('pl-faded-parsons-question.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
 
 
-def render_submission_panel(element, data):
+def render_submission_panel(element_html, data):
     """Show student what they submitted"""
     html_params = {
-        'code': get_student_code(element, data),
+        'code': get_student_code(element_html, data),
     }
     with open('pl-faded-parsons-submission.mustache', 'r') as f:
         return chevron.render(f, html_params).strip()
 
 
-def render_answer_panel(element, data):
+def render_answer_panel(element_html, data):
     """Show the instructor's reference solution"""
+    element = xml.fragment_fromstring(element_html)
     path = pl.get_string_attrib(element, 'solution-path', './solution')
     path = os.path.join(data["options"]["question_path"], path)
 
@@ -245,28 +256,24 @@ def render_answer_panel(element, data):
 # Main functions
 #
 def render(element_html, data):
-    element = xml.fragment_fromstring(element_html)
-    pl.check_attribs(
-        element,
-        required_attribs=["answers-name"],
-        optional_attribs=["language", "format", "solution-path", "file-name"]
-    )
     panel_type = data['panel']
     if panel_type == 'question':
-        return render_question_panel(element, data)
+        return render_question_panel(element_html, data)
     elif panel_type == 'submission':
-        return render_submission_panel(element, data)
+        return render_submission_panel(element_html, data)
     elif panel_type == 'answer':
-        return render_answer_panel(element, data)
+        return render_answer_panel(element_html, data)
     else:
         raise Exception(f'Invalid panel type: {panel_type}')
 
 
 def parse(element_html, data):
     """Parse student's submitted answer (HTML form submission)"""
+    # make an XML fragment that can be passed around to other PL functions,
+    # parsed/walked, etc
+
     element = xml.fragment_fromstring(element_html)
     format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
-    answers_name = pl.get_string_attrib(element, 'answers-name')
 
     def load_json_if_present(key: str, default=[]):
         if key in data['raw_submitted_answers']:
@@ -274,17 +281,18 @@ def parse(element_html, data):
         return default
 
     if format != "no_code":
-        starter_lines = load_json_if_present(answers_name + 'starter-tray-order')
-    submission_lines = load_json_if_present(answers_name + 'solution-tray-order')
+        starter_lines = load_json_if_present('starter-tray-order')
+    submission_lines = load_json_if_present('solution-tray-order')
 
-    submission_code = "\n".join(
-        line.get("content", "") for line in submission_lines
-    ) + "\n"
+    submission_code = "\n".join([
+        line.get("content", "")
+        for line in submission_lines
+    ]) + "\n"
 
-    data['submitted_answers'][answers_name + 'student-parsons-solution'] = submission_code
+    data['submitted_answers']['student-parsons-solution'] = submission_code
     if format != "no_code":
-        data['submitted_answers'][answers_name + 'starter-lines'] = starter_lines
-    data['submitted_answers'][answers_name + 'submission-lines'] = submission_lines
+        data['submitted_answers']['starter-lines'] = starter_lines
+    data['submitted_answers']['submission-lines'] = submission_lines
 
     # `element` is now an XML data structure - see docs for LXML library at lxml.de
 
@@ -296,7 +304,7 @@ def parse(element_html, data):
     data['submitted_answers']['_files'] = [
         {
             "name": file_name,
-            "contents": base64_encode(get_student_code(element, data))
+            "contents": base64_encode(get_student_code(element_html, data))
         }
     ]
 
