@@ -30,7 +30,7 @@
         <pre class="prettyprint" language="{{{language}}}"> {{{text}}} </pre>
         {{/pre_text}}
         {{#given}}
-        <div id="solution-{{uuid}}" class="solution-code-tray codeline-tray soft-border col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}}">
+        <div id="solution-{{uuid}}" style="margin-left:{{visual_indent}}ch" class="solution-code-tray codeline-tray soft-border col-sm-{{#narrow}}6{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}}">
             <ol id="ol-solution-{{uuid}}" class="ui-sortable codeline-list output">
                 {{#lines}}
                     {{> pl-faded-parsons-code-line}}
