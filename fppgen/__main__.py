@@ -52,13 +52,49 @@ class Options:
 
 def generate_question_html(
     prompt_code: str, *,
+    prefix_code: str = '',
+    suffix_code: str = '',
     question_text: str = None,
     tab: str = '  ',
+    display_format: str = '',
     setup_names: List[AnnotatedName] = None,
     answer_names: List[AnnotatedName] = None
 ) -> str:
     """Turn an extracted prompt string into a question html file body"""
     indented = prompt_code.replace('\n', '\n' + tab)
+    if prefix_code != '' or suffix_code != '':
+        xml_items = [
+            "<code-lines>",
+                tab + indented,
+            "</code-lines>"
+        ]
+
+        if prefix_code != '':
+            xml_items = [
+                "<pre-text>",
+                    tab + prefix_code.replace('\n', '\n' + tab),
+                "</pre-text>"
+            ] + xml_items
+
+        if suffix_code != '':
+            xml_items += [
+                "<post-text>",
+                    tab + suffix_code.replace('\n', '\n' + tab),
+                "</post-text>"
+            ]
+
+        indented = f"\n{tab}".join(xml_items)
+
+    xml_tag_dict = { }
+    if prefix_code != '' or suffix_code != '':
+        xml_tag_dict['format'] = "bottom"
+    if display_format != '':
+        xml_tag_dict['format'] = display_format
+
+    xml_tags = " ".join([ 
+        f'{key}="{value}"'
+        for key, value in xml_tag_dict.items() 
+    ])
 
     if question_text is None:
         question_text = tab + '<!-- Write the question prompt here -->'
@@ -95,9 +131,9 @@ def generate_question_html(
 </pl-question-panel>
 
 <!-- see README for where the various parts of question live -->
-<pl-faded-parsons>
+<pl-faded-parsons {xml_tags}>
 {tab}{indented}
-</pl-faded-parsons>""".format(question_text=question_text, tab=tab, indented=indented)
+</pl-faded-parsons>""".format(question_text=question_text, tab=tab, indented=indented, xml_tags=xml_tags)
 
 
 def generate_info_json(question_name: str, autograder: AutograderConfig, *, indent=4) -> str:
@@ -178,7 +214,9 @@ def generate_fpp_question(
     setup_code = remove_region('setup_code', SETUP_CODE_DEFAULT)
     answer_code = remove_region('answer_code')
     server_code = remove_region('server')
+    prefix_code = remove_region('prefix_code')
     prompt_code = remove_region('prompt_code')
+    suffix_code = remove_region('suffix_code')
     question_text = remove_region('question_text')
     
     if options.verbosity > 0: print('- Populating {} ...'.format(question_dir))
@@ -192,7 +230,10 @@ def generate_fpp_question(
 
     question_html = generate_question_html(
         prompt_code,
+        prefix_code=prefix_code,
+        suffix_code=suffix_code,
         question_text=question_text,
+        # display_format=..., # TODO: get this working
         setup_names=setup_names,
         # show_required removed:
         # answer_names=answer_names if show_required else None
@@ -224,7 +265,9 @@ def generate_fpp_question(
         answer_code,
         setup_code,
         test_region,
-        log_details= options.verbosity > 0
+        pre_code  = prefix_code,
+        post_code = suffix_code,
+        log_details = options.verbosity > 0
     )
 
     if metadata:
@@ -263,6 +306,7 @@ def generate_many(args: Namespace):
         options = Options(args)
         options.force_generate_json = force_json
 
+        source_path = path.abspath(source_path)
         try:
             generate_fpp_question(
                 source_path,
