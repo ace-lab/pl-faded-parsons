@@ -23,6 +23,10 @@ NoneType = type(None) # replace with an import when python>=3.10
 # Common Interfaces for Parsing/Generating Data
 #
 
+"""
+We use dataclasses instead of `TypeDict`s to allow for type checking in constructors
+"""
+
 @dataclass(frozen=True)
 class Submission:
     '''
@@ -84,6 +88,11 @@ class Mustache:
         lines: List["Mustache.Line"] # [Line.to_mustache(l, lang) for l in lines]
         size: bool = True # any truthy value will do
 
+    @dataclass(frozen=True)
+    class PrePostText:
+        text: str
+        language: str
+
     # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
 
     # main element config
@@ -94,9 +103,9 @@ class Mustache:
 
     # trays and code context
     starter: Union[TrayLines, Literal['']]
-    pre_text: str
+    pre_text: PrePostText
     given: TrayLines
-    post_text: str
+    post_text: PrePostText
 
 #
 # Helper Routines
@@ -202,6 +211,10 @@ def submission_line_to_code(sub_line: Submission.Line) -> str:
     return code
 
 def submission_line_to_mustache(sub_line: Submission.Line, language: str) -> Mustache.Line:
+    """
+    Convert a Submission.Line into a Mustache.Line
+    TODO: This routine is technical debt that should be cleaned into FadedParsons class
+    """
     return Mustache.Line(
         indent=sub_line.indent,
         segments=[
@@ -386,7 +399,7 @@ class FadedParsonsProblem:
         random.shuffle(starters)
 
         self.trays: Submission.Trays
-        if format == FadedParsonsProblem.Formats.NO_CODE:
+        if self.format == FadedParsonsProblem.Formats.NO_CODE:
             self.trays = Submission.Trays(
                 solution = givens + starters,
                 starter = [ ]
@@ -419,14 +432,20 @@ class FadedParsonsProblem:
             previous_log=json.dumps(self.log),
             uuid=pl.get_uuid(),
             starter=starter_lines,
-            pre_text=self.pre_text,
+            pre_text=Mustache.PrePostText(
+                text=self.pre_text,
+                language=self.language
+            ),
             given=Mustache.TrayLines(
                 lines=[
                     submission_line_to_mustache(sub_line=l, language=self.language)
                     for l in self.trays.solution
                 ]
             ),
-            post_text=self.post_text
+            post_text=Mustache.PrePostText(
+                text=self.post_text,
+                language=self.language
+            )
         )
     
     def to_code(self) -> str:
