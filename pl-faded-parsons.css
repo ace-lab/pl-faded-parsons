@@ -123,3 +123,7 @@ code {
   flex-direction: row-reverse;
   border-radius: 0;
 }
+
+.pre-text, .post-text {
+  width: 100%;
+}
