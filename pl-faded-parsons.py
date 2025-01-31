@@ -129,9 +129,9 @@ class Mustache:
 
     # trays and code context
     starter: Union[TrayLines, Literal[""]]
-    pre_text: PrePostText
+    pre_text: Union[Literal[False], PrePostText]
     given: TrayLines
-    post_text: PrePostText
+    post_text: Union[Literal[False], PrePostText]
 
 
 #
@@ -323,10 +323,11 @@ class FadedParsonsProblem:
 
     """
 
-    class Formats(Enum):
+    class Format(Enum):
         BOTTOM = "bottom"
         RIGHT = "right"
         NO_CODE = "no_code"
+
 
     @property
     def solution_path(self) -> str:
@@ -366,8 +367,8 @@ class FadedParsonsProblem:
             ],
         )
 
-        self.answers_name: str = pl.get_string_attrib(element, "answers-name")
-        self.format = FadedParsonsProblem.Formats(
+        self.answers_name = pl.get_string_attrib(element, "answers-name")
+        self.format = FadedParsonsProblem.Format(
             pl.get_string_attrib(element, "format", "right").replace("-", "_")
         )
         self.pre_text = get_child_text_by_tag(element, "pre-text").strip("\n")
@@ -375,7 +376,7 @@ class FadedParsonsProblem:
         self.language: str = pl.get_string_attrib(element, "language", "")
         self.out_filename = pl.get_string_attrib(element, "file-name", "user_code.py")
         self.size = (
-            "narrow" if self.format == FadedParsonsProblem.Formats.RIGHT else "wide"
+            "narrow" if self.format == FadedParsonsProblem.Format.RIGHT else "wide"
         )
 
         self.markup = get_child_text_by_tag(self._element, "code-lines")
@@ -391,7 +392,7 @@ class FadedParsonsProblem:
             except:
                 self.markup = str(self._element.text)
 
-        if self.format == FadedParsonsProblem.Formats.RIGHT and (
+        if self.format == FadedParsonsProblem.Format.RIGHT and (
             self.pre_text or self.post_text
         ):
             raise Exception(
@@ -405,9 +406,8 @@ class FadedParsonsProblem:
         self._max_distractors = 10  # this was hardcoded before
         self._raw_answers = data["raw_submitted_answers"]
         self._options = data["options"]
-        self._load()
 
-    def _load(self) -> None:
+        # load the trays and log fields
         if self.answers_name in self._raw_answers:
             prev_submission: Submission = cast(
                 Submission,
@@ -420,7 +420,6 @@ class FadedParsonsProblem:
             self._trays_from_markup()
 
     def _trays_from_markup(self) -> None:
-
         starters, givens, distractors = [], [], []
         BLANK = re.compile(r"#blank [^#]*")
         GIVEN = re.compile(r"#(\d+)given")
@@ -438,7 +437,6 @@ class FadedParsonsProblem:
             if match := re.search(GIVEN, line_str):
                 givens.append(Submission.Line(int(match.group(1)), snippets, blanks))
             else:
-
                 line = Submission.Line(0, snippets, blanks)
                 if re.search(DISTRACTOR, line_str):
                     distractors.append(line)
@@ -451,7 +449,7 @@ class FadedParsonsProblem:
         random.shuffle(starters)
 
         self.trays: Submission.Trays
-        if self.format == FadedParsonsProblem.Formats.NO_CODE:
+        if self.format == FadedParsonsProblem.Format.NO_CODE:
             self.trays = Submission.Trays(solution=givens + starters, starter=[])
         else:
             self.trays = Submission.Trays(solution=givens, starter=starters)
@@ -479,7 +477,7 @@ class FadedParsonsProblem:
             previous_log=json.dumps(self.log),
             uuid=pl.get_uuid(),
             starter=starter_lines,
-            pre_text=Mustache.PrePostText(text=self.pre_text, language=self.language),
+            pre_text=self.pre_text and Mustache.PrePostText(text=self.pre_text, language=self.language),
             given=Mustache.TrayLines(
                 lines=[
                     submission_line_to_mustache(sub_line=l, language=self.language)
@@ -487,7 +485,7 @@ class FadedParsonsProblem:
                 ],
                 **{self.size: True},
             ),
-            post_text=Mustache.PrePostText(text=self.post_text, language=self.language),
+            post_text=self.post_text and Mustache.PrePostText(text=self.post_text, language=self.language),
         )
 
     def to_code(self) -> str:
@@ -516,7 +514,7 @@ class FadedParsonsProblem:
             ],
         }
 
-        if self.format != FadedParsonsProblem.Formats.NO_CODE:
+        if self.format != FadedParsonsProblem.Format.NO_CODE:
             assert self.trays.starter is not None  # to appease the typechecker
 
             data["starter-lines"] = [

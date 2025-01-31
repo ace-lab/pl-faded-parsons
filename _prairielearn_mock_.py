@@ -1,5 +1,7 @@
 from typing import Any, Literal, TypedDict, Optional
 
+import lxml
+
 
 class PartialScore(TypedDict):
     score: float | None
@@ -24,3 +26,6 @@ class QuestionData(TypedDict):
     num_valid_submissions: int
     manual_grading: bool
     answers_names: dict[str, bool]
+
+def get_string_attrib(element: lxml.html.HtmlElement, name: str, *args: str | None) -> str | None:
+    return 'mock_stub'
