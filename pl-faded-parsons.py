@@ -359,7 +359,6 @@ class FadedParsonsProblem:
                 "answers-name",
             ],
             optional_attribs=[
-                "solution-path",
                 "format",
                 "language",
                 "file-name",
@@ -400,9 +399,10 @@ class FadedParsonsProblem:
                 + 'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.'
             )
 
-        self._solution_path = pl.get_string_attrib(
+        path = pl.get_string_attrib(
             element, "solution-path", "./solution"
         )
+        self._solution_path = os.path.join(data["options"]["question_path"], path)
         self._max_distractors = 10  # this was hardcoded before
         self._raw_answers = data["raw_submitted_answers"]
         self._options = data["options"]
@@ -498,8 +498,8 @@ class FadedParsonsProblem:
 
     def to_legacy_data(self) -> Dict[str, Any]:
         data: Dict[str, Any] = {
-            "student-parsons-solution": self.to_code(),
-            "submission-lines": [
+            self.answers_name + "student-parsons-solution": self.to_code(),
+            self.answers_name + "submission-lines": [
                 {
                     "content": submission_line_to_code(line),
                     "indent": line.indent,
@@ -517,7 +517,7 @@ class FadedParsonsProblem:
         if self.format != FadedParsonsProblem.Format.NO_CODE:
             assert self.trays.starter is not None  # to appease the typechecker
 
-            data["starter-lines"] = [
+            data[self.answers_name + "starter-lines"] = [
                 {
                     "content": submission_line_to_code(line),
                     "indent": line.indent,
