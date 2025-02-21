@@ -13,8 +13,17 @@ import re
 import lxml.html as xml
 
 from dataclasses import asdict, dataclass, field, is_dataclass
-from typing import Union, List, Dict, Literal, Any, get_args, get_origin, cast
-from datetime import datetime
+from typing import (
+    Union,
+    ForwardRef,
+    List,
+    Dict,
+    Literal,
+    Any,
+    get_args,
+    get_origin,
+    cast
+)
 from enum import Enum
 
 UnionType = Union  # replace with an import when python>=3.10
@@ -52,11 +61,12 @@ class Submission:
     @dataclass(frozen=True, slots=True)
     class Trays:
         solution: List["Submission.Line"]
-        starter: Union[List["Submission.Line"], None] = None
+        # starter: Union[List["Submission.Line"], None] = None # TODO: this breaks validate_and_instantiate, but isn't necessary
+        starter: List["Submission.Line"] = field(default_factory=list)
 
     @dataclass(frozen=True, slots=True)
     class LogEntry:
-        timestamp: datetime
+        timestamp: str # TODO: this as a datetime breaks validate_and_instantiate, but isn't necessary
         tag: str  # this is technically an enum of string literals ... Maybe enumerate eventually?
         data: dict  # TODO: expand this, the "tag" tells us the type of JSON object this is
 
@@ -148,7 +158,7 @@ def validate_and_instantiate(t: type, value: Any):
     If so, returns an instance of `t`. Raises a ParsingError otherwise.
     """
 
-    if isinstance(t, UnionType):
+    if get_origin(t) is UnionType:
         annotated_types = get_args(t)
 
         if NoneType in annotated_types and value is None:  # fast return for common case
@@ -156,7 +166,7 @@ def validate_and_instantiate(t: type, value: Any):
 
         casts = []
         for t in annotated_types:  # for each type that isn't None:
-            if issubclass(t, NoneType):
+            if t is NoneType:
                 continue
 
             try:  # try to cast it to each anotation, skipping ones that error
@@ -180,7 +190,15 @@ def validate_and_instantiate(t: type, value: Any):
 
         return casts[0][0]
 
+    # this is the `List` in `List[int]`, is None if just `list`
+    wanted_type = get_origin(t)
+    if wanted_type is None and isinstance(t, ForwardRef):
+        # handle the case where the type wasn't auto-resolved to the class
+        t = t._evaluate(globalns=globals(), localns=locals(), recursive_guard=set())
+
     if is_dataclass(t):
+        if not isinstance(value, dict):
+            raise ParsingError(f"Expected a dictionary object to instantiate type {t}, got: {type(value)}")
         return t(
             **{
                 k: validate_and_instantiate(t.__annotations__[k], v)
@@ -188,8 +206,6 @@ def validate_and_instantiate(t: type, value: Any):
             }
         )
 
-    # this is the `List` in `List[int]`, is None if just `list`
-    wanted_type = get_origin(t)
     if wanted_type == None:
         # `t` is a class that's not a dataclass with no annotations, cast it
         return t(value)
@@ -408,11 +424,18 @@ class FadedParsonsProblem:
         self._options = data["options"]
 
         # load the trays and log fields
-        if self.answers_name in self._raw_answers:
+        if f"{self.answers_name}.main" in self._raw_answers:
             prev_submission: Submission = cast(
                 Submission,
                 validate_and_instantiate(
-                    Submission, self._raw_answers[self.answers_name]
+                    Submission, {
+                        "main": json.loads(
+                            self._raw_answers[f"{self.answers_name}.main"]
+                        ),
+                        "log": json.loads(
+                            self._raw_answers.get(f"{self.answers_name}.log", "[]")
+                        )
+                    }
                 ),
             )
             self._trays_from_submission(prev_submission)
@@ -474,7 +497,7 @@ class FadedParsonsProblem:
         return Mustache(
             answers_name=self.answers_name,
             language=self.language,
-            previous_log=json.dumps(self.log),
+            previous_log=json.dumps(self.log, default=asdict),
             uuid=pl.get_uuid(),
             starter=starter_lines,
             pre_text=self.pre_text and Mustache.PrePostText(text=self.pre_text, language=self.language),
