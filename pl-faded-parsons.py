@@ -560,6 +560,16 @@ class FadedParsonsProblem:
 #
 # Main functions
 #
+def prepare(element_html: str, data: pl.QuestionData):
+    element: xml.HtmlElement = xml.fragment_fromstring(element_html)
+    pl.check_attribs(
+        element,
+        required_attribs=["answers-name"],
+        optional_attribs=["format", "language", "file-name", "solution-path"],
+    )
+    pl.check_answers_names(data, pl.get_string_attrib(element, "answers-name"))
+
+
 def render(element_html: str, data: pl.QuestionData):
     panel_type = data["panel"]
 
