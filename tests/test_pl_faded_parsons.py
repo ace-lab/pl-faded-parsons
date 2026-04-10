@@ -90,22 +90,30 @@ ignored() #distractor</code-lines>
         self.assertEqual(problem.size, "wide")
         self.assertEqual(problem.trays.starter[1].blankValues, ["42"])
         self.assertEqual(
-            [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.solution],
+            [
+                pl_faded_parsons.FadedParsonsProblem.line_to_code(line)
+                for line in problem.trays.solution
+            ],
             ["    given()"],
         )
         self.assertEqual(
-            [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.starter],
+            [
+                pl_faded_parsons.FadedParsonsProblem.line_to_code(line)
+                for line in problem.trays.starter
+            ],
             ["starter()", "value = 42", "ignored()"],
         )
 
-    def test_submission_line_to_mustache_preserves_segments_without_mutation(self):
+    def test_line_to_mustache_preserves_segments_without_mutation(self):
         line = pl_faded_parsons.Submission.Line(
             indent=1,
             codeSnippets=["print(", ")"],
             blankValues=["value"],
         )
 
-        mustache_line = pl_faded_parsons.submission_line_to_mustache(line, "python")
+        mustache_line = pl_faded_parsons.FadedParsonsProblem.line_to_mustache(
+            line, "python"
+        )
 
         self.assertEqual(mustache_line.indent, 1)
         self.assertEqual(len(mustache_line.segments), 3)
@@ -206,7 +214,7 @@ starter()</code-lines>
         self.assertIn(str(self.tmp_path), answer_rendered)
         self.assertIn("./solution", answer_rendered)
 
-    def test_parse_writes_submission_file_and_legacy_fields(self):
+    def test_parse_writes_submission_file_using_answers_name_only(self):
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">
             <code-lines>print(!BLANK) #blank 7
@@ -218,17 +226,9 @@ return 3 #1given</code-lines>
 
         expected_code = "    return 3"
         self.assertEqual(self.data["submitted_answers"]["demo"], expected_code)
-        self.assertEqual(
-            self.data["submitted_answers"]["demostudent-parsons-solution"], expected_code
-        )
-        self.assertEqual(
-            self.data["submitted_answers"]["demosubmission-lines"][0]["content"],
-            expected_code,
-        )
-        self.assertEqual(
-            self.data["submitted_answers"]["demostarter-lines"][0]["content"],
-            "print(7)",
-        )
+        self.assertNotIn("demostudent-parsons-solution", self.data["submitted_answers"])
+        self.assertNotIn("demosubmission-lines", self.data["submitted_answers"])
+        self.assertNotIn("demostarter-lines", self.data["submitted_answers"])
 
         encoded = self.data["submitted_answers"]["_files"]["student.py"]
         self.assertEqual(base64.b64decode(encoded).decode("ascii"), expected_code)
@@ -244,7 +244,10 @@ starter()</code-lines>
         problem = pl_faded_parsons.FadedParsonsProblem(html, self.data)
 
         self.assertEqual(
-            [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.solution],
+            [
+                pl_faded_parsons.FadedParsonsProblem.line_to_code(line)
+                for line in problem.trays.solution
+            ],
             ["given()", "starter()"],
         )
         self.assertEqual(problem.trays.starter, [])

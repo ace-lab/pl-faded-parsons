@@ -29,11 +29,10 @@ class QuestionData(TypedDict):
     answers_names: dict[str, bool]
 
 
-def get_string_attrib(
-    element: lxml.html.HtmlElement, name: str, *args: str | None
-) -> str | None:
-    default = args[0] if args else None
-    return element.get(name, default)
+def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | None = None) -> str:
+    out = element.get(name, default)
+    if out is None: raise ValueError()
+    return out
 
 
 def check_attribs(

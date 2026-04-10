@@ -1,7 +1,6 @@
 try:
     import prairielearn as pl
 except ModuleNotFoundError:
-    print("<!> pl not loaded! <!>")
     import _prairielearn_mock_ as pl
 
 import base64
@@ -17,7 +16,6 @@ from typing import (
     Union,
     ForwardRef,
     List,
-    Dict,
     Literal,
     Any,
     get_args,
@@ -245,16 +243,6 @@ def interleave(list1: list, list2: list) -> list:
             out.append(list2[i])
 
     return out
-
-
-def submission_line_to_code(sub_line: Submission.Line) -> str:
-    return FadedParsonsProblem.line_to_code(sub_line)
-
-
-def submission_line_to_mustache(
-    sub_line: Submission.Line, language: str
-) -> Mustache.Line:
-    return FadedParsonsProblem.line_to_mustache(sub_line, language)
 
 
 #
@@ -507,7 +495,7 @@ class FadedParsonsProblem:
             previous_log=json.dumps(self.log, default=asdict),
             uuid=pl.get_uuid(),
             starter=starter_lines,
-            pre_text=self.pre_text and Mustache.PrePostText(text=self.pre_text, language=self.language),
+            pre_text=bool(self.pre_text) and Mustache.PrePostText(text=self.pre_text, language=self.language),
             given=Mustache.TrayLines(
                 lines=[
                     self.line_to_mustache(sub_line=l, language=self.language)
@@ -515,7 +503,7 @@ class FadedParsonsProblem:
                 ],
                 **{self.size: True},
             ),
-            post_text=self.post_text and Mustache.PrePostText(text=self.post_text, language=self.language),
+            post_text=bool(self.post_text) and Mustache.PrePostText(text=self.post_text, language=self.language),
         )
 
     def to_code(self) -> str:
@@ -526,47 +514,6 @@ class FadedParsonsProblem:
             )
         )
 
-    def to_legacy_data(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {
-            self.answers_name + "student-parsons-solution": self.to_code(),
-            self.answers_name + "submission-lines": [
-                {
-                    "content": self.line_to_code(line),
-                    "indent": line.indent,
-                    "segments": {
-                        "givenSegments": line.codeSnippets,
-                        "blankValues": line.blankValues,
-                    },
-                    # "id": str, #$(line).attr("logging-id"),
-                    # "index": int,
-                }
-                for line in self.trays.solution
-            ],
-        }
-
-        if self.format != FadedParsonsProblem.Format.NO_CODE:
-            assert self.trays.starter is not None  # to appease the typechecker
-
-            data[self.answers_name + "starter-lines"] = [
-                {
-                    "content": self.line_to_code(line),
-                    "indent": line.indent,
-                    "segments": {
-                        "givenSegments": line.codeSnippets,
-                        "blankValues": line.blankValues,
-                    },
-                    # "id": str, #$(line).attr("logging-id"),
-                    # "index": int,
-                }
-                for line in self.trays.starter
-            ]
-
-        return data
-
-
-#
-# Main functions
-#
 def prepare(element_html: str, data: pl.QuestionData):
     element: xml.HtmlElement = xml.fragment_fromstring(element_html)
     pl.check_attribs(
@@ -612,6 +559,3 @@ def parse(element_html: str, data: pl.QuestionData):
     # provide the answer to users of pl-faded-parsons in classic PL style
     data["submitted_answers"][fpp.answers_name] = student_code
     pl.add_submitted_file(data, fpp.out_filename, base64_encode(student_code))
-
-    # support legacy questions from when we wrote to the wrong place
-    data["submitted_answers"].update(fpp.to_legacy_data())
