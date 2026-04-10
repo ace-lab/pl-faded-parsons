@@ -1,6 +1,7 @@
-from typing import Any, Literal, TypedDict, Optional
+from typing import Any, Literal, Optional, TypedDict
+from uuid import uuid4
 
-import lxml
+import lxml.html
 
 
 class PartialScore(TypedDict):
@@ -21,11 +22,50 @@ class QuestionData(TypedDict):
     options: dict[str, Any]
     raw_submitted_answers: dict[str, Any]
     editable: bool
-    panel: Literal['question', 'submission', 'answer']
+    panel: Literal["question", "submission", "answer"]
     extensions: dict[str, Any]
     num_valid_submissions: int
     manual_grading: bool
     answers_names: dict[str, bool]
 
-def get_string_attrib(element: lxml.html.HtmlElement, name: str, *args: str | None) -> str | None:
-    return 'mock_stub'
+
+def get_string_attrib(
+    element: lxml.html.HtmlElement, name: str, *args: str | None
+) -> str | None:
+    default = args[0] if args else None
+    return element.get(name, default)
+
+
+def check_attribs(
+    element: lxml.html.HtmlElement,
+    required_attribs: list[str] | None = None,
+    optional_attribs: list[str] | None = None,
+) -> None:
+    required = set(required_attribs or [])
+    optional = set(optional_attribs or [])
+
+    missing = [name for name in required if not element.get(name)]
+    if missing:
+        raise ValueError(f"Missing required attributes: {missing}")
+
+    allowed = required | optional
+    extra = sorted(set(element.attrib) - allowed)
+    if extra:
+        raise ValueError(f"Unexpected attributes: {extra}")
+
+
+def check_answers_names(data: QuestionData, name: str | None) -> None:
+    if not name:
+        raise ValueError("answers-name is required")
+    if data["answers_names"].get(name):
+        raise ValueError(f"Duplicate answers-name: {name}")
+    data["answers_names"][name] = True
+
+
+def get_uuid() -> str:
+    return str(uuid4())
+
+
+def add_submitted_file(data: QuestionData, filename: str, contents: str) -> None:
+    submitted_files = data["submitted_answers"].setdefault("_files", {})
+    submitted_files[filename] = contents
