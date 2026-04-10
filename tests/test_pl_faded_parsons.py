@@ -91,12 +91,30 @@ ignored() #distractor</code-lines>
         self.assertEqual(problem.trays.starter[1].blankValues, ["42"])
         self.assertEqual(
             [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.solution],
-            ["    given() "],
+            ["    given()"],
         )
         self.assertEqual(
             [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.starter],
-            ["starter()", "value = 42 ", "ignored() "],
+            ["starter()", "value = 42", "ignored()"],
         )
+
+    def test_submission_line_to_mustache_preserves_segments_without_mutation(self):
+        line = pl_faded_parsons.Submission.Line(
+            indent=1,
+            codeSnippets=["print(", ")"],
+            blankValues=["value"],
+        )
+
+        mustache_line = pl_faded_parsons.submission_line_to_mustache(line, "python")
+
+        self.assertEqual(mustache_line.indent, 1)
+        self.assertEqual(len(mustache_line.segments), 3)
+        self.assertEqual(mustache_line.segments[0].code.content, "print(")
+        self.assertEqual(mustache_line.segments[1].blank.default, "value")
+        self.assertEqual(mustache_line.segments[1].blank.width, 6)
+        self.assertEqual(mustache_line.segments[2].code.content, ")")
+        self.assertEqual(line.codeSnippets, ["print(", ")"])
+        self.assertEqual(line.blankValues, ["value"])
 
     def test_problem_uses_prior_submission_when_present(self):
         self.data["raw_submitted_answers"] = {
@@ -198,18 +216,18 @@ return 3 #1given</code-lines>
 
         pl_faded_parsons.parse(html, self.data)
 
-        expected_code = "    return 3 "
+        expected_code = "    return 3"
         self.assertEqual(self.data["submitted_answers"]["demo"], expected_code)
         self.assertEqual(
-            self.data["submitted_answers"]["demostudent-parsons-solution"], "    "
+            self.data["submitted_answers"]["demostudent-parsons-solution"], expected_code
         )
         self.assertEqual(
             self.data["submitted_answers"]["demosubmission-lines"][0]["content"],
-            "    ",
+            expected_code,
         )
         self.assertEqual(
             self.data["submitted_answers"]["demostarter-lines"][0]["content"],
-            "print(7) ",
+            "print(7)",
         )
 
         encoded = self.data["submitted_answers"]["_files"]["student.py"]
@@ -227,7 +245,7 @@ starter()</code-lines>
 
         self.assertEqual(
             [pl_faded_parsons.submission_line_to_code(line) for line in problem.trays.solution],
-            ["given() ", "starter()"],
+            ["given()", "starter()"],
         )
         self.assertEqual(problem.trays.starter, [])
 

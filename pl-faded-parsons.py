@@ -237,48 +237,24 @@ def validate_and_instantiate(t: type, value: Any):
 
 def interleave(list1: list, list2: list) -> list:
     out = []
-
-    while len(list1) > 0 or len(list2) > 0:
-        if len(list1) > 0:
-            out.append(list1.pop(0))
-        if len(list2) > 0:
-            out.append(list2.pop(0))
+    max_len = max(len(list1), len(list2))
+    for i in range(max_len):
+        if i < len(list1):
+            out.append(list1[i])
+        if i < len(list2):
+            out.append(list2[i])
 
     return out
 
 
 def submission_line_to_code(sub_line: Submission.Line) -> str:
-    prefix = sub_line.indent * "    "
-    code = prefix + "".join(interleave(sub_line.codeSnippets, sub_line.blankValues))
-    return code
+    return FadedParsonsProblem.line_to_code(sub_line)
 
 
 def submission_line_to_mustache(
     sub_line: Submission.Line, language: str
 ) -> Mustache.Line:
-    """
-    Convert a Submission.Line into a Mustache.Line
-    TODO: This routine is technical debt that should be cleaned into FadedParsons class
-    """
-    return Mustache.Line(
-        indent=sub_line.indent,
-        segments=interleave(
-            [
-                Mustache.Line.Segment(
-                    code=Mustache.Line.Segment.Code(content, language=language)
-                )
-                for content in sub_line.codeSnippets
-            ],
-            [
-                Mustache.Line.Segment(
-                    blank=Mustache.Line.Segment.Blank(
-                        placeholder, width=max(4, len(placeholder) + 1)
-                    )
-                )
-                for placeholder in sub_line.blankValues
-            ],
-        ),
-    )
+    return FadedParsonsProblem.line_to_mustache(sub_line, language)
 
 
 #
@@ -344,6 +320,48 @@ class FadedParsonsProblem:
         RIGHT = "right"
         NO_CODE = "no_code"
 
+    @staticmethod
+    def _get_child_text_by_tag(element: xml.HtmlElement, tag: str) -> str:
+        return next((elem.text for elem in element if elem.tag == tag), "")
+
+    @staticmethod
+    def _parse_markup_segments(line_str: str) -> tuple[list[str], list[str]]:
+        code_portion = line_str.split("#", 1)[0].rstrip()
+        snippets = code_portion.split("!BLANK")
+        blanks = [""] * (len(snippets) - 1)
+
+        for i, val in enumerate(re.findall(r"#blank [^#]*", line_str)):
+            blanks[i] = val.replace("#blank", "").strip()
+
+        return snippets, blanks
+
+    @staticmethod
+    def line_to_code(sub_line: Submission.Line) -> str:
+        prefix = sub_line.indent * "    "
+        return prefix + "".join(interleave(sub_line.codeSnippets, sub_line.blankValues))
+
+    @staticmethod
+    def line_to_mustache(sub_line: Submission.Line, language: str) -> Mustache.Line:
+        return Mustache.Line(
+            indent=sub_line.indent,
+            segments=interleave(
+                [
+                    Mustache.Line.Segment(
+                        code=Mustache.Line.Segment.Code(content, language=language)
+                    )
+                    for content in sub_line.codeSnippets
+                ],
+                [
+                    Mustache.Line.Segment(
+                        blank=Mustache.Line.Segment.Blank(
+                            placeholder, width=max(4, len(placeholder) + 1)
+                        )
+                    )
+                    for placeholder in sub_line.blankValues
+                ],
+            ),
+        )
+
 
     @property
     def solution_path(self) -> str:
@@ -362,13 +380,10 @@ class FadedParsonsProblem:
             return f.read()
 
     def __init__(self, element_html: str, data: pl.QuestionData):
-        def get_child_text_by_tag(element, tag: str) -> str:
-            """get the innerHTML of the first child of `element` that has the tag `tag`
-            default value is empty string"""
-            return next((elem.text for elem in element if elem.tag == tag), "")
-
         element: xml.HtmlElement = xml.fragment_fromstring(element_html)
         self._element: xml.HtmlElement = element
+        self._raw_answers = data["raw_submitted_answers"]
+        self._options = data["options"]
         pl.check_attribs(
             element,
             required_attribs=[
@@ -386,15 +401,15 @@ class FadedParsonsProblem:
         self.format = FadedParsonsProblem.Format(
             pl.get_string_attrib(element, "format", "right").replace("-", "_")
         )
-        self.pre_text = get_child_text_by_tag(element, "pre-text").strip("\n")
-        self.post_text = get_child_text_by_tag(element, "post-text").strip("\n")
+        self.pre_text = self._get_child_text_by_tag(element, "pre-text").strip("\n")
+        self.post_text = self._get_child_text_by_tag(element, "post-text").strip("\n")
         self.language: str = pl.get_string_attrib(element, "language", "")
         self.out_filename = pl.get_string_attrib(element, "file-name", "user_code.py")
         self.size = (
             "narrow" if self.format == FadedParsonsProblem.Format.RIGHT else "wide"
         )
 
-        self.markup = get_child_text_by_tag(self._element, "code-lines")
+        self.markup = self._get_child_text_by_tag(self._element, "code-lines")
         if not self.markup:
             try:
                 path = os.path.join(
@@ -420,8 +435,6 @@ class FadedParsonsProblem:
         )
         self._solution_path = os.path.join(data["options"]["question_path"], path)
         self._max_distractors = 10  # this was hardcoded before
-        self._raw_answers = data["raw_submitted_answers"]
-        self._options = data["options"]
 
         # load the trays and log fields
         if f"{self.answers_name}.main" in self._raw_answers:
@@ -444,18 +457,12 @@ class FadedParsonsProblem:
 
     def _trays_from_markup(self) -> None:
         starters, givens, distractors = [], [], []
-        BLANK = re.compile(r"#blank [^#]*")
         GIVEN = re.compile(r"#(\d+)given")
         DISTRACTOR = re.compile(r"#distractor")
 
         for raw_line in self.markup.strip().split("\n"):
             line_str = raw_line.strip()
-            snippets = line_str.split("#")[0].split("!BLANK")
-
-            blanks = [""] * (len(snippets) - 1)
-            if blank_defaults := re.findall(BLANK, line_str):
-                for i, val in enumerate(blank_defaults):
-                    blanks[i] = val.replace("#blank", "").strip()
+            snippets, blanks = self._parse_markup_segments(line_str)
 
             if match := re.search(GIVEN, line_str):
                 givens.append(Submission.Line(int(match.group(1)), snippets, blanks))
@@ -488,7 +495,7 @@ class FadedParsonsProblem:
         else:
             starter_lines = Mustache.TrayLines(
                 lines=[
-                    submission_line_to_mustache(sub_line=l, language=self.language)
+                    self.line_to_mustache(sub_line=l, language=self.language)
                     for l in self.trays.starter
                 ],
                 **{self.size: True},
@@ -503,7 +510,7 @@ class FadedParsonsProblem:
             pre_text=self.pre_text and Mustache.PrePostText(text=self.pre_text, language=self.language),
             given=Mustache.TrayLines(
                 lines=[
-                    submission_line_to_mustache(sub_line=l, language=self.language)
+                    self.line_to_mustache(sub_line=l, language=self.language)
                     for l in self.trays.solution
                 ],
                 **{self.size: True},
@@ -514,7 +521,7 @@ class FadedParsonsProblem:
     def to_code(self) -> str:
         return "\n".join(
             map(
-                submission_line_to_code,
+                self.line_to_code,
                 self.trays.solution,
             )
         )
@@ -524,7 +531,7 @@ class FadedParsonsProblem:
             self.answers_name + "student-parsons-solution": self.to_code(),
             self.answers_name + "submission-lines": [
                 {
-                    "content": submission_line_to_code(line),
+                    "content": self.line_to_code(line),
                     "indent": line.indent,
                     "segments": {
                         "givenSegments": line.codeSnippets,
@@ -542,7 +549,7 @@ class FadedParsonsProblem:
 
             data[self.answers_name + "starter-lines"] = [
                 {
-                    "content": submission_line_to_code(line),
+                    "content": self.line_to_code(line),
                     "indent": line.indent,
                     "segments": {
                         "givenSegments": line.codeSnippets,
