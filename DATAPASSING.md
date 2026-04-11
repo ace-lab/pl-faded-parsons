@@ -155,7 +155,8 @@ Files:
 Each rendered code line is built from:
 
 - `indent`
-  - rendered as `style="margin-left: {{indent}}ch;"`
+  - rendered as `style="--pl-faded-parsons-indent: {{indent}};"`
+  - stored as a logical indent level and converted to visual width by CSS/JS
 - `segments`
   - alternates between:
     - `code.content`, `code.language`

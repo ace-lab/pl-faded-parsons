@@ -613,13 +613,16 @@ class ParsonsWidget {
   }
   /** Returns the indentation level of the codeline */
   getCodelineIndent(codeline) {
-    // for some reason, $.css and $.cssUnit report values only in px in amounts
-    // that do not align with ParsonsGlobal.charWidthInPx... just use DOM API.
     codeline = $(codeline).get(0);
-    const indentChar = parseInt(
-      codeline.style && codeline.style.marginLeft,
+    const logicalIndent = parseInt(
+      codeline.style &&
+        codeline.style.getPropertyValue("--pl-faded-parsons-indent"),
       10,
     );
+    if (!isNaN(logicalIndent)) return logicalIndent;
+
+    // Fallback for older markup that still stores a visual margin-left.
+    const indentChar = parseInt(codeline.style && codeline.style.marginLeft, 10);
     const indentLevel = indentChar / this.config.xIndent;
     return isNaN(indentLevel) ? 0 : indentLevel;
   }
@@ -712,8 +715,8 @@ class ParsonsWidget {
       );
 
       $(codeline).css(
-        "margin-left",
-        this.config.xIndent * newCodeIndent + "ch",
+        "--pl-faded-parsons-indent",
+        newCodeIndent,
       );
 
       this.redrawTabStops();

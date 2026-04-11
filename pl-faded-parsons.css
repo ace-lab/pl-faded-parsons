@@ -78,6 +78,7 @@ code {
 }
 
 .codeline-tray li {
+  --pl-faded-parsons-indent-width: 4ch;
   -moz-border-radius: 10px;
   -webkit-border-radius: 10px;
   border-radius: 10px;
@@ -88,6 +89,9 @@ code {
   padding-left: 3ch;
   text-indent: -2ch;
   /* 0.6ch */
+  margin-left: calc(
+    var(--pl-faded-parsons-indent, 0) * var(--pl-faded-parsons-indent-width)
+  );
   margin-top: 5px;
   overflow: hidden;
   cursor: move;
