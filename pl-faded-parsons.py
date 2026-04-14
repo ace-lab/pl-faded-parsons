@@ -1,305 +1,561 @@
-import prairielearn as pl
-import lxml.html as xml
-import chevron
-import os
+try:
+    import prairielearn as pl
+except ModuleNotFoundError:
+    import _prairielearn_mock_ as pl
+
 import base64
+import chevron
 import json
-import re
+import os.path
 import random
+import re
+import lxml.html as xml
+
+from dataclasses import asdict, dataclass, field, is_dataclass
+from typing import (
+    Union,
+    ForwardRef,
+    List,
+    Literal,
+    Any,
+    get_args,
+    get_origin,
+    cast
+)
+from enum import Enum
+
+UnionType = Union  # replace with an import when python>=3.10
+NoneType = type(None)  # replace with an import when python>=3.10
+
+#
+# Common Interfaces for Parsing/Generating Data
+#
+
+"""
+We use dataclasses instead of `TypeDict`s to allow for type checking in constructors
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Submission:
+    """
+    Represent the JSON contents of input.main and input.log from pl-faded-parsons-question.mustache
+
+    Naming is sensitive! Compare to mustache and pl-faded-parsons.js
+    """
+
+    @dataclass(frozen=True, slots=True)
+    class Line:
+        indent: int
+        codeSnippets: List[str]
+        blankValues: List[str]
+
+        def __post_init__(self):
+            if len(self.codeSnippets) != len(self.blankValues) + 1:
+                raise ValueError(
+                    "codeSnippets must have one more element than blankValues"
+                )
+
+    @dataclass(frozen=True, slots=True)
+    class Trays:
+        solution: List["Submission.Line"]
+        # starter: Union[List["Submission.Line"], None] = None # TODO: this breaks validate_and_instantiate, but isn't necessary
+        starter: List["Submission.Line"] = field(default_factory=list)
+
+    @dataclass(frozen=True, slots=True)
+    class LogEntry:
+        timestamp: str # TODO: this as a datetime breaks validate_and_instantiate, but isn't necessary
+        tag: str  # this is technically an enum of string literals ... Maybe enumerate eventually?
+        data: dict  # TODO: expand this, the "tag" tells us the type of JSON object this is
+
+    main: Trays
+    log: List[LogEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class Mustache:
+    """
+    The structure expected by chevron for pl-faded-parsons-question.mustache
+
+    Naming is sensitive! compare to mustache!
+    """
+
+    @dataclass(frozen=True, slots=True)
+    class Line:
+        @dataclass(frozen=True, slots=True, kw_only=True)
+        class Segment:
+            @dataclass(frozen=True, slots=True)
+            class Blank:
+                default: str
+                width: int
+
+            @dataclass(frozen=True, slots=True)
+            class Code:
+                content: str
+                language: str
+
+            # { 'blank': { 'default': ..., 'width': max(4, len(...) + 1) } }
+            blank: Union[Blank, None] = None
+            # { 'code': { 'content': ..., 'language': ... } }
+            code: Union[Code, None] = None
+
+            def __post_init__(self):
+                if bool(self.blank) == bool(self.code):
+                    raise ValueError(
+                        "A Segment must be either blank *or* code, set exactly one, not "
+                        + ("both" if self.blank else "neither")
+                    )
+
+        indent: int
+        segments: List[Segment]
+
+    @dataclass(frozen=True, slots=True, kw_only=True)
+    class TrayLines:
+        lines: List["Mustache.Line"]  # [Line.to_mustache(l, lang) for l in lines]
+        narrow: bool = False
+        wide: bool = False
+
+        def __post_init__(self):
+            if self.narrow == self.wide:
+                raise ValueError(
+                    "A TrayLine must be either narrow *or* wide, set exactly one, not "
+                    + ("both" if self.narrow else "neither")
+                )
+
+    @dataclass(frozen=True, slots=True)
+    class PrePostText:
+        text: str
+        language: str
+
+    # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
+
+    # main element config
+    answers_name: str
+    language: str
+    previous_log: str
+    uuid: str
+
+    # trays and code context
+    starter: Union[TrayLines, Literal[""]]
+    pre_text: Union[Literal[False], PrePostText]
+    given: TrayLines
+    post_text: Union[Literal[False], PrePostText]
 
 
 #
-# Helper functions
+# Helper Routines
 #
-def read_file_lines(data, filename, error_if_not_found=True):
-    """Return a string of newline-separated lines of code from some file in serverFilesQuestion."""
-    path = os.path.join(data["options"]["question_path"], 'serverFilesQuestion', filename)
-    try:
-        f = open(path, 'r')
-        return f.read()
-    except FileNotFoundError as e:
-        if error_if_not_found:
-            raise e
-        else:
-            return False
+class ParsingError(Exception):
+    """Something went wrong during parsing"""
 
 
-def get_student_code(element, data):
-    answers_name = pl.get_string_attrib(element, 'answers-name')
-    student_code = data['submitted_answers'].get(answers_name + 'student-parsons-solution', None)
-    return student_code
+# add generic typing when python>=3.12 (i.e. `val_and_inst[T](t: T, value: Any) -> T`)
+def validate_and_instantiate(t: type, value: Any):
+    """
+    Validate that `value` (a primitive type) can be converted to `t`.
+    If so, returns an instance of `t`. Raises a ParsingError otherwise.
+    """
 
+    if get_origin(t) is UnionType:
+        annotated_types = get_args(t)
 
-def parse_lines(language, lines):
-    'Reads lines structured by pl-faded-parsons.js codelineSummary'
-    for line in lines:
-        old_segments = line['segments']['givenSegments']
-        segments = [{ "code" : { "content" : old_segments[0] }}]
+        if NoneType in annotated_types and value is None:  # fast return for common case
+            return None
 
-        for segment, fill in zip(old_segments[1:], line['segments']['blankValues']):
-            segments.append({ "blank" : { "default" : fill    }})
-            segments.append({ "code"  : { "content" : segment }})
+        casts = []
+        for t in annotated_types:  # for each type that isn't None:
+            if t is NoneType:
+                continue
 
-        yield {
-            "language" : language,
-            "segments" : segments,
-            "indent": line.get('indent', 0)
+            try:  # try to cast it to each anotation, skipping ones that error
+                singly_typed = validate_and_instantiate(t, value)
+                if singly_typed is None:
+                    continue
+
+                casts.append((singly_typed, t))
+            except TypeError as _:
+                pass
+
+        if casts == []:
+            raise ParsingError(
+                f"None of {annotated_types} can be constructed from: {value}"
+            )
+        elif len(casts) > 1:  # multiple casts worked -- that's bad
+            matching_types = list(map(lambda x: x[1], casts))
+            raise ParsingError(
+                f"Ambiguous type! All of {matching_types} could be constructed from: {value}"
+            )
+
+        return casts[0][0]
+
+    # this is the `List` in `List[int]`, is None if just `list`
+    wanted_type = get_origin(t)
+    if wanted_type is None and isinstance(t, ForwardRef):
+        # handle the case where the type wasn't auto-resolved to the class
+        t = t._evaluate(globalns=globals(), localns=locals(), recursive_guard=set())
+
+    if is_dataclass(t):
+        if not isinstance(value, dict):
+            raise ParsingError(f"Expected a dictionary object to instantiate type {t}, got: {type(value)}")
+        return t(
+            **{
+                k: validate_and_instantiate(t.__annotations__[k], v)
+                for k, v in value.items()
+            }
+        )
+
+    if wanted_type == None:
+        # `t` is a class that's not a dataclass with no annotations, cast it
+        return t(value)
+
+    # this is the `(int,)` in `List[int]`, is `tuple()` if just `list`/`List`
+    type_args = get_args(t)
+    if len(type_args) == 0:
+        return wanted_type(value)
+
+    if wanted_type == list and isinstance(value, list):
+        # `List`/`list` only accepts one type argument
+        item_type = type_args[0]
+        return list(validate_and_instantiate(item_type, v) for v in value)
+
+    if wanted_type == tuple and isinstance(value, tuple):
+        # `Tuple`/`tuple` requires a type argument for each position
+        return tuple(validate_and_instantiate(tt, v) for tt, v in zip(type_args, value))
+
+    if wanted_type == dict and isinstance(value, dict):
+        # `Dict`/`dict` requires 2 type arguments: one for keys, another for values
+        k_type, v_type = type_args
+        return {
+            validate_and_instantiate(k_type, k): validate_and_instantiate(v_type, v)
+            for k, v in value.items()
         }
 
-
-def load_previous_state(language, old_starter, old_submission, indent_size=4):
-    scrambled = list(parse_lines(language, old_starter))
-    given = []
-
-    for data in parse_lines(language, old_submission):
-        data['indent'] *= indent_size
-        given.append(data)
-
-    return scrambled, given
+    raise ParsingError(f"Unhandled case! Could not parse type:{t}, value:{value}")
 
 
-def load_starter_and_given(raw_lines, language, indent_size=4, max_distractors=10):
-    line_segments = [ line.strip().split('!BLANK') for line in raw_lines.strip().split('\n') ]
+def interleave(list1: list, list2: list) -> list:
+    out = []
+    max_len = max(len(list1), len(list2))
+    for i in range(max_len):
+        if i < len(list1):
+            out.append(list1[i])
+        if i < len(list2):
+            out.append(list2[i])
 
-    scrambled = []
-    given = []
-    distractors = []
-
-    for segments in line_segments:
-        new_line = { "language": language }
-
-        matches = re.findall(r'#blank [^#]*', segments[-1])
-        tail = re.sub(r'#blank [^#]*', '', segments[-1])
-        blank_count = len(segments) - 1
-        fills = list(map(lambda e: e.replace('#blank ', ""), matches)) + [""] * (blank_count-len(matches))
-        segments[-1] = tail
-
-        parsed_segments = [{ "code" : { "content" : segments[0] } }]
-        for segment, pre_fill in zip(segments[1:], fills):
-            width = str(len(pre_fill)+1) if pre_fill != "" else "4"
-            parsed_segments.append({ "blank" : { "default" : pre_fill, "width" : width } })
-            parsed_segments.append({ "code"  : { "content" : segment  } })
-
-        matches = re.search(r'#([0-9]+)given', tail)
-        if matches is not None:
-            indent = int(matches.group(1))
-            new_line['indent'] = indent * indent_size
-            parsed_segments[-1] = {
-                "code" : { "content" : re.sub(r'#([0-9]+)given', '', tail).rstrip() }
-            }
-            new_line['segments'] = parsed_segments
-            given.append(new_line)
-            continue
-
-        if re.match(r'#distractor', tail):
-            parsed_segments[-1] = {
-                "code" : { "content" : re.sub(r'#distractor', '', tail).rstrip() }
-            }
-            new_line['segments'] = parsed_segments
-            distractors.append(new_line)
-            continue
-
-        new_line['segments'] = parsed_segments
-        scrambled.append(new_line)
+    return out
 
 
-    for _ in range(max_distractors):
-        if len(distractors) == 0:
-            break
-        index = random.randint(len(distractors))
-        scrambled.append(distractors.pop(index))
+#
+# The FPP Definition
+#
+class FadedParsonsProblem:
+    """An instance of an FPP
 
-    return scrambled, given
+    Instantiate an FPP from an html tag and populate the trays with
+    either submitted state or the provided markup.
 
+    XML Attributes
+    --------------
+    `answers-name="..."`
+        The unique identifier for this problem. Raises error if `ValueError` if empty or missing.
+    `format={ right | bottom | no-code }`
+        The provided format of the problem. Defaults to "right".
+    `language`
+        The language with which to apply syntax highlighting. Defaults to "" (no highlighting).
+    `file-name`
+        The file to store the student's submission for grading. Defaults to `user_code.py`.
+    `solution-path`
+        The path to a file containing the solution. Defaults to "./solution".
 
-def base64_encode(s):
-    return base64.b64encode(s.encode("ascii")).decode("ascii")
+    Attributes
+    ----------
+    `answers_name` : `str`
+        This problem's identifier. Specified with `answers-name="..."`.
+    `format` : `FadedParsonsProblem.Formats`
+        The provided format of the problem. Specified with `format="..."`.
+    `markup` : `str`
+        The markup provided in html that is parsed into lines for the student. Is not used if the student has previously made a submission.
+    `pre_text` : `str`
+        The text that will be shown directly before the solution tray. Will be an empty string and not rendered if omitted. Cannot be used with format="right".
+    `post_text` : `str`
+        The text that will be shown directly after the solution tray. Will be an empty string and not rendered if omitted. Cannot be used with format="right".
+    `language` : `str`
+        The language with which to apply syntax highlighting. May be an empty string, in which case no highlighting will be done.
+    `out_filename` : `str`
+        The file to which to include the student's submission. Specified with `file-name="..."`.
+    `size` : `Literal["narrow", "wide"]`
+        The size of the solution tray. `"narrow"` indicates it should take approximately half the width of the problem pane. `"wide"` indicates it should take the full width of the problem pane.
+    `solution_path` : `str`
+        The path to a file containing the solution. Specified with `solution-path="..."`. Raises `FileNotFoundError` on access if not found.
+    `solution` : `str`
+        The solution. Specified with `solution-path="..."`. Raises `FileNotFoundError` on access if file not found.
+    `trays` : `Submission.Trays`
+        The trays used in this problem. MUST CALL `.load(...)` TO DEFINE.
+    `log` : `List[Submission.LogEntry]`
+        The log of events for this problem. MUST CALL `.load(...)` TO DEFINE.
 
+    Methods
+    -------
+    `to_mustache() -> Mustache`
+        Produce a `Mustache` instance for rendering
+    `to_code() -> str`
+        Compile the student submission into an executable code snippet.
 
-def render_question_panel(element, data):
-    """Render the panel that displays the question (from code_lines.txt) and interaction boxes"""
-    answers_name = pl.get_string_attrib(element, 'answers-name')
+    """
 
-    format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
-    if format not in ("bottom", "right", "no_code"):
-        raise Exception(f"Unsupported pl-faded-parsons format: \"{format}\". Please see documentation for supported formats")
+    class Format(Enum):
+        BOTTOM = "bottom"
+        RIGHT = "right"
+        NO_CODE = "no_code"
 
-    lang = pl.get_string_attrib(element, "language", None)
-
-    html_params = {
-        "code_lines": str(element.text),
-    }
-
-    def get_child_text_by_tag(element, tag: str) -> str:
-        """get the innerHTML of the first child of `element` that has the tag `tag`
-        default value is empty string"""
+    @staticmethod
+    def _get_child_text_by_tag(element: xml.HtmlElement, tag: str) -> str:
         return next((elem.text for elem in element if elem.tag == tag), "")
 
-    def get_code_lines():
-        code_lines = get_child_text_by_tag(element, "code-lines") or \
-            read_file_lines(data, 'code_lines.txt', error_if_not_found=False)
+    @staticmethod
+    def _parse_markup_segments(line_str: str) -> tuple[list[str], list[str]]:
+        code_portion = line_str.split("#", 1)[0].rstrip()
+        snippets = code_portion.split("!BLANK")
+        blanks = [""] * (len(snippets) - 1)
 
-        if not code_lines:
-            raise Exception("A non-empty code_lines.txt or <code-lines> child must be provided in right (horizontal) placement.")
+        for i, val in enumerate(re.findall(r"#blank [^#]*", line_str)):
+            blanks[i] = val.replace("#blank", "").strip()
 
-        return code_lines
+        return snippets, blanks
 
-    # pre + post text
-    pre_text = get_child_text_by_tag(element, "pre-text") \
-        .strip("\n") # trim newlines
-    post_text = get_child_text_by_tag(element, "post-text") \
-        .strip("\n") # trim newlines
+    @staticmethod
+    def line_to_code(sub_line: Submission.Line) -> str:
+        prefix = sub_line.indent * "    "
+        return prefix + "".join(interleave(sub_line.codeSnippets, sub_line.blankValues))
 
-    pre  = { "text" : pre_text  }
-    post = { "text" : post_text }
-
-    if lang:
-        pre.update({ "language" : lang })
-        post.update({ "language" : lang })
-
-    if pre_text:
-        html_params.update({
-            "pre_text" : pre,
-        })
-    if post_text:
-        html_params.update({
-            "post_text" : post,
-        })
-
-    try:
-        raw_lines = get_code_lines()
-    except:
-        raw_lines = str(element.text)
-
-
-    starter_lines    = data['submitted_answers'].get(answers_name + 'starter-lines', [])
-    submission_lines = data['submitted_answers'].get(answers_name + 'submission-lines', [])
-
-    if starter_lines or submission_lines:
-        scrambled_lines, solution_lines = load_previous_state(lang, starter_lines, submission_lines)
-    else:
-        starter_lines, given_lines = load_starter_and_given(raw_lines, lang)
-        scrambled_lines = starter_lines.copy()
-        solution_lines = given_lines.copy()
-
-        if format in ("right", "bottom", "no_code", ):
-            random.shuffle(scrambled_lines)
-
-    scrambled = { "lines" : scrambled_lines, "answers_name" : answers_name }
-    given     = { "lines" : solution_lines , "answers_name" : answers_name }
-
-    if format == "right":
-        if pre_text or post_text:
-            raise Exception("pre-text and post-text are not supported in right (horizontal) mode. " +
-                'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.')
-        size = "narrow"
-    elif format == "bottom":
-        size = "wide"
-    elif format == "no_code":
-        size = "wide"
-        given["lines"] = given['lines'] + scrambled['lines']
-
-    scrambled[size] = {"non_empty" : "non_empty"}
-    given    [size] = {"non_empty" : "non_empty"}
-
-    if format != "no_code":
-        html_params.update({
-            "scrambled" : scrambled,
-        })
-    html_params.update({
-        "answers-name": answers_name,
-        "given" : given,
-        "uuid": pl.get_uuid(),
-        "previous_log" : data['submitted_answers'].get(answers_name + 'log', "[]")
-    })
-
-    with open('pl-faded-parsons-question.mustache', 'r') as f:
-        return chevron.render(f, html_params).strip()
+    @staticmethod
+    def line_to_mustache(sub_line: Submission.Line, language: str) -> Mustache.Line:
+        return Mustache.Line(
+            indent=sub_line.indent,
+            segments=interleave(
+                [
+                    Mustache.Line.Segment(
+                        code=Mustache.Line.Segment.Code(content, language=language)
+                    )
+                    for content in sub_line.codeSnippets
+                ],
+                [
+                    Mustache.Line.Segment(
+                        blank=Mustache.Line.Segment.Blank(
+                            placeholder, width=max(4, len(placeholder) + 1)
+                        )
+                    )
+                    for placeholder in sub_line.blankValues
+                ],
+            ),
+        )
 
 
-def render_submission_panel(element, data):
-    """Show student what they submitted"""
-    html_params = {
-        'code': get_student_code(element, data),
-    }
-    with open('pl-faded-parsons-submission.mustache', 'r') as f:
-        return chevron.render(f, html_params).strip()
+    @property
+    def solution_path(self) -> str:
+        if not os.path.exists(self._solution_path):
+            raise FileNotFoundError(
+                "\n"
+                f"\tCorrect answer not found at `{self._solution_path}`! \n"
+                '\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`'
+            )
 
+        return self._solution_path
 
-def render_answer_panel(element, data):
-    """Show the instructor's reference solution"""
-    path = pl.get_string_attrib(element, 'solution-path', './solution')
-    path = os.path.join(data["options"]["question_path"], path)
+    @property
+    def solution(self) -> str:
+        with open(self.solution_path, "r") as f:
+            return f.read()
 
-    if not os.path.exists(path):
-        raise FileNotFoundError(f'\n\tCorrect answer not found at `{path}`! \n\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`')
+    def __init__(self, element_html: str, data: pl.QuestionData):
+        element: xml.HtmlElement = xml.fragment_fromstring(element_html)
+        self._element: xml.HtmlElement = element
+        self._raw_answers = data["raw_submitted_answers"]
+        self._options = data["options"]
+        pl.check_attribs(
+            element,
+            required_attribs=[
+                "answers-name",
+            ],
+            optional_attribs=[
+                "format",
+                "language",
+                "file-name",
+                "solution-path",
+            ],
+        )
 
-    html_params = {
-        "solution_path": path,
-    }
-    with open('pl-faded-parsons-answer.mustache', 'r') as f:
-        return chevron.render(f, html_params).strip()
+        self.answers_name = pl.get_string_attrib(element, "answers-name")
+        self.format = FadedParsonsProblem.Format(
+            pl.get_string_attrib(element, "format", "right").replace("-", "_")
+        )
+        self.pre_text = self._get_child_text_by_tag(element, "pre-text").strip("\n")
+        self.post_text = self._get_child_text_by_tag(element, "post-text").strip("\n")
+        self.language: str = pl.get_string_attrib(element, "language", "")
+        self.out_filename = pl.get_string_attrib(element, "file-name", "user_code.py")
+        self.size = (
+            "narrow" if self.format == FadedParsonsProblem.Format.RIGHT else "wide"
+        )
 
+        self.markup = self._get_child_text_by_tag(self._element, "code-lines")
+        if not self.markup:
+            try:
+                path = os.path.join(
+                    self._options["question_path"],
+                    "serverFilesQuestion",
+                    "code_lines.txt",
+                )
+                with open(path, "r") as f:
+                    self.markup = f.read()
+            except:
+                self.markup = str(self._element.text)
 
-#
-# Main functions
-#
-def render(element_html, data):
-    element = xml.fragment_fromstring(element_html)
+        if self.format == FadedParsonsProblem.Format.RIGHT and (
+            self.pre_text or self.post_text
+        ):
+            raise Exception(
+                "pre-text and post-text are not supported in right (horizontal) mode. "
+                + 'Add/set `format="bottom"` or `format="no-code"` to your element to use this feature.'
+            )
+
+        path = pl.get_string_attrib(
+            element, "solution-path", "./solution"
+        )
+        self._solution_path = os.path.join(data["options"]["question_path"], path)
+        self._max_distractors = 10  # this was hardcoded before
+
+        # load the trays and log fields
+        if f"{self.answers_name}.main" in self._raw_answers:
+            prev_submission: Submission = cast(
+                Submission,
+                validate_and_instantiate(
+                    Submission, {
+                        "main": json.loads(
+                            self._raw_answers[f"{self.answers_name}.main"]
+                        ),
+                        "log": json.loads(
+                            self._raw_answers.get(f"{self.answers_name}.log", "[]")
+                        )
+                    }
+                ),
+            )
+            self._trays_from_submission(prev_submission)
+        else:
+            self._trays_from_markup()
+
+    def _trays_from_markup(self) -> None:
+        starters, givens, distractors = [], [], []
+        GIVEN = re.compile(r"#(\d+)given")
+        DISTRACTOR = re.compile(r"#distractor")
+
+        for raw_line in self.markup.strip().split("\n"):
+            line_str = raw_line.strip()
+            snippets, blanks = self._parse_markup_segments(line_str)
+
+            if match := re.search(GIVEN, line_str):
+                givens.append(Submission.Line(int(match.group(1)), snippets, blanks))
+            else:
+                line = Submission.Line(0, snippets, blanks)
+                if re.search(DISTRACTOR, line_str):
+                    distractors.append(line)
+                else:
+                    starters.append(line)
+
+        distractor_count = min(len(distractors), self._max_distractors)
+        starters.extend(random.sample(distractors, k=distractor_count))
+
+        random.shuffle(starters)
+
+        self.trays: Submission.Trays
+        if self.format == FadedParsonsProblem.Format.NO_CODE:
+            self.trays = Submission.Trays(solution=givens + starters, starter=[])
+        else:
+            self.trays = Submission.Trays(solution=givens, starter=starters)
+        self.log: List[Submission.LogEntry] = []
+
+    def _trays_from_submission(self, data: Submission) -> None:
+        self.trays: Submission.Trays = data.main
+        self.log: List[Submission.LogEntry] = data.log
+
+    def to_mustache(self) -> Mustache:
+        if self.trays.starter in ([], None):
+            starter_lines = ""
+        else:
+            starter_lines = Mustache.TrayLines(
+                lines=[
+                    self.line_to_mustache(sub_line=l, language=self.language)
+                    for l in self.trays.starter
+                ],
+                **{self.size: True},
+            )
+
+        return Mustache(
+            answers_name=self.answers_name,
+            language=self.language,
+            previous_log=json.dumps(self.log, default=asdict),
+            uuid=pl.get_uuid(),
+            starter=starter_lines,
+            pre_text=bool(self.pre_text) and Mustache.PrePostText(text=self.pre_text, language=self.language),
+            given=Mustache.TrayLines(
+                lines=[
+                    self.line_to_mustache(sub_line=l, language=self.language)
+                    for l in self.trays.solution
+                ],
+                **{self.size: True},
+            ),
+            post_text=bool(self.post_text) and Mustache.PrePostText(text=self.post_text, language=self.language),
+        )
+
+    def to_code(self) -> str:
+        return "\n".join(
+            map(
+                self.line_to_code,
+                self.trays.solution,
+            )
+        )
+
+def prepare(element_html: str, data: pl.QuestionData):
+    element: xml.HtmlElement = xml.fragment_fromstring(element_html)
     pl.check_attribs(
         element,
         required_attribs=["answers-name"],
-        optional_attribs=["language", "format", "solution-path", "file-name"]
+        optional_attribs=["format", "language", "file-name", "solution-path"],
     )
-    panel_type = data['panel']
-    if panel_type == 'question':
-        return render_question_panel(element, data)
-    elif panel_type == 'submission':
-        return render_submission_panel(element, data)
-    elif panel_type == 'answer':
-        return render_answer_panel(element, data)
-    else:
-        raise Exception(f'Invalid panel type: {panel_type}')
+    pl.check_answers_names(data, pl.get_string_attrib(element, "answers-name"))
 
 
-def parse(element_html, data):
-    """Parse student's submitted answer (HTML form submission)"""
-    element = xml.fragment_fromstring(element_html)
-    format = pl.get_string_attrib(element, "format", "right").replace("-", '_')
-    answers_name = pl.get_string_attrib(element, 'answers-name')
+def render(element_html: str, data: pl.QuestionData):
+    panel_type = data["panel"]
 
-    def load_json_if_present(key: str, default=[]):
-        if key in data['raw_submitted_answers']:
-            return json.loads(data['raw_submitted_answers'][key])
-        return default
+    fpp = FadedParsonsProblem(element_html, data)
+    mustache_file = f"pl-faded-parsons-{panel_type}.mustache"
 
-    if format != "no_code":
-        starter_lines = load_json_if_present(answers_name + 'starter-tray-order')
-    submission_lines = load_json_if_present(answers_name + 'solution-tray-order')
-
-    submission_code = "\n".join(
-        line.get("content", "") for line in submission_lines
-    ) + "\n"
-
-    data['submitted_answers'][answers_name + 'student-parsons-solution'] = submission_code
-    if format != "no_code":
-        data['submitted_answers'][answers_name + 'starter-lines'] = starter_lines
-    data['submitted_answers'][answers_name + 'submission-lines'] = submission_lines
-
-    # `element` is now an XML data structure - see docs for LXML library at lxml.de
-
-    # only Python problems are allowed right now (lang MUST be "py")
-    # lang = pl.get_string_attrib(element, 'language') # TODO: commenting is a stop gap for the pilot study, find a better solution
-
-    file_name = pl.get_string_attrib(element, 'file-name', 'user_code.py')
-
-    data['submitted_answers']['_files'] = [
-        {
-            "name": file_name,
-            "contents": base64_encode(get_student_code(element, data))
+    if panel_type == "question":
+        # chevron skips rendering when values are falsy (eg pre-text/post-text/starter)
+        html_params = asdict(fpp.to_mustache())
+    elif panel_type == "submission":
+        html_params = {
+            "code": fpp.to_code(),
         }
-    ]
+    elif panel_type == "answer":
+        html_params = {"solution_path": fpp.solution_path}
+    else:
+        raise Exception(f"Invalid panel type: {panel_type}")
 
-    # TBD do error checking here for other attribute values....
-    # set data['format_errors']['elt'] to an error message indicating an error with the
-    # contents/format of the HTML element named 'elt'
+    with open(mustache_file, "r") as f:
+        return chevron.render(f, html_params).strip()
+
+
+def parse(element_html: str, data: pl.QuestionData):
+    """Parse student's submitted answer (HTML form submission)"""
+
+    def base64_encode(s):
+        return base64.b64encode(s.encode("ascii")).decode("ascii")
+
+    fpp = FadedParsonsProblem(element_html, data)
+
+    student_code = fpp.to_code()
+
+    # provide the answer to users of pl-faded-parsons in classic PL style
+    data["submitted_answers"][fpp.answers_name] = student_code
+    pl.add_submitted_file(data, fpp.out_filename, base64_encode(student_code))
