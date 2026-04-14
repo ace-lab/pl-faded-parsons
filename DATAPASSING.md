@@ -33,7 +33,8 @@ data["raw_submitted_answers"][f"{answers_name}.main"]
 data["raw_submitted_answers"][f"{answers_name}.log"]
 ```
 
-Legacy compatibility data is also written into `submitted_answers`, but it is not the primary contract.
+Interaction logging is optional and disabled by default. Set `log="true"` on the
+element to preserve the browser event log in `raw_submitted_answers`.
 
 ## Lifecycle
 
@@ -43,6 +44,7 @@ File: `pl-faded-parsons.py`
 
 - Validates element attributes.
 - Validates `answers-name` uniqueness with `pl.check_answers_names(...)`.
+- Reads `log="true|false"` and defaults logging to `false`.
 
 Important contract:
 
@@ -52,10 +54,10 @@ Important contract:
 
 File: `pl-faded-parsons.py`
 
-- Instantiates `FadedParsonsProblem`.
+- Builds a small config dictionary from the element HTML.
 - Reconstructs state from `raw_submitted_answers` if `"{answers_name}.main"` exists.
 - Otherwise builds trays from element markup.
-- Converts internal Python state into a `Mustache` dataclass.
+- Converts the state into the plain dictionary shape expected by Mustache.
 - Renders `pl-faded-parsons-question.mustache`.
 
 ### 3. Browser initialization
@@ -96,15 +98,14 @@ On parse:
 - compiles the solution tray into plaintext code
 - stores the canonical answer in `submitted_answers[answers_name]`
 - adds a submitted file using `file-name` or the default `user_code.py`
-- writes legacy flat compatibility keys into `submitted_answers`
 
 ## Boundary Map
 
-### Python -> Mustache (`Mustache`)
+### Python -> Mustache
 
 File: `pl-faded-parsons.py`
 
-`FadedParsonsProblem.to_mustache()` returns:
+`render(panel="question")` builds a dictionary with:
 
 - `answers_name: str`
   - used for hidden input names in the question template
@@ -112,6 +113,9 @@ File: `pl-faded-parsons.py`
   - used for syntax highlighting and copied onto the root widget DOM node
 - `previous_log: str`
   - JSON string used to initialize the hidden log input
+  - defaults to `[]` unless `log="true"` is set on the element
+- `logging_enabled: bool`
+  - controls whether the browser widget records interaction logs
 - `uuid: str`
   - used to build DOM ids and JS selectors
 - `starter`
@@ -162,14 +166,14 @@ Each rendered code line is built from:
     - `code.content`, `code.language`
     - `blank.default`, `blank.width`
 
-This mirrors `Submission.Line` in Python:
+This mirrors one saved line in Python:
 
 ```python
-Submission.Line(
-    indent: int,
-    codeSnippets: list[str],
-    blankValues: list[str],
-)
+{
+    "indent": int,
+    "codeSnippets": list[str],
+    "blankValues": list[str],
+}
 ```
 
 The invariant is:
@@ -186,8 +190,9 @@ File: `pl-faded-parsons-question.mustache`
 
 - `main`
 - `uuid`
-- `logStorage`
 - `storage`
+- optionally `logStorage`
+- `loggingEnabled`
 - `ariaDescriptor`
 - `ariaDetails`
 - `toolbar`
@@ -204,7 +209,7 @@ File: `pl-faded-parsons-question.mustache`
 - `main`
 - `toolbar`
 - `storage`
-- `logStorage`
+- `logStorage` when `loggingEnabled` is true
 
 Starter selectors are optional.
 
@@ -237,26 +242,24 @@ File: `pl-faded-parsons.js`
 
 Important mapping:
 
-- JS `starter` -> Python `Submission.Trays.starter`
-- JS `solution` -> Python `Submission.Trays.solution`
+- JS `starter` -> Python `state["starter"]`
+- JS `solution` -> Python `state["solution"]`
 
-This schema is read in `pl-faded-parsons.py` by constructing:
+This schema is read in `pl-faded-parsons.py` by validating the JSON and returning:
 
 ```python
-Submission(
-    main={
-        "starter": ...,
-        "solution": ...
-    },
-    log=[...]
-)
+{
+    "starter": [...],
+    "solution": [...],
+    "log": [...],
+}
 ```
 
 ### Hidden `.log` input
 
 File: `pl-faded-parsons.js`
 
-`addLogEntry()` appends entries shaped like:
+When `loggingEnabled` is true, `addLogEntry()` appends entries shaped like:
 
 ```json
 {
@@ -275,37 +278,35 @@ Observed tags include:
 - `moveOutput`
 - `addOutput`
 
-This schema is read back into Python as `Submission.LogEntry`.
+This schema is read back into Python as a list of dictionaries with
+`timestamp`, `tag`, and `data` keys.
 
 ## Python Internal State
 
-### `Submission`
+### State dictionary
 
 File: `pl-faded-parsons.py`
 
 Python reconstructs the raw submission into:
 
 ```python
-Submission(
-    main=Submission.Trays(
-        solution=[Submission.Line(...), ...],
-        starter=[Submission.Line(...), ...],
-    ),
-    log=[Submission.LogEntry(...), ...],
-)
+{
+    "solution": [{"indent": ..., "codeSnippets": [...], "blankValues": [...]}, ...],
+    "starter": [{"indent": ..., "codeSnippets": [...], "blankValues": [...]}, ...],
+    "log": [{"timestamp": "...", "tag": "...", "data": {...}}, ...],
+}
 ```
 
 This internal representation is then used for:
 
 - re-rendering prior student state on the question panel
 - generating the compiled code string
-- generating legacy compatibility outputs
 
 ### Compiled code
 
 File: `pl-faded-parsons.py`
 
-`to_code()` compiles only the `solution` tray.
+`parse()` and `render(panel="submission")` compile only the `solution` tray.
 
 Each line is rendered by:
 
@@ -331,18 +332,6 @@ File: `pl-faded-parsons.py`
 - `pl.add_submitted_file(data, out_filename, base64(student_code))`
 
 These are the modern outputs other graders/elements should rely on.
-
-### Legacy outputs
-
-File: `pl-faded-parsons.py`
-
-`to_legacy_data()` writes flat keys into `submitted_answers`:
-
-- `answers_name + "student-parsons-solution"`
-- `answers_name + "submission-lines"`
-- optionally `answers_name + "starter-lines"`
-
-These exist for backwards compatibility with older autograders/questions.
 
 ## Panel-Specific Data
 
@@ -392,6 +381,7 @@ These names must stay aligned:
 - JS:
   - `storage`
   - `logStorage`
+  - `loggingEnabled`
 - Python:
   - `raw_submitted_answers[f"{answers_name}.main"]`
   - `raw_submitted_answers[f"{answers_name}.log"]`
@@ -403,15 +393,15 @@ These names must stay aligned:
   - `codeSnippets`
   - `blankValues`
 - Python:
-  - `Submission.Line.indent`
-  - `Submission.Line.codeSnippets`
-  - `Submission.Line.blankValues`
+  - `state_line["indent"]`
+  - `state_line["codeSnippets"]`
+  - `state_line["blankValues"]`
 
 ### Mustache line schema
 
 - Python:
-  - `Mustache.Line.Segment.Code`
-  - `Mustache.Line.Segment.Blank`
+  - `{"code": {...}}`
+  - `{"blank": {...}}`
 - Mustache partial:
   - `{{#code}}`
   - `{{#blank}}`

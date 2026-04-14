@@ -62,6 +62,7 @@
             new ParsonsWidget({
                 main: '#pl-faded-parsons-{{uuid}}',
                 uuid: '{{uuid}}',
+                loggingEnabled: {{#logging_enabled}}true{{/logging_enabled}}{{^logging_enabled}}false{{/logging_enabled}},
 
                 logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
                 storage: "#pl-faded-parsons-{{uuid}} > input.main",

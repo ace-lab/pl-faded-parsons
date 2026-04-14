@@ -35,6 +35,26 @@ def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | 
     return out
 
 
+def get_boolean_attrib(
+    element: lxml.html.HtmlElement, name: str, *, default: bool = False
+) -> bool:
+    """Parse a boolean HTML attribute using a small PrairieLearn-friendly vocabulary."""
+
+    raw_value = element.get(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+
+    raise ValueError(
+        f"Attribute `{name}` must be a boolean string like `true` or `false`, got `{raw_value}`."
+    )
+
+
 def check_attribs(
     element: lxml.html.HtmlElement,
     required_attribs: list[str] | None = None,
