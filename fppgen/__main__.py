@@ -38,7 +38,7 @@ class Options:
         self.make_dir: bool = metadata.get("make-dir", self.make_dir)
 
         self.out_path = self.cli_args.output_path or metadata.get("output-path", self.out_path)
-        
+
     def dump(self) -> str:
         """Produce a json dump of this object"""
 
@@ -95,7 +95,7 @@ def generate_question_html(
 </pl-question-panel>
 
 <!-- see README for where the various parts of question live -->
-<pl-faded-parsons>
+<pl-faded-parsons answers-name="fpp">
 {tab}{indented}
 </pl-faded-parsons>""".format(question_text=question_text, tab=tab, indented=indented)
 
@@ -164,14 +164,14 @@ def generate_fpp_question(
     else:
         question_dir = q_dir
     test_dir = path.join(question_dir, 'tests')
-    
+
     if options.verbosity > 0: print('- Creating destination directories...')
-    
+
     make_if_absent(question_dir)
     make_if_absent(test_dir)
 
     copy_dest_path = path.join(question_dir, 'source.py')
-    if options.verbosity > 0: 
+    if options.verbosity > 0:
         print('- Copying {} to {} ...'.format(path.basename(source_path), copy_dest_path))
     copyfile(source_path, copy_dest_path)
 
@@ -180,7 +180,7 @@ def generate_fpp_question(
     server_code = remove_region('server')
     prompt_code = remove_region('prompt_code')
     question_text = remove_region('question_text')
-    
+
     if options.verbosity > 0: print('- Populating {} ...'.format(question_dir))
 
     gen_server_code, setup_names, answer_names = autograder.generate_server(
@@ -212,7 +212,7 @@ def generate_fpp_question(
             Bcolors.warn('  - Overwriting', json_path,
                          'using \"info.json\" region...' if json_region else '...')
 
-    
+
 
     if options.verbosity > 0:
         print('- Populating {} ...'.format(test_dir))
@@ -249,7 +249,7 @@ def generate_fpp_question(
 
         # write files
         write_to(question_dir, raw_path, data)
-    
+
     autograder.clean_tests_dir(test_dir)
 
     Bcolors.printf(Bcolors.OK_GREEN, 'Done.')
