@@ -381,13 +381,14 @@ def _build_question_params(
             state["starter"],
             config["language"],
             config["size"],
+            allow_empty=config["format"] == FORMAT_NO_CODE,
         ),
         "pre_text": _build_text_block(config["pre_text"], config["language"]),
         "given": _build_tray_params(
             state["solution"],
             config["language"],
             config["size"],
-            allow_empty=True,
+            allow_empty=False,
         ),
         "post_text": _build_text_block(config["post_text"], config["language"]),
     }
@@ -402,7 +403,7 @@ def _build_tray_params(
 ) -> dict[str, Any] | str:
     """Build the tray object expected by the Mustache question template."""
 
-    if not lines and not allow_empty:
+    if not lines and allow_empty:
         return ""
 
     tray = {

@@ -79,6 +79,63 @@ class TestReloadIndentRegression(unittest.TestCase):
         self.assertIn("loggingEnabled: true", rendered)
         self.assertIn("problemOpened", rendered)
 
+    def test_render_keeps_empty_starter_tray_visible_after_submission(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            data["raw_submitted_answers"] = {
+                "demo.main": json.dumps(
+                    {
+                        "solution": [
+                            {
+                                "indent": 0,
+                                "codeSnippets": ["answer()"],
+                                "blankValues": [],
+                            }
+                        ],
+                        "starter": [],
+                    }
+                ),
+                "demo.log": "[]",
+            }
+            element_html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
+
+            with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
+                rendered = pl_faded_parsons.render(element_html, data)
+
+        self.assertIn('id="starter-code-uuid-123"', rendered)
+        self.assertIn('id="ol-starter-code-uuid-123"', rendered)
+
+    def test_render_hides_empty_starter_tray_in_no_code_format(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            data["raw_submitted_answers"] = {
+                "demo.main": json.dumps(
+                    {
+                        "solution": [
+                            {
+                                "indent": 0,
+                                "codeSnippets": ["answer()"],
+                                "blankValues": [],
+                            }
+                        ],
+                        "starter": [],
+                    }
+                ),
+                "demo.log": "[]",
+            }
+            element_html = (
+                '<pl-faded-parsons answers-name="demo" format="no-code">'
+                "</pl-faded-parsons>"
+            )
+
+            with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
+                rendered = pl_faded_parsons.render(element_html, data)
+
+        self.assertNotIn('id="starter-code-uuid-123"', rendered)
+        self.assertNotIn('id="ol-starter-code-uuid-123"', rendered)
+
     def test_saved_indent_level_rerenders_as_logical_indent_property(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
