@@ -36,7 +36,7 @@ def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | 
 
 
 def get_boolean_attrib(
-    element: lxml.html.HtmlElement, name: str, *, default: bool = False
+    element: lxml.html.HtmlElement, name: str, default: bool = False
 ) -> bool:
     """Parse a boolean HTML attribute using a small PrairieLearn-friendly vocabulary."""
 

@@ -174,7 +174,7 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "format": format_name,
         "language": pl.get_string_attrib(element, "language", ""),
         "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
-        "logging_enabled": pl.get_boolean_attrib(element, "log", default=False),
+        "logging_enabled": pl.get_boolean_attrib(element, "log", False),
         "markup": _load_markup(element, question_path),
         "pre_text": pre_text,
         "post_text": post_text,
