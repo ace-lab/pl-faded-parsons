@@ -35,7 +35,6 @@ import chevron
 import lxml.html as xml
 
 
-ELEMENT_DIR = Path(__file__).resolve().parent
 REQUIRED_ATTRIBS = ["answers-name"]
 OPTIONAL_ATTRIBS = ["format", "language", "file-name", "solution-path", "log"]
 
@@ -486,10 +485,10 @@ def _render_template(template_name: str, params: dict[str, Any]) -> str:
     working directory, which makes local tests and upstream integration simpler.
     """
 
-    template_path = ELEMENT_DIR / template_name
+    template_path = Path(template_name)
     with template_path.open(encoding="utf-8") as template_file:
         return chevron.render(
             template_file,
             params,
-            partials_path=str(ELEMENT_DIR),
+            partials_path=template_path.parent
         ).strip()
