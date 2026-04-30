@@ -523,7 +523,8 @@ class ParsonsWidget {
           widget.updateAriaInfo(this, false);
         },
         click(e) {
-          if (e.target != this) return; // if child clicked, return.
+          // Let code text clicks focus the line too; keep blank inputs handling themselves.
+          if ($(e.target).is("input.parsons-blank")) return;
           widget.enterBlankOnCodelineFocus = false;
           focusCodeline(this);
         },
