@@ -4,8 +4,10 @@
   <pl-code language="python">
 {{code}}
   </pl-code>
+  {{#has_feedback}}
   <p> Feedback </p>
   <div>
     <pl-external-grader-results></pl-external-grader-results>
   </div>
+  {{/has_feedback}}
 </div>

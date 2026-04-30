@@ -200,6 +200,24 @@ starter()</code-lines>
         self.assertIn("source-file-name=", answer_rendered)
         self.assertIn(str(self.tmp_path / "solution"), answer_rendered)
 
+    def test_submission_panel_hides_feedback_header_without_feedback(self):
+        html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
+
+        submission_data = make_question_data(self.tmp_path, panel="submission")
+        submission_data["raw_submitted_answers"] = {
+            "demo.main": json.dumps(
+                {
+                    "solution": [{"indent": 0, "codeSnippets": ["answer()"], "blankValues": []}],
+                    "starter": [],
+                }
+            )
+        }
+
+        rendered = pl_faded_parsons.render(html, submission_data)
+
+        self.assertIn("<p>Submission:</p>", rendered)
+        self.assertNotIn("Feedback", rendered)
+
     def test_parse_writes_submission_file_using_answers_name_only(self):
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">

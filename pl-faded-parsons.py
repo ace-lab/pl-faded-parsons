@@ -110,7 +110,10 @@ def render(element_html: str, data: pl.QuestionData) -> str:
     if panel == "question":
         params = _build_question_params(config, _load_state(config, data))
     elif panel == "submission":
-        params = {"code": _compile_code(_load_state(config, data)["solution"])}
+        params = {
+            "code": _compile_code(_load_state(config, data)["solution"]),
+            "has_feedback": bool(data.get("feedback")),
+        }
     elif panel == "answer":
         params = {"solution_path": _require_solution_path(config)}
     else:
