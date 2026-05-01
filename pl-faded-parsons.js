@@ -46,7 +46,7 @@ function getIndentAtDragPosition(widget, ui) {
   const { item, position } = ui;
   const codeline = item[0];
   const pxDelta = position.left - item.parent().position().left;
-  const charDelta = pxDelta / ParsonsGlobal.charWidthInPx;
+  const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
   const levelDelta = Math.floor(charDelta / widget.config.xIndent);
   return clampIndent(widget.getCodelineIndent(codeline) + levelDelta);
 }
@@ -54,6 +54,45 @@ function getIndentAtDragPosition(widget, ui) {
 function landedInAnotherTray(e, ui) {
   return e.target != ui.item.parent()[0];
 }
+
+const PRETTIFY_OUTPUT_CLASSES =
+  ".prettyprint,.linenums,.pln,.str,.kwd,.com,.typ,.lit,.dec,.var,.pun,.opn,.clo,.tag,.atn,.atv,.fun,.L0,.L1,.L3,.L4,.L5,.L6,.L7,.L8,.L9";
+
+const CHAR_WIDTH_IN_PX = (() => {
+  const context = document.createElement("canvas").getContext("2d");
+  context.font = "monospace";
+  return context.measureText("#").width;
+})();
+
+(() => {
+  const extension = {
+    /** True if the query has results */
+    exists() {
+      return this.length !== 0;
+    },
+    /** If the query is empty, return alt, otherwise return this */
+    or(alt) {
+      return this.exists() ? this : alt;
+    },
+    /** Filters for the (first) minimum element by keyFn(index, elem) */
+    minBy(keyFn) {
+      let out = 0,
+        i = 0,
+        min = Infinity;
+      for (let item of this) {
+        const key = keyFn(i, item);
+        if (key < min) {
+          min = key;
+          out = i;
+        }
+        if (key === -Infinity) break;
+        i++;
+      }
+      return this.eq(out);
+    },
+  };
+  $.fn.extend(extension);
+})();
 
 /** expects a config with a `uuid` and fields that align with this schema:
  * ```
@@ -183,7 +222,7 @@ class ParsonsWidget {
     const solutionTray = $(this.config.solutionList);
 
     const grid = this.config.canIndent && [
-      this.config.xIndent * ParsonsGlobal.charWidthInPx,
+      this.config.xIndent * CHAR_WIDTH_IN_PX,
       1,
     ];
     const sortableOptions = {
@@ -810,7 +849,7 @@ class ParsonsWidget {
 
   toggleDarkmode() {
     $(this.config.main)
-      .find(ParsonsGlobal.prettifyOutputClasses)
+      .find(PRETTIFY_OUTPUT_CLASSES)
       .add($(this.config.main))
       .each((_, e) => $(e).toggleClass("dark"));
   }
@@ -937,66 +976,27 @@ window.ParsonsWidgetHelpers = {
 };
 window.ParsonsWidget = ParsonsWidget;
 
-////////////////////////////////////// ParsonsGlobal ////////////////////////////////////////
 window.ParsonsGlobal ||= /* singleton! */ {
   widgets: [],
-  prettifyOutputClasses:
-    ".prettyprint,.linenums,.pln,.str,.kwd,.com,.typ,.lit,.dec,.var,.pun,.opn,.clo,.tag,.atn,.atv,.fun,.L0,.L1,.L3,.L4,.L5,.L6,.L7,.L8,.L9",
   uiConfig: {
+    /**
+     * When true, a Tab indents a codeline in the codetray
+     * instead of advancing it into the next tray
+     */
+    allowIndentingInStarterTray: false,
     /**
      * When true, a Tab in a fading blank always indents,
      * otherwise a tab will attempt to advance to the next blank
      * in the codeline before it changes indents
      */
     alwaysIndentOnTab: true,
+    /** Maximum logical indent level of codelines in the solution tray */
+    maxIndentLevel: 5,
+    /** Toggles the visibility of the aria-describedby and aria-details divs */
+    showAriaDescriptor: false,
     /** Toggles the indicator for the next unused tab stop */
     showNextTabStop: false,
     /** Toggles displaying tab stop altogether */
     showTabStops: false,
-    /**
-     * When true, a Tab indents a codeline in the codetray
-     * instead of advancing it into the next tray
-     */
-    allowIndentingInStarterTray: false,
-    /** Toggles the visibility of the aria-describedby and aria-details divs */
-    showAriaDescriptor: false,
-    /** Maximum logical indent level of codelines in the solution tray */
-    maxIndentLevel: 5,
   },
-  /** The custom methods that are added to jQuery results */
-  jqueryExtension: (function ($) {
-    const extension = {
-      /** True if the query has results */
-      exists() {
-        return this.length !== 0;
-      },
-      /** If the query is empty, return alt, otherwise return this */
-      or(alt) {
-        return this.exists() ? this : alt;
-      },
-      /** Filters for the (first) minimum element by keyFn(index, elem) */
-      minBy(keyFn) {
-        let out = 0,
-          i = 0,
-          min = Infinity;
-        for (let item of this) {
-          const key = keyFn(i, item);
-          if (key < min) {
-            min = key;
-            out = i;
-          }
-          if (key === -Infinity) break;
-          i++;
-        }
-        return this.eq(out);
-      },
-    };
-    $.fn.extend(extension);
-    return extension;
-  })(jQuery),
-  charWidthInPx: (function () {
-    const context = document.createElement("canvas").getContext("2d");
-    context.font = "monospace";
-    return context.measureText("#").width;
-  })(),
 };

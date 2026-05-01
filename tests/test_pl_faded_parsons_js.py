@@ -123,7 +123,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobal.charWidthInPx = 8;
                   sandbox.ParsonsGlobal.uiConfig.maxIndentLevel = 5;
                   const widget = {
                     config: { xIndent: 4 },
@@ -289,7 +288,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     };
                   };
                   sandbox.jQuery = sandbox.$;
-                  sandbox.ParsonsGlobal.charWidthInPx = 8;
                   sandbox.ParsonsGlobal.uiConfig.allowIndentingInStarterTray = true;
                   const logTags = [];
                   const widget = {
