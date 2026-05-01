@@ -587,39 +587,58 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  const near = { getBoundingClientRect() { return { top: 20, bottom: 40 }; } };
-                  const far = { getBoundingClientRect() { return { top: 100, bottom: 120 }; } };
+                  const sourceLine = { id: 'source' };
+                  const targetLine = { id: 'target', exists() { return true; } };
                   const target = {
-                    0: near,
+                    0: targetLine,
                     exists() { return true; },
+                    or() { return this; },
+                  };
+                  const targetLines = {
+                    filter() { return this; },
+                    eq(idx) {
+                      return idx === 1
+                        ? target
+                        : { exists() { return false; }, or() { return this; } };
+                    },
+                    last() {
+                      return target;
+                    },
                   };
                   const tray = {
                     find(selector) {
                       if (selector !== 'li.codeline') throw new Error(selector);
-                      return {
-                        minBy(fn) {
-                          fn(0, near);
-                          fn(1, far);
-                          return target;
-                        },
-                      };
+                      return targetLines;
                     },
                   };
+                  const widget = {
+                    isSortablePlaceholder() { return false; },
+                  };
                   sandbox.$ = (value) => ({
-                    find() {
+                    parent() {
                       return {
-                        minBy() {
-                          return target;
+                        children() {
+                          return {
+                            filter() {
+                              return {
+                                index() {
+                                  return 1;
+                                },
+                              };
+                            },
+                          };
                         },
                       };
                     },
+                    find() {
+                      return targetLines;
+                    },
+                    or() { return this; },
                   });
-                  const widget = {};
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
-                  const resultTarget = Widget.prototype.findHorizontalTarget.call(widget, near, tray);
+                  const resultTarget = Widget.prototype.findHorizontalTarget.call(widget, sourceLine, tray);
                   return {
                     found: resultTarget.found,
-                    targetIsLower: resultTarget.targetIsLower,
                     sameObject: resultTarget.target === target,
                   };
                 })()
@@ -628,7 +647,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         )
 
         self.assertTrue(result["found"])
-        self.assertFalse(result["targetIsLower"])
         self.assertTrue(result["sameObject"])
 
     def test_move_horizontally_focuses_target_without_moving(self):
@@ -638,31 +656,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 (() => {
                   const focusCalls = [];
                   const currentLine = { id: 'current' };
-                  const targetLine = { focus() { focusCalls.push('target'); } };
-                  const tray = {
-                    has() {
-                      return { exists() { return true; } };
-                    },
-                  };
-                  const codeboxes = {
-                    length: 2,
-                    toArray() { return [tray, tray]; },
-                    eq() { return { find() { return { exists() { return true; } }; } }; },
-                  };
-                  const codebox = {
-                    find(selector) {
-                      if (selector !== '.codeline-list') return this;
+                  const targetLine = { id: 'target', focus() { focusCalls.push('target'); } };
+                  const newTray = {
+                    find() {
                       return {
-                        find() {
-                          return {
-                            minBy() {
-                              return {
-                                0: targetLine,
-                                exists() { return true; },
-                              };
-                            },
-                          };
-                        },
+                        filter() { return this; },
+                        eq() { return targetLine; },
+                        last() { return targetLine; },
                       };
                     },
                   };
@@ -670,31 +670,79 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     if (value === '#main') {
                       return {
                         find(selector) {
-                          if (selector === '.codeline-tray') return codeboxes;
+                          if (selector === '.codeline-tray') {
+                            return {
+                              length: 2,
+                              toArray() {
+                                return [
+                                  { has() { return { exists() { return true; } }; } },
+                                  { has() { return { exists() { return true; } }; } },
+                                ];
+                              },
+                              eq(idx) {
+                                return idx === 1 ? newTray : {};
+                              },
+                            };
+                          }
                           return this;
                         },
+                        or() { return this; },
+                      };
+                    }
+                    if (value === newTray) {
+                      return {
+                        append(line) {
+                          inserted.push(['append', line.id]);
+                        },
+                        focus() { return this; },
+                        or() { return this; },
+                      };
+                    }
+                    if (value === newTray) {
+                      return {
+                        append(line) {
+                          inserted.push(['append', line.id]);
+                        },
+                        or() { return this; },
+                        focus() { return this; },
                       };
                     }
                     if (value === currentLine) {
                       return {
-                        has() { return { exists() { return true; } }; },
+                        parent() {
+                          return {
+                            children() {
+                              return {
+                                filter() {
+                                  return {
+                                    index() {
+                                      return 1;
+                                    },
+                                  };
+                                },
+                              };
+                            },
+                          };
+                        },
+                        or() { return this; },
                         focus() { focusCalls.push('current'); return this; },
                       };
                     }
-                    if (value === targetLine) {
+                    if (value && typeof value.has === 'function') {
                       return {
-                        focus() { focusCalls.push('target'); return this; },
+                        has(line) { return value.has(line); },
+                        or() { return this; },
+                        focus() { return this; },
                       };
                     }
-                    return {
-                      has() { return { exists() { return false; } }; },
-                      focus() { return this; },
-                    };
+                    return { focus() { return this; }, or() { return this; } };
                   };
+                  sandbox.document.activeElement = currentLine;
                   const widget = {
                     config: { main: '#main' },
+                    isSortablePlaceholder() { return false; },
                     findHorizontalTarget() {
-                      return { found: true, targetIsLower: false, target: targetLine };
+                      return { found: true, target: targetLine };
                     },
                     focusCodeline(line) {
                       focusCalls.push(line === targetLine ? 'target' : 'other');
@@ -709,6 +757,202 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         )
 
         self.assertEqual(result, ["target"])
+
+    def test_move_horizontally_inserts_before_same_row_target(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const currentLine = { id: 'current' };
+                  const targetLine = {
+                    id: 'target',
+                    exists() { return true; },
+                    focus() { calls.push('target-focus'); return this; },
+                  };
+                  const inserted = [];
+                  const newTray = {
+                    find() {
+                      return {
+                        filter() { return this; },
+                        eq() { return targetLine; },
+                        last() { return targetLine; },
+                      };
+                    },
+                    append(line) {
+                      inserted.push(['append', line.id]);
+                    },
+                  };
+                  sandbox.$ = (value) => {
+                    if (value === '#main') {
+                      return {
+                        find(selector) {
+                          if (selector === '.codeline-tray') {
+                            return {
+                              length: 2,
+                              toArray() {
+                                return [
+                                  { has() { return { exists() { return true; } }; } },
+                                  { has() { return { exists() { return true; } }; } },
+                                ];
+                              },
+                              eq(idx) { return idx === 1 ? newTray : {}; },
+                            };
+                          }
+                          return this;
+                        },
+                        or() { return this; },
+                        focus() { return this; },
+                      };
+                    }
+                    if (value === currentLine) {
+                      return {
+                        parent() {
+                          return {
+                            children() {
+                              return {
+                                filter() {
+                                  return {
+                                    index() { return 1; },
+                                  };
+                                },
+                              };
+                            },
+                          };
+                        },
+                        insertBefore(target) {
+                          inserted.push(['before', target.id]);
+                        },
+                        or() { return this; },
+                      };
+                    }
+                    if (value && typeof value.has === 'function') {
+                      return {
+                        has(line) { return value.has(line); },
+                        or() { return this; },
+                        focus() { return this; },
+                      };
+                    }
+                    return {
+                      focus() { return this; },
+                      or() { return this; },
+                    };
+                  };
+                  sandbox.document.activeElement = currentLine;
+                  const widget = {
+                    config: { main: '#main' },
+                    isSortablePlaceholder() { return false; },
+                    findHorizontalTarget() {
+                      return { found: true, target: targetLine };
+                    },
+                    focusCodeline() {},
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.moveHorizontally.call(widget, currentLine, { moveForward: true, moveCodeline: true });
+                  return inserted;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, [["before", "target"]])
+
+    def test_move_horizontally_appends_when_source_row_exceeds_destination(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const currentLine = { id: 'current' };
+                  const inserted = [];
+                  const trayList = {
+                    append(line) {
+                      inserted.push(['append', line.id]);
+                    },
+                  };
+                  const newTray = {
+                    find() {
+                      return trayList;
+                    },
+                  };
+                  sandbox.$ = (value) => {
+                    if (value === '#main') {
+                      return {
+                        find(selector) {
+                          if (selector === '.codeline-tray') {
+                            return {
+                              length: 2,
+                              toArray() {
+                                return [
+                                  { has() { return { exists() { return true; } }; } },
+                                  { has() { return { exists() { return true; } }; } },
+                                ];
+                              },
+                              eq(idx) { return idx === 1 ? newTray : {}; },
+                            };
+                          }
+                          return this;
+                        },
+                        or() { return this; },
+                      };
+                    }
+                    if (value === currentLine) {
+                      return {
+                        parent() {
+                          return {
+                            children() {
+                              return {
+                                filter() {
+                                  return {
+                                    index() { return 2; },
+                                  };
+                                },
+                              };
+                            },
+                          };
+                        },
+                        or() { return this; },
+                        focus() { return this; },
+                      };
+                    }
+                    if (value === trayList) {
+                      return {
+                        append(line) {
+                          inserted.push(['append', line.id]);
+                        },
+                        or() { return this; },
+                        focus() { return this; },
+                      };
+                    }
+                    if (value && typeof value.has === 'function') {
+                      return {
+                        has(line) { return value.has(line); },
+                        or() { return this; },
+                        focus() { return this; },
+                      };
+                    }
+                    return {
+                      focus() { return this; },
+                      or() { return this; },
+                    };
+                  };
+                  sandbox.document.activeElement = currentLine;
+                  const widget = {
+                    config: { main: '#main' },
+                    isSortablePlaceholder() { return false; },
+                    findHorizontalTarget() {
+                      return { found: false, target: { exists() { return false; }, or() { return this; } } };
+                    },
+                    focusCodeline() {},
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.moveHorizontally.call(widget, currentLine, { moveForward: true, moveCodeline: true });
+                  return inserted;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, [["append", "current"]])
 
     def test_move_cursor_in_blank_horizontally_advances_when_at_edge(self):
         result = run_js(

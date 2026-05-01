@@ -421,20 +421,17 @@ class ParsonsWidget {
   }
 
   findHorizontalTarget(codeline, searchTray) {
-    const getMiddleY = (domObj) => {
-      const { top, bottom } = domObj.getBoundingClientRect();
-      return (top + bottom) / 2.0;
-    };
-
-    const middle = getMiddleY(codeline);
-    const target = $(searchTray)
+    const sourceIndex = $(codeline)
+      .parent()
+      .children()
+      .filter((_, line) => !this.isSortablePlaceholder(line))
+      .index(codeline);
+    const targetLines = $(searchTray)
       .find("li.codeline")
-      .minBy((_, line) => Math.abs(middle - getMiddleY(line)));
+      .filter((_, line) => !this.isSortablePlaceholder(line));
+    const target = targetLines.eq(sourceIndex);
 
-    const found = target.exists();
-    const targetIsLower = found ? getMiddleY(target[0]) > middle : undefined;
-
-    return { found, targetIsLower, target };
+    return { found: target.exists(), target };
   }
 
   moveHorizontally(codeline, { moveForward, moveCodeline }) {
@@ -448,7 +445,7 @@ class ParsonsWidget {
     if (k < 0 || m <= k) return;
     const newTray = codeboxes.eq(k).find(".codeline-list");
 
-    const { found, targetIsLower, target } = this.findHorizontalTarget(
+    const { found, target } = this.findHorizontalTarget(
       codeline,
       newTray,
     );
@@ -461,11 +458,7 @@ class ParsonsWidget {
     const selection = $(document.activeElement).or(codeline);
 
     if (found) {
-      if (targetIsLower) {
-        $(codeline).insertBefore(target);
-      } else {
-        $(codeline).insertAfter(target);
-      }
+      $(codeline).insertBefore(target);
     } else {
       $(newTray).append(codeline);
     }
