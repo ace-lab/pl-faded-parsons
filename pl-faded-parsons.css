@@ -73,18 +73,36 @@ code {
 .codeline-tray .ui-sortable-placeholder,
 .codeline-tray .codeline-sortable-placeholder {
   visibility: visible !important;
-  border: 1px dashed var(--focus-border-color);
+  background: rgba(0, 123, 255, 0.06);
+  border: 2px dotted var(--focus-border-color);
+  border-radius: 10px;
+  box-sizing: border-box;
   min-height: 2.2em;
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.12);
+}
 
-  /* 0.6ch */
-  margin-left: calc(
-    var(--pl-faded-parsons-indent, 0) * var(--pl-faded-parsons-indent-width)
-  );
+.codeline-tray .codeline-sortable-placeholder {
+  padding: 0;
+  overflow: hidden;
+}
+
+.codeline-tray .codeline-sortable-placeholder * {
+  display: none !important;
 }
 
 .codeline-tray li.codeline-in-motion {
   outline: 4px solid var(--motion-border-color) !important;
   border-color: var(--motion-border-color);
+}
+
+.codeline-tray li.codeline-dragging {
+  opacity: 0.65;
+}
+
+.starter-code-tray.codeline-tray li {
+  margin-left: 0px !important;
 }
 
 .codeline-tray li {
@@ -95,8 +113,7 @@ code {
   border-right: 2px solid var(--pln-txt-color);
   border-left: 2px solid var(--pln-txt-color);
   background-color: var(--code-background);
-  padding: 2px;
-  padding-left: 3ch;
+  padding: 2px 2ch;
   text-indent: -2ch;
   /* 0.6ch */
   margin-left: calc(

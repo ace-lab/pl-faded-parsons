@@ -52,6 +52,15 @@ class ParsonsWidget {
 
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     widget.enterBlankOnCodelineFocus = true;
+    widget.activeSortablePlaceholder = $();
+    widget.syncSortablePlaceholder = (codeline, indent = widget.getCodelineIndent(codeline)) => {
+      const placeholder = widget.activeSortablePlaceholder;
+      if (!placeholder || !placeholder.exists()) return;
+
+      placeholder
+        .empty()
+        .css("--pl-faded-parsons-indent", indent);
+    };
 
     widget.validateConfig();
 
@@ -104,16 +113,19 @@ class ParsonsWidget {
 
     // make solution and starter tray sortable, and linked together ////////////
     {
-      /** Does the arithmetic to update the indent after a drag motion */
-      const updateIndentAfterDrag = (ui) => {
+      /** Computes the indent at the current drag position */
+      const getIndentAtDragPosition = (ui) => {
         const { item, position } = ui;
         const codeline = item[0];
         const pxDelta = position.left - item.parent().position().left;
         const charDelta = pxDelta / ParsonsGlobal.charWidthInPx;
         const levelDelta = Math.floor(charDelta / widget.config.xIndent);
         let newIndent = widget.getCodelineIndent(codeline) + levelDelta;
-        newIndent = Math.max(0, newIndent);
-        widget.updateIndent(codeline, newIndent, true);
+        return Math.max(0, Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newIndent));
+      };
+      /** Does the arithmetic to update the indent after a drag motion */
+      const updateIndentAfterDrag = (ui) => {
+        widget.updateIndent(ui.item[0], getIndentAtDragPosition(ui), true);
       };
       /** Determines if the moved codeline changed trays */
       const landedInAnotherTray = (e, ui) => e.target != ui.item.parent()[0];
@@ -121,20 +133,32 @@ class ParsonsWidget {
       const starterTray = $(widget.config.starterList); // may not exist!
       const solutionTray = $(widget.config.solutionList);
 
-      const grid =
-        widget.config.canIndent && [
-          ParsonsGlobal.charWidthInPx * widget.config.xIndent,
-          1,
-        ];
+      const grid = widget.config.canIndent && [widget.config.xIndent * ParsonsGlobal.charWidthInPx, 1];
+      const sortableOptions = {
+        placeholder: "codeline-sortable-placeholder",
+        forcePlaceholderSize: true,
+        tolerance: "pointer",
+      };
 
       // ok if DNE, does nothing
       starterTray.sortable({
         connectWith: solutionTray,
-        start: (_, ui) => setCodelineInMotion(ui.item, true),
+        ...sortableOptions,
+        start: (_, ui) => {
+          widget.activeSortablePlaceholder = ui.placeholder;
+          ui.item.addClass("codeline-dragging");
+          setCodelineInMotion(ui.item, true);
+          widget.syncSortablePlaceholder(ui.item);
+        },
+        sort: (_, ui) => {
+          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(ui));
+        },
         receive: (_, ui) =>
           widget.addLogEntry("removeOutput", widget.codelineLogEntry(ui.item)),
         stop: (event, ui) => {
+          ui.item.removeClass("codeline-dragging");
           setCodelineInMotion(ui.item, false);
+          widget.activeSortablePlaceholder = $();
           widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
@@ -146,9 +170,20 @@ class ParsonsWidget {
 
       solutionTray.sortable({
         connectWith: starterTray, // ok if DNE, does nothing
-        start: (_, ui) => setCodelineInMotion(ui.item, true),
+        ...sortableOptions,
+        start: (_, ui) => {
+          widget.activeSortablePlaceholder = ui.placeholder;
+          ui.item.addClass("codeline-dragging");
+          setCodelineInMotion(ui.item, true);
+          widget.syncSortablePlaceholder(ui.item);
+        },
+        sort: (_, ui) => {
+          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(ui));
+        },
         stop: (event, ui) => {
+          ui.item.removeClass("codeline-dragging");
           setCodelineInMotion(ui.item, false);
+          widget.activeSortablePlaceholder = $();
           widget.storeStudentProgress();
 
           if (landedInAnotherTray(event, ui)) return;
@@ -707,25 +742,27 @@ class ParsonsWidget {
 
     let oldCodeIndent = this.getCodelineIndent(codeline);
     if (!absolute) newCodeIndent += oldCodeIndent;
+    newCodeIndent = Math.max(0, Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newCodeIndent));
 
-    if (oldCodeIndent != newCodeIndent && newCodeIndent >= 0) {
-      this.config.onSortableUpdate(
-        {
-          type: "reindent",
-          content: this.getCodelineText(codeline),
-          old: oldCodeIndent,
-          new: newCodeIndent,
-        },
-        this.getSolutionLines(),
-      );
+    if (oldCodeIndent == newCodeIndent) return oldCodeIndent;
 
-      $(codeline).css(
-        "--pl-faded-parsons-indent",
-        newCodeIndent,
-      );
+    this.config.onSortableUpdate(
+      {
+        type: "reindent",
+        content: this.getCodelineText(codeline),
+        old: oldCodeIndent,
+        new: newCodeIndent,
+      },
+      this.getSolutionLines(),
+    );
 
-      this.redrawTabStops();
-    }
+    $(codeline).css(
+      "--pl-faded-parsons-indent",
+      newCodeIndent,
+    );
+
+    this.redrawTabStops();
+
     this.updateAriaInfo(codeline);
     console.log("update indent");
     this.storeStudentProgress();
@@ -738,28 +775,29 @@ class ParsonsWidget {
     const max_code_indent = this.getSolutionLines()
       .map((line) => this.getCodelineIndent(line))
       .reduce((x, y) => Math.max(x, y), 0);
+    const capped_max_code_indent = Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, max_code_indent);
     const [backgroundColor, tabStopColor] = [
       "var(--code-background)",
       "var(--pln-txt-color-faded)",
     ];
     const [solidTabStops, dashedTabStop] = [
       `linear-gradient(${tabStopColor}, ${tabStopColor}) no-repeat border-box, `.repeat(
-        max_code_indent,
+        capped_max_code_indent,
       ),
       `repeating-linear-gradient(0,${tabStopColor},${tabStopColor} 10px,${backgroundColor} 10px,${backgroundColor} 12px) no-repeat border-box`,
     ];
     let backgroundPosition = "";
-    for (let i = 1; i <= max_code_indent + 1; i++) {
+    for (let i = 1; i <= capped_max_code_indent + 1; i++) {
       backgroundPosition += i * this.config.xIndent + "ch 0, ";
     }
     $(this.config.solutionList).css({
       background: ParsonsGlobal.uiConfig.showNextTabStop
         ? solidTabStops + dashedTabStop
         : solidTabStops.slice(0, -2),
-      "background-size": "1px 100%, ".repeat(max_code_indent + 1).slice(0, -2),
+      "background-size": "1px 100%, ".repeat(capped_max_code_indent + 1).slice(0, -2),
       "background-position": backgroundPosition.slice(0, -2),
       "background-origin": "padding-box, "
-        .repeat(max_code_indent + 1)
+        .repeat(capped_max_code_indent + 1)
         .slice(0, -2),
       "background-color": backgroundColor,
     });
@@ -920,6 +958,8 @@ window.ParsonsGlobal ||= /* singleton! */ {
     allowIndentingInStarterTray: false,
     /** Toggles the visibility of the aria-describedby and aria-details divs */
     showAriaDescriptor: false,
+    /** Maximum logical indent level of codelines in the solution tray */
+    maxIndentLevel: 5,
   },
   /** The custom methods that are added to jQuery results */
   jqueryExtension: (function ($) {
