@@ -121,7 +121,11 @@ class ParsonsWidget {
       const starterTray = $(widget.config.starterList); // may not exist!
       const solutionTray = $(widget.config.solutionList);
 
-      const grid = widget.config.canIndent && [widget.config.xIndent, 1];
+      const grid =
+        widget.config.canIndent && [
+          ParsonsGlobal.charWidthInPx * widget.config.xIndent,
+          1,
+        ];
 
       // ok if DNE, does nothing
       starterTray.sortable({

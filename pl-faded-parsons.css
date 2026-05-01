@@ -70,6 +70,18 @@ code {
   border-radius: 15px;
 }
 
+.codeline-tray .ui-sortable-placeholder,
+.codeline-tray .codeline-sortable-placeholder {
+  visibility: visible !important;
+  border: 1px dashed var(--focus-border-color);
+  min-height: 2.2em;
+
+  /* 0.6ch */
+  margin-left: calc(
+    var(--pl-faded-parsons-indent, 0) * var(--pl-faded-parsons-indent-width)
+  );
+}
+
 .codeline-tray li.codeline-in-motion {
   outline: 4px solid var(--motion-border-color) !important;
   border-color: var(--motion-border-color);
@@ -94,10 +106,6 @@ code {
   overflow: hidden;
   cursor: move;
   outline: 0;
-}
-
-.starter-code-tray.codeline-tray li {
-  margin-left: 0px !important;
 }
 
 .codeline-tray li code {
