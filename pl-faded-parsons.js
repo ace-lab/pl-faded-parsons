@@ -231,6 +231,9 @@ class ParsonsWidget {
 
     widget.getCodelineInMotion = (codeline) =>
       $(codeline).hasClass("codeline-in-motion");
+    widget.isSortablePlaceholder = (codeline) =>
+      $(codeline).hasClass("ui-sortable-placeholder") ||
+      $(codeline).hasClass("codeline-sortable-placeholder");
 
     /**
      * Takes a codeline or codeline-query and focuses either on its blanks
@@ -691,10 +694,16 @@ class ParsonsWidget {
     $(el).width(el.value.length.toString() + "ch");
   }
   getSourceLines() {
-    return $(this.config.starterList).children().toArray();
+    return $(this.config.starterList)
+      .children()
+      .filter((_, line) => !this.isSortablePlaceholder(line))
+      .toArray();
   }
   getSolutionLines() {
-    return $(this.config.solutionList).children().toArray();
+    return $(this.config.solutionList)
+      .children()
+      .filter((_, line) => !this.isSortablePlaceholder(line))
+      .toArray();
   }
   /** Reads a codeline element and interpolates the blanks with their value */
   getCodelineText(codeline) {
@@ -853,6 +862,7 @@ class ParsonsWidget {
     const visualDedentParents = $(codeline)
       .prevAll()
       .filter((_, sib) => {
+        if (this.isSortablePlaceholder(sib)) return false;
         const sibIndentLevel = this.getCodelineIndent(sib);
         const sibDedented = sibIndentLevel < indentLevel;
         indentLevel = Math.min(sibIndentLevel, indentLevel);
