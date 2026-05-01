@@ -14,6 +14,44 @@ const TOOLBAR_HELP_LINES = [
   "(Shift+)Enter: Enter Prev/Next Blank",
 ];
 
+function buildWidgetConfig(config) {
+  return jQuery.extend({}, DEFAULT_WIDGET_CONFIG, config);
+}
+
+function buildToolbarHelpContent() {
+  return TOOLBAR_HELP_LINES.join("<br>");
+}
+
+function keyMotionData(e) {
+  return {
+    /** move the codeline under the cursor */
+    moveCodeline: e.altKey,
+    /** move to the last location */
+    moveToEnd: e.ctrlKey || e.metaKey,
+    /** shift is not down */
+    jumpForward: !e.shiftKey,
+    /** arrow direction is `"Right"` or `"Down"` */
+    moveForward: e.key === "ArrowRight" || e.key === "ArrowDown",
+  };
+}
+
+function clampIndent(indent, maxIndentLevel = ParsonsGlobal.uiConfig.maxIndentLevel) {
+  return Math.max(0, Math.min(maxIndentLevel, indent));
+}
+
+function getIndentAtDragPosition(widget, ui) {
+  const { item, position } = ui;
+  const codeline = item[0];
+  const pxDelta = position.left - item.parent().position().left;
+  const charDelta = pxDelta / ParsonsGlobal.charWidthInPx;
+  const levelDelta = Math.floor(charDelta / widget.config.xIndent);
+  return clampIndent(widget.getCodelineIndent(codeline) + levelDelta);
+}
+
+function landedInAnotherTray(e, ui) {
+  return e.target != ui.item.parent()[0];
+}
+
 /** expects a config with a `uuid` and fields that align with this schema:
  * ```
  *  ...
@@ -55,7 +93,7 @@ class ParsonsWidget {
   constructor(config) {
     // immediately rebind because jquery does funky stuff to this bindings
     const widget = this;
-    widget.config = jQuery.extend({}, DEFAULT_WIDGET_CONFIG, config);
+    widget.config = buildWidgetConfig(config);
 
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     widget.enterBlankOnCodelineFocus = true;
@@ -81,7 +119,7 @@ class ParsonsWidget {
           trigger: "focus",
           html: true,
           title: "Faded Parsons Help",
-          content: TOOLBAR_HELP_LINES.join("<br>"), // changes here should be reflected in keyMotionModifiers!
+          content: buildToolbarHelpContent(), // changes here should be reflected in keyMotionModifiers!
         });
 
       $(widget.config.toolbar)
@@ -113,25 +151,10 @@ class ParsonsWidget {
 
     // make solution and starter tray sortable, and linked together ////////////
     {
-      /** Computes the indent at the current drag position */
-      const getIndentAtDragPosition = (ui) => {
-        const { item, position } = ui;
-        const codeline = item[0];
-        const pxDelta = position.left - item.parent().position().left;
-        const charDelta = pxDelta / ParsonsGlobal.charWidthInPx;
-        const levelDelta = Math.floor(charDelta / widget.config.xIndent);
-        let newIndent = widget.getCodelineIndent(codeline) + levelDelta;
-        return Math.max(
-          0,
-          Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newIndent),
-        );
-      };
       /** Does the arithmetic to update the indent after a drag motion */
       const updateIndentAfterDrag = (ui) => {
-        widget.updateIndent(ui.item[0], getIndentAtDragPosition(ui), true);
+        widget.updateIndent(ui.item[0], getIndentAtDragPosition(widget, ui), true);
       };
-      /** Determines if the moved codeline changed trays */
-      const landedInAnotherTray = (e, ui) => e.target != ui.item.parent()[0];
 
       const starterTray = $(widget.config.starterList); // may not exist!
       const solutionTray = $(widget.config.solutionList);
@@ -157,7 +180,7 @@ class ParsonsWidget {
           widget.syncSortablePlaceholder(ui.item);
         },
         sort: (_, ui) => {
-          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(ui));
+          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(widget, ui));
         },
         receive: (_, ui) =>
           widget.addLogEntry("removeOutput", widget.codelineLogEntry(ui.item)),
@@ -184,7 +207,7 @@ class ParsonsWidget {
           widget.syncSortablePlaceholder(ui.item);
         },
         sort: (_, ui) => {
-          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(ui));
+          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(widget, ui));
         },
         stop: (event, ui) => {
           ui.item.removeClass("codeline-dragging");
@@ -208,21 +231,6 @@ class ParsonsWidget {
     } // end solution and start tray setup
 
     // make keyboard interactivity helper functions ///////////////////////////
-
-    /**
-     * Matches bindings in widget help text!
-     * @param e {KeyboardEvent}
-     */
-    const keyMotionData = (e) => ({
-      /** move the codeline under the cursor */
-      moveCodeline: e.altKey,
-      /** move to the last location */
-      moveToEnd: e.ctrlKey || e.metaKey,
-      /** shift is not down */
-      jumpForward: !e.shiftKey,
-      /** arrow direction is `"Right"` or `"Down"` */
-      moveForward: e.key === "ArrowRight" || e.key === "ArrowDown",
-    });
 
     /** Finds the blanks within a query subject */
     const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
@@ -760,10 +768,7 @@ class ParsonsWidget {
 
     let oldCodeIndent = this.getCodelineIndent(codeline);
     if (!absolute) newCodeIndent += oldCodeIndent;
-    newCodeIndent = Math.max(
-      0,
-      Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newCodeIndent),
-    );
+    newCodeIndent = clampIndent(newCodeIndent);
 
     if (oldCodeIndent == newCodeIndent) return oldCodeIndent;
 
@@ -954,6 +959,15 @@ class ParsonsWidget {
     return JSON.stringify({ raw_submitted_answers: data });
   }
 }
+
+window.ParsonsWidgetHelpers = {
+  buildWidgetConfig,
+  buildToolbarHelpContent,
+  keyMotionData,
+  clampIndent,
+  getIndentAtDragPosition,
+  landedInAnotherTray,
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 window.ParsonsGlobal ||= /* singleton! */ {
