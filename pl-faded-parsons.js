@@ -38,17 +38,47 @@ function clampIndent(indent) {
   return Math.max(0, Math.min(indent, ParsonsGlobalUISettings.maxIndentLevel));
 }
 
-function getIndentAtDragPosition(widget, ui) {
+function getIndentAtDragPosition(widget, ui, tray = ui.item.parent()) {
   const { item, position } = ui;
   const codeline = item[0];
-  const pxDelta = position.left - item.parent().position().left;
+  const trayPosition = tray?.position?.() ?? item.parent()?.position?.() ?? {};
+  const pxDelta = position.left - (trayPosition.left ?? 0);
   const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
   const levelDelta = Math.floor(charDelta / widget.config.xIndent);
   return clampIndent(widget.getCodelineIndent(codeline) + levelDelta);
 }
 
+function getCurrentDragTray(ui) {
+  return ui?.placeholder?.parent?.() ?? ui?.item?.parent?.();
+}
+
+const DRAG_START_TRAY_KEY = "__plFppDragStartTray";
+
+function getDragTray(ui) {
+  return ui?.item?.parent?.()?.[0];
+}
+
+function rememberDragStartTray(ui) {
+  const codeline = ui?.item?.[0];
+  if (!codeline) return;
+  codeline[DRAG_START_TRAY_KEY] = getDragTray(ui);
+}
+
+function forgetDragStartTray(ui) {
+  const codeline = ui?.item?.[0];
+  if (!codeline) return;
+  delete codeline[DRAG_START_TRAY_KEY];
+}
+
+function draggedFromAnotherTray(ui) {
+  const codeline = ui?.item?.[0];
+  const startTray = codeline?.[DRAG_START_TRAY_KEY];
+  const endTray = getDragTray(ui);
+  return startTray != null && startTray !== endTray;
+}
+
 function landedInAnotherTray(e, ui) {
-  return e.target != ui.item.parent()[0];
+  return draggedFromAnotherTray(ui) || e.target != getDragTray(ui);
 }
 
 const PRETTIFY_OUTPUT_CLASSES =
@@ -229,14 +259,16 @@ class ParsonsWidget {
       ...sortableOptions,
       start: (_, ui) => {
         this.activeSortablePlaceholder = ui.placeholder;
+        this.activeSortablePlaceholder.addClass("no-indent")
         ui.item.addClass("codeline-dragging");
         this.setCodelineInMotion(ui.item, true);
+        rememberDragStartTray(ui);
         this.syncSortablePlaceholder(ui.item);
       },
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui),
+          getIndentAtDragPosition(this, ui, getCurrentDragTray(ui)),
         );
       },
       receive: (_, ui) =>
@@ -244,6 +276,7 @@ class ParsonsWidget {
       stop: (event, ui) => {
         ui.item.removeClass("codeline-dragging");
         this.setCodelineInMotion(ui.item, false);
+        forgetDragStartTray(ui);
         this.activeSortablePlaceholder = $();
         this.storeStudentProgress();
 
@@ -260,17 +293,19 @@ class ParsonsWidget {
         this.activeSortablePlaceholder = ui.placeholder;
         ui.item.addClass("codeline-dragging");
         this.setCodelineInMotion(ui.item, true);
+        rememberDragStartTray(ui);
         this.syncSortablePlaceholder(ui.item);
       },
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui),
+          getIndentAtDragPosition(this, ui, getCurrentDragTray(ui)),
         );
       },
       stop: (event, ui) => {
         ui.item.removeClass("codeline-dragging");
         this.setCodelineInMotion(ui.item, false);
+        forgetDragStartTray(ui);
         this.activeSortablePlaceholder = $();
         this.storeStudentProgress();
 
@@ -956,6 +991,10 @@ window.ParsonsWidgetHelpers = {
   getKeyMotionData,
   clampIndent,
   getIndentAtDragPosition,
+  getCurrentDragTray,
+  rememberDragStartTray,
+  forgetDragStartTray,
+  draggedFromAnotherTray,
   landedInAnotherTray,
 };
 window.ParsonsWidget = ParsonsWidget;

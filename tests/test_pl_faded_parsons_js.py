@@ -144,7 +144,118 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result, 5)
 
+    def test_get_indent_at_drag_position_prefers_explicit_parent(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
+                  const staleTray = { position() { return { left: 0 }; } };
+                  const liveTray = { position() { return { left: 100 }; } };
+                  const widget = {
+                    config: { xIndent: 4 },
+                    getCodelineIndent() { return 0; },
+                  };
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    position: { left: 164 },
+                  };
+                  ui.item.parent = () => staleTray;
+                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui, liveTray);
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 2)
+
+    def test_get_indent_at_drag_position_uses_placeholder_tray_when_dragging_across_trays(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const startTray = { position() { return { left: 0 }; } };
+                  const liveTray = { position() { return { left: 100 }; } };
+                  const widget = {
+                    config: { xIndent: 4 },
+                    getCodelineIndent() { return 0; },
+                  };
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    position: { left: 164 },
+                    placeholder: {
+                      parent() {
+                        return liveTray;
+                      },
+                    },
+                  };
+                  ui.item.parent = () => startTray;
+                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(
+                    widget,
+                    ui,
+                    sandbox.window.ParsonsWidgetHelpers.getCurrentDragTray(ui),
+                  );
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 2)
+
+    def test_get_indent_at_drag_position_falls_back_when_parent_has_no_position(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const widget = {
+                    config: { xIndent: 4 },
+                    getCodelineIndent() { return 1; },
+                  };
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    position: { left: 0 },
+                  };
+                  ui.item.parent = () => ({ position() { return undefined; } });
+                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui);
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 1)
+
     def test_landed_in_another_tray_detects_tray_change(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const startTray = { id: 'start-tray' };
+                  const endTray = { id: 'end-tray' };
+                  const ui = {
+                    item: [{
+                      __plFppDragStartTray: startTray,
+                    }],
+                  };
+                  ui.item.parent = () => [endTray];
+                  return [
+                    sandbox.window.ParsonsWidgetHelpers.draggedFromAnotherTray(ui),
+                    sandbox.window.ParsonsWidgetHelpers.landedInAnotherTray({ target: endTray }, ui),
+                    sandbox.window.ParsonsWidgetHelpers.landedInAnotherTray({ target: { id: 'other-tray' } }, ui),
+                  ];
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, [True, True, True])
+
+    def test_landed_in_another_tray_falls_back_to_event_target_when_drag_origin_missing(self):
         result = run_js(
             textwrap.dedent(
                 """
@@ -318,7 +429,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
                   Widget.prototype.setupTraySortables.call(widget);
                   const item = makeItem();
-                  captured.starter.start({}, { placeholder: 'ph', item });
+                  captured.starter.start({}, {
+                    placeholder: {
+                      addClass() {},
+                    },
+                    item,
+                  });
                   captured.starter.sort({}, { item, position: { left: 32 } });
                   const parent = item.parent()[0];
                   captured.starter.receive({}, { item, position: { left: 32 } });
