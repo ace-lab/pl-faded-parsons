@@ -73,7 +73,6 @@ code {
 .codeline-tray li.codeline-in-motion {
   outline: 4px solid var(--motion-border-color) !important;
   border-color: var(--motion-border-color);
-  margin: 12px;
 }
 
 .codeline-tray li {
@@ -95,6 +94,10 @@ code {
   overflow: hidden;
   cursor: move;
   outline: 0;
+}
+
+.starter-code-tray.codeline-tray li {
+  margin-left: 0px !important;
 }
 
 .codeline-tray li code {
