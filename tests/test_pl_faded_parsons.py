@@ -44,6 +44,11 @@ def make_question_data(tmp_path: Path, *, panel: str = "question") -> dict:
     }
 
 
+def render_with_uuid(element_html: str, data: dict, uuid: str = "uuid-123") -> str:
+    with patch.object(pl_faded_parsons.pl, "get_uuid", return_value=uuid):
+        return pl_faded_parsons.render(element_html, data)
+
+
 class TestPlFadedParsonsController(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -119,6 +124,43 @@ ignored() #distractor</code-lines>
         )
         self.assertEqual(state["starter"][0]["blankValues"], ["42"])
 
+    def test_build_initial_state_handles_empty_markup(self):
+        html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(state["solution"], [])
+        self.assertEqual(state["starter"], [])
+        self.assertEqual(state["log"], [])
+
+    def test_build_initial_state_moves_all_lines_into_solution_in_no_code_mode(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <code-lines>kept()
+starter()
+value = !BLANK #blank
+</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertCountEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["kept()", "starter()", "value = "],
+        )
+        self.assertEqual(state["starter"], [])
+
+    def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
+        line = pl_faded_parsons._parse_markup_line(
+            "print(!BLANK, !BLANK) #blank first #blank"
+        )
+
+        self.assertEqual(line["codeSnippets"], ["print(", ", ", ")"])
+        self.assertEqual(line["blankValues"], ["first", ""])
+
     def test_parse_saved_state_validates_shape(self):
         with self.assertRaisesRegex(
             pl_faded_parsons.ParsingError,
@@ -139,6 +181,27 @@ ignored() #distractor</code-lines>
                 ),
                 "[]",
             )
+
+    def test_parse_saved_state_accepts_empty_trays_and_blank_values(self):
+        state = pl_faded_parsons._parse_saved_state(
+            json.dumps(
+                {
+                    "solution": [
+                        {
+                            "indent": 0,
+                            "codeSnippets": ["value = ", ""],
+                            "blankValues": [""],
+                        }
+                    ],
+                    "starter": [],
+                }
+            ),
+            "[]",
+        )
+
+        self.assertEqual(state["solution"][0]["blankValues"], [""])
+        self.assertEqual(state["starter"], [])
+        self.assertEqual(state["log"], [])
 
     def test_line_to_mustache_preserves_segments(self):
         line = {
@@ -166,8 +229,7 @@ starter()</code-lines>
         </pl-faded-parsons>
         """
 
-        with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
-            rendered = pl_faded_parsons.render(html, self.data)
+        rendered = render_with_uuid(html, self.data)
 
         self.assertIn('name="demo.main"', rendered)
         self.assertIn('name="demo.log"', rendered)
@@ -218,6 +280,34 @@ starter()</code-lines>
         self.assertIn("<p>Submission:</p>", rendered)
         self.assertNotIn("Feedback", rendered)
 
+    def test_render_respects_logging_toggle_and_no_code_layout(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" log="true" format="no-code">
+            <code-lines>print("hello")</code-lines>
+        </pl-faded-parsons>
+        """
+
+        data = make_question_data(self.tmp_path)
+        data["raw_submitted_answers"] = {
+            "demo.main": json.dumps({"solution": [], "starter": []}),
+            "demo.log": json.dumps(
+                [
+                    {
+                        "timestamp": "2024-01-01T00:00:00Z",
+                        "tag": "problemOpened",
+                        "data": {},
+                    }
+                ]
+            ),
+        }
+
+        rendered = render_with_uuid(html, data)
+
+        self.assertIn("loggingEnabled: true", rendered)
+        self.assertNotIn('id="starter-code-uuid-123"', rendered)
+        self.assertIn('id="solution-uuid-123"', rendered)
+        self.assertIn("problemOpened", rendered)
+
     def test_parse_writes_submission_file_using_answers_name_only(self):
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">
@@ -238,6 +328,19 @@ return 3 #1given</code-lines>
                 "utf-8"
             ),
             expected_code,
+        )
+
+    def test_parse_writes_empty_solution_to_file(self):
+        html = '<pl-faded-parsons answers-name="demo" file-name="student.py"></pl-faded-parsons>'
+
+        pl_faded_parsons.parse(html, self.data)
+
+        self.assertEqual(self.data["submitted_answers"]["demo"], "")
+        self.assertEqual(
+            base64.b64decode(self.data["submitted_answers"]["_files"]["student.py"]).decode(
+                "utf-8"
+            ),
+            "",
         )
 
     def test_no_code_format_moves_starter_lines_into_solution(self):

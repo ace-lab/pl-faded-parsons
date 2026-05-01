@@ -1,3 +1,19 @@
+const DEFAULT_WIDGET_CONFIG = Object.freeze({
+  xIndent: 4,
+  canIndent: true,
+  prettyPrint: true,
+  onSortableUpdate: (_event, _ui) => {},
+  onBlankUpdate: (_event, _input) => {},
+});
+
+const TOOLBAR_HELP_LINES = [
+  "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
+  "Arrow Keys: Select",
+  "Alt/Opt+Arrow Keys: Reorder",
+  "(Shift+)Tab: Down/Up Indent",
+  "(Shift+)Enter: Enter Prev/Next Blank",
+];
+
 /** expects a config with a `uuid` and fields that align with this schema:
  * ```
  *  ...
@@ -39,27 +55,19 @@ class ParsonsWidget {
   constructor(config) {
     // immediately rebind because jquery does funky stuff to this bindings
     const widget = this;
-    widget.config = jQuery.extend(
-      {
-        xIndent: 4,
-        canIndent: true,
-        prettyPrint: true,
-        onSortableUpdate: (_event, _ui) => {},
-        onBlankUpdate: (_event, _input) => {},
-      },
-      config,
-    );
+    widget.config = jQuery.extend({}, DEFAULT_WIDGET_CONFIG, config);
 
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     widget.enterBlankOnCodelineFocus = true;
     widget.activeSortablePlaceholder = $();
-    widget.syncSortablePlaceholder = (codeline, indent = widget.getCodelineIndent(codeline)) => {
+    widget.syncSortablePlaceholder = (
+      codeline,
+      indent = widget.getCodelineIndent(codeline),
+    ) => {
       const placeholder = widget.activeSortablePlaceholder;
       if (!placeholder || !placeholder.exists()) return;
 
-      placeholder
-        .empty()
-        .css("--pl-faded-parsons-indent", indent);
+      placeholder.empty().css("--pl-faded-parsons-indent", indent);
     };
 
     widget.validateConfig();
@@ -73,15 +81,7 @@ class ParsonsWidget {
           trigger: "focus",
           html: true,
           title: "Faded Parsons Help",
-          content:
-            // changes here should be reflected in keyMotionModifiers!
-            [
-              "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
-              "Arrow Keys: Select",
-              "Alt/Opt+Arrow Keys: Reorder",
-              "(Shift+)Tab: Down/Up Indent",
-              "(Shift+)Enter: Enter Prev/Next Blank",
-            ].join("<br>"),
+          content: TOOLBAR_HELP_LINES.join("<br>"), // changes here should be reflected in keyMotionModifiers!
         });
 
       $(widget.config.toolbar)
@@ -108,7 +108,7 @@ class ParsonsWidget {
 
       $(widget.config.toolbar)
         .find(".widget-dark")
-        .on({ click: () => ParsonsGlobal.toggleDarkmode() });
+        .on({ click: () => this.toggleDarkmode() });
     } // end toolbar button setup
 
     // make solution and starter tray sortable, and linked together ////////////
@@ -121,7 +121,10 @@ class ParsonsWidget {
         const charDelta = pxDelta / ParsonsGlobal.charWidthInPx;
         const levelDelta = Math.floor(charDelta / widget.config.xIndent);
         let newIndent = widget.getCodelineIndent(codeline) + levelDelta;
-        return Math.max(0, Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newIndent));
+        return Math.max(
+          0,
+          Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newIndent),
+        );
       };
       /** Does the arithmetic to update the indent after a drag motion */
       const updateIndentAfterDrag = (ui) => {
@@ -133,7 +136,10 @@ class ParsonsWidget {
       const starterTray = $(widget.config.starterList); // may not exist!
       const solutionTray = $(widget.config.solutionList);
 
-      const grid = widget.config.canIndent && [widget.config.xIndent * ParsonsGlobal.charWidthInPx, 1];
+      const grid = widget.config.canIndent && [
+        widget.config.xIndent * ParsonsGlobal.charWidthInPx,
+        1,
+      ];
       const sortableOptions = {
         placeholder: "codeline-sortable-placeholder",
         forcePlaceholderSize: true,
@@ -665,7 +671,10 @@ class ParsonsWidget {
     if (!isNaN(logicalIndent)) return logicalIndent;
 
     // Fallback for older markup that still stores a visual margin-left.
-    const indentChar = parseInt(codeline.style && codeline.style.marginLeft, 10);
+    const indentChar = parseInt(
+      codeline.style && codeline.style.marginLeft,
+      10,
+    );
     const indentLevel = indentChar / this.config.xIndent;
     return isNaN(indentLevel) ? 0 : indentLevel;
   }
@@ -751,7 +760,10 @@ class ParsonsWidget {
 
     let oldCodeIndent = this.getCodelineIndent(codeline);
     if (!absolute) newCodeIndent += oldCodeIndent;
-    newCodeIndent = Math.max(0, Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newCodeIndent));
+    newCodeIndent = Math.max(
+      0,
+      Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, newCodeIndent),
+    );
 
     if (oldCodeIndent == newCodeIndent) return oldCodeIndent;
 
@@ -765,10 +777,7 @@ class ParsonsWidget {
       this.getSolutionLines(),
     );
 
-    $(codeline).css(
-      "--pl-faded-parsons-indent",
-      newCodeIndent,
-    );
+    $(codeline).css("--pl-faded-parsons-indent", newCodeIndent);
 
     this.redrawTabStops();
 
@@ -784,7 +793,10 @@ class ParsonsWidget {
     const max_code_indent = this.getSolutionLines()
       .map((line) => this.getCodelineIndent(line))
       .reduce((x, y) => Math.max(x, y), 0);
-    const capped_max_code_indent = Math.min(ParsonsGlobal.uiConfig.maxIndentLevel, max_code_indent);
+    const capped_max_code_indent = Math.min(
+      ParsonsGlobal.uiConfig.maxIndentLevel,
+      max_code_indent,
+    );
     const [backgroundColor, tabStopColor] = [
       "var(--code-background)",
       "var(--pln-txt-color-faded)",
@@ -803,7 +815,9 @@ class ParsonsWidget {
       background: ParsonsGlobal.uiConfig.showNextTabStop
         ? solidTabStops + dashedTabStop
         : solidTabStops.slice(0, -2),
-      "background-size": "1px 100%, ".repeat(capped_max_code_indent + 1).slice(0, -2),
+      "background-size": "1px 100%, "
+        .repeat(capped_max_code_indent + 1)
+        .slice(0, -2),
       "background-position": backgroundPosition.slice(0, -2),
       "background-origin": "padding-box, "
         .repeat(capped_max_code_indent + 1)
@@ -819,15 +833,15 @@ class ParsonsWidget {
       return;
     }
 
-    const pythonSummary = line => ({
+    const pythonSummary = (line) => ({
       indent: this.getCodelineIndent(line),
       ...this.getCodelineSegments(line),
     });
 
     storage.val(
       JSON.stringify({
-        'starter': this.getSourceLines().map(pythonSummary),
-        'solution': this.getSolutionLines().map(pythonSummary),
+        starter: this.getSourceLines().map(pythonSummary),
+        solution: this.getSolutionLines().map(pythonSummary),
       }),
     );
   }
@@ -932,21 +946,17 @@ class ParsonsWidget {
     s.val(JSON.stringify(prev_log));
   }
   generateMockPLData() {
-    const txInputs = [
-      $(this.config.storage),
-      $(this.config.logStorage),
-    ];
+    const txInputs = [$(this.config.storage), $(this.config.logStorage)];
     const data = {};
     for (let inp of txInputs) {
-      data[inp.attr('name')] = inp.val();
+      data[inp.attr("name")] = inp.val();
     }
-    return JSON.stringify({ "raw_submitted_answers": data });
+    return JSON.stringify({ raw_submitted_answers: data });
   }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 window.ParsonsGlobal ||= /* singleton! */ {
-  makeLogger: false,
   widgets: [],
   prettifyOutputClasses:
     ".prettyprint,.linenums,.pln,.str,.kwd,.com,.typ,.lit,.dec,.var,.pun,.opn,.clo,.tag,.atn,.atv,.fun,.L0,.L1,.L3,.L4,.L5,.L6,.L7,.L8,.L9",
@@ -1005,12 +1015,6 @@ window.ParsonsGlobal ||= /* singleton! */ {
   charWidthInPx: (function () {
     const context = document.createElement("canvas").getContext("2d");
     context.font = "monospace";
-    return context.measureText("0").width;
+    return context.measureText("#").width;
   })(),
-  getWidget(uuid) {
-    return ParsonsGlobal.widgets.find((w) => w.config.uuid == uuid);
-  },
-  toggleDarkmode() {
-    ParsonsGlobal.widgets.forEach((w) => w.toggleDarkmode());
-  },
 };
