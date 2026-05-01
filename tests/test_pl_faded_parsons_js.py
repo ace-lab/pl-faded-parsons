@@ -58,7 +58,7 @@ def run_js(expression: str) -> dict:
 
         vm.createContext(sandbox);
         vm.runInContext(source, sandbox);
-        sandbox.ParsonsGlobal = sandbox.window.ParsonsGlobal;
+        sandbox.ParsonsGlobalUISettings = sandbox.window.ParsonsGlobalUISettings;
         const result = {expression};
         process.stdout.write(JSON.stringify(result));
         """
@@ -92,7 +92,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
     def test_key_motion_data_tracks_modifier_keys(self):
         result = run_js(
-            "sandbox.window.ParsonsWidgetHelpers.keyMotionData({ altKey: true, ctrlKey: false, metaKey: true, shiftKey: false, key: 'ArrowRight' })"
+            "sandbox.window.ParsonsWidgetHelpers.getKeyMotionData({ altKey: true, ctrlKey: false, metaKey: true, shiftKey: false, key: 'ArrowRight' })"
         )
 
         self.assertTrue(result["moveCodeline"])
@@ -105,7 +105,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobal.uiConfig.maxIndentLevel = 5;
+                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
                   return [
                     sandbox.window.ParsonsWidgetHelpers.clampIndent(-2),
                     sandbox.window.ParsonsWidgetHelpers.clampIndent(3),
@@ -123,7 +123,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobal.uiConfig.maxIndentLevel = 5;
+                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
                   const widget = {
                     config: { xIndent: 4 },
                     getCodelineIndent() { return 2; },
@@ -288,7 +288,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     };
                   };
                   sandbox.jQuery = sandbox.$;
-                  sandbox.ParsonsGlobal.uiConfig.allowIndentingInStarterTray = true;
+                  sandbox.ParsonsGlobalUISettings.allowIndentingInStarterTray = true;
                   const logTags = [];
                   const widget = {
                     config: {
@@ -345,6 +345,31 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertIn("moveOutput", result["logs"])
         self.assertTrue(result["stored"])
         self.assertEqual(result["updatedIndent"]["indent"], 5)
+
+    def test_sync_sortable_placeholder_updates_active_placeholder(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const placeholder = {
+                    exists() { return true; },
+                    empty() { calls.push('empty'); return this; },
+                    css(name, value) { calls.push([name, value]); return this; },
+                  };
+                  const widget = {
+                    activeSortablePlaceholder: placeholder,
+                    getCodelineIndent() { return 3; },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.syncSortablePlaceholder.call(widget, { id: 'line' });
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, ["empty", ["--pl-faded-parsons-indent", 3]])
 
     def test_setup_core_dom_helpers_exposes_dom_adapters(self):
         result = run_js(
@@ -499,7 +524,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     };
                   };
                   sandbox.jQuery = sandbox.$;
-                  sandbox.ParsonsGlobal.uiConfig.showAriaDescriptor = true;
+                  sandbox.ParsonsGlobalUISettings.showAriaDescriptor = true;
                   const widget = {
                     config: { ariaDescriptor: '#descriptor', ariaDetails: '#details', main: '#main' },
                     findBlanksIn() {
@@ -815,7 +840,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       return { first() { calls.push(['blank-first']); return { focus() {} }; } };
                     },
                   };
-                  sandbox.ParsonsGlobal.uiConfig.allowIndentingInStarterTray = false;
+                  sandbox.ParsonsGlobalUISettings.allowIndentingInStarterTray = false;
                   sandbox.$ = (value) => ({
                     is() { return true; },
                     has() { return { exists() { return true; } }; },
@@ -867,7 +892,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       };
                     },
                   };
-                  sandbox.ParsonsGlobal.uiConfig.alwaysIndentOnTab = true;
+                  sandbox.ParsonsGlobalUISettings.alwaysIndentOnTab = true;
                   sandbox.$ = (value) => ({
                     focus() { calls.push('focus'); return this; },
                     is() { return true; },

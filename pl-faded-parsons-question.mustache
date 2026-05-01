@@ -58,26 +58,24 @@
 
 <script>
     $(document).ready(() =>
-        ParsonsGlobal.widgets.push(
-            new ParsonsWidget({
-                main: '#pl-faded-parsons-{{uuid}}',
-                uuid: '{{uuid}}',
-                loggingEnabled: {{#logging_enabled}}true{{/logging_enabled}}{{^logging_enabled}}false{{/logging_enabled}},
+        new ParsonsWidget({
+            main: '#pl-faded-parsons-{{uuid}}',
+            uuid: '{{uuid}}',
+            loggingEnabled: {{#logging_enabled}}true{{/logging_enabled}}{{^logging_enabled}}false{{/logging_enabled}},
 
-                logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
-                storage: "#pl-faded-parsons-{{uuid}} > input.main",
+            logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
+            storage: "#pl-faded-parsons-{{uuid}} > input.main",
 
-                ariaDescriptor: "#pl-faded-parsons-aria-descriptor-{{uuid}}",
-                ariaDetails: "#pl-faded-parsons-aria-details-{{uuid}}",
-                toolbar: "#widget-toolbar-{{uuid}}",
+            ariaDescriptor: "#pl-faded-parsons-aria-descriptor-{{uuid}}",
+            ariaDetails: "#pl-faded-parsons-aria-details-{{uuid}}",
+            toolbar: "#widget-toolbar-{{uuid}}",
 
-                solution: '#solution-{{uuid}}',
-                solutionList: '#ol-solution-{{uuid}}',
-                {{#starter}}
-                starter: '#starter-code-{{uuid}}',
-                starterList: '#ol-starter-code-{{uuid}}',
-                {{/starter}}
-            })
-        )
+            solution: '#solution-{{uuid}}',
+            solutionList: '#ol-solution-{{uuid}}',
+            {{#starter}}
+            starter: '#starter-code-{{uuid}}',
+            starterList: '#ol-starter-code-{{uuid}}',
+            {{/starter}}
+        })
     );
 </script>

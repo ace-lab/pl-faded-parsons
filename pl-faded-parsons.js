@@ -1,28 +1,27 @@
-const DEFAULT_WIDGET_CONFIG = Object.freeze({
-  xIndent: 4,
-  canIndent: true,
-  prettyPrint: true,
-  onSortableUpdate: (_event, _ui) => {},
-  onBlankUpdate: (_event, _input) => {},
-});
-
-const TOOLBAR_HELP_LINES = [
-  "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
-  "Arrow Keys: Select",
-  "Alt/Opt+Arrow Keys: Reorder",
-  "(Shift+)Tab: Down/Up Indent",
-  "(Shift+)Enter: Enter Prev/Next Blank",
-];
-
 function buildWidgetConfig(config) {
-  return jQuery.extend({}, DEFAULT_WIDGET_CONFIG, config);
+  return jQuery.extend(
+    {
+      xIndent: 4,
+      canIndent: true,
+      prettyPrint: true,
+      onSortableUpdate: (_event, _ui) => {},
+      onBlankUpdate: (_event, _input) => {},
+    },
+    config,
+  );
 }
 
 function buildToolbarHelpContent() {
-  return TOOLBAR_HELP_LINES.join("<br>");
+  return [
+    "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
+    "Arrow Keys: Select",
+    "Alt/Opt+Arrow Keys: Reorder",
+    "(Shift+)Tab: Down/Up Indent",
+    "(Shift+)Enter: Enter Prev/Next Blank",
+  ].join("<br>");
 }
 
-function keyMotionData(e) {
+function getKeyMotionData(e) {
   return {
     /** move the codeline under the cursor */
     moveCodeline: e.altKey,
@@ -35,11 +34,8 @@ function keyMotionData(e) {
   };
 }
 
-function clampIndent(
-  indent,
-  maxIndentLevel = ParsonsGlobal.uiConfig.maxIndentLevel,
-) {
-  return Math.max(0, Math.min(maxIndentLevel, indent));
+function clampIndent(indent) {
+  return Math.max(0, Math.min(indent, ParsonsGlobalUISettings.maxIndentLevel));
 }
 
 function getIndentAtDragPosition(widget, ui) {
@@ -64,35 +60,32 @@ const CHAR_WIDTH_IN_PX = (() => {
   return context.measureText("#").width;
 })();
 
-(() => {
-  const extension = {
-    /** True if the query has results */
-    exists() {
-      return this.length !== 0;
-    },
-    /** If the query is empty, return alt, otherwise return this */
-    or(alt) {
-      return this.exists() ? this : alt;
-    },
-    /** Filters for the (first) minimum element by keyFn(index, elem) */
-    minBy(keyFn) {
-      let out = 0,
-        i = 0,
-        min = Infinity;
-      for (let item of this) {
-        const key = keyFn(i, item);
-        if (key < min) {
-          min = key;
-          out = i;
-        }
-        if (key === -Infinity) break;
-        i++;
+$.fn.extend({
+  /** True if the query has results */
+  exists() {
+    return this.length !== 0;
+  },
+  /** If the query is empty, return alt, otherwise return this */
+  or(alt) {
+    return this.exists() ? this : alt;
+  },
+  /** Filters for the (first) minimum element by keyFn(index, elem) */
+  minBy(keyFn) {
+    let out = 0,
+      i = 0,
+      min = Infinity;
+    for (let item of this) {
+      const key = keyFn(i, item);
+      if (key < min) {
+        min = key;
+        out = i;
       }
-      return this.eq(out);
-    },
-  };
-  $.fn.extend(extension);
-})();
+      if (key === -Infinity) break;
+      i++;
+    }
+    return this.eq(out);
+  },
+});
 
 /** expects a config with a `uuid` and fields that align with this schema:
  * ```
@@ -258,7 +251,7 @@ class ParsonsWidget {
 
         this.addLogEntry("moveInput", this.codelineLogEntry(ui.item));
       },
-      grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
+      grid: ParsonsGlobalUISettings.allowIndentingInStarterTray && grid,
     });
 
     solutionTray.sortable({
@@ -327,7 +320,7 @@ class ParsonsWidget {
   setupAccessibilityBindings() {
     const descriptor = $(this.config.ariaDescriptor);
     const details = $(this.config.ariaDetails);
-    if (ParsonsGlobal.uiConfig.showAriaDescriptor) {
+    if (ParsonsGlobalUISettings.showAriaDescriptor) {
       descriptor.css("display", "inline-block");
       details.css("display", "inline-block");
     }
@@ -360,7 +353,7 @@ class ParsonsWidget {
           this.focusCodeline(e.currentTarget);
         },
         keyup: (e) => {
-          const { moveCodeline } = keyMotionData(e);
+          const { moveCodeline } = getKeyMotionData(e);
           this.setCodelineInMotion(e.currentTarget, moveCodeline);
           this.updateAriaInfo(e.currentTarget);
         },
@@ -548,7 +541,7 @@ class ParsonsWidget {
   }
 
   onCodelineKeydown(e, codeline) {
-    const motionData = keyMotionData(e);
+    const motionData = getKeyMotionData(e);
     this.setCodelineInMotion(codeline, motionData.moveCodeline);
 
     if (!$(codeline).is(":focus")) return;
@@ -556,7 +549,7 @@ class ParsonsWidget {
     if (e.key === "Tab") {
       e.preventDefault();
       const moveInsteadOfIndent =
-        !ParsonsGlobal.uiConfig.allowIndentingInStarterTray &&
+        !ParsonsGlobalUISettings.allowIndentingInStarterTray &&
         motionData.jumpForward &&
         $(this.config.starter).has(codeline).exists();
       if (moveInsteadOfIndent) {
@@ -602,13 +595,13 @@ class ParsonsWidget {
   onBlankKeydown(e, codeline, blank) {
     const blanks = this.findBlanksIn(codeline);
     const blankIdx = blanks.index(blank);
-    const motionData = keyMotionData(e);
+    const motionData = getKeyMotionData(e);
 
     if (e.key === "Tab") {
       const [boundary, delta] = motionData.jumpForward
         ? [blanks.length - 1, +1]
         : [0, -1];
-      if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || blankIdx == boundary) {
+      if (ParsonsGlobalUISettings.alwaysIndentOnTab || blankIdx == boundary) {
         e.preventDefault();
         this.updateIndent(codeline, delta, false);
       }
@@ -647,8 +640,8 @@ class ParsonsWidget {
   /////////////////////////////// GENERAL HELPERS ////////////////////////////
 
   syncSortablePlaceholder(codeline, indent = 0) {
-    indent ||= widget.getCodelineIndent(codeline);
-    const placeholder = widget.activeSortablePlaceholder;
+    indent ||= this.getCodelineIndent(codeline);
+    const placeholder = this.activeSortablePlaceholder;
     if (!placeholder || !placeholder.exists()) return;
 
     placeholder.empty().css("--pl-faded-parsons-indent", indent);
@@ -788,13 +781,13 @@ class ParsonsWidget {
 
   /** Redraws the tab stops in the solution box if this.config.canIndent */
   redrawTabStops() {
-    if (!this.config.canIndent || !ParsonsGlobal.uiConfig.showTabStops) return;
+    if (!this.config.canIndent || !ParsonsGlobalUISettings.showTabStops) return;
 
     const max_code_indent = this.getSolutionLines()
       .map((line) => this.getCodelineIndent(line))
       .reduce((x, y) => Math.max(x, y), 0);
     const capped_max_code_indent = Math.min(
-      ParsonsGlobal.uiConfig.maxIndentLevel,
+      ParsonsGlobalUISettings.maxIndentLevel,
       max_code_indent,
     );
     const [backgroundColor, tabStopColor] = [
@@ -812,7 +805,7 @@ class ParsonsWidget {
       backgroundPosition += i * this.config.xIndent + "ch 0, ";
     }
     $(this.config.solutionList).css({
-      background: ParsonsGlobal.uiConfig.showNextTabStop
+      background: ParsonsGlobalUISettings.showNextTabStop
         ? solidTabStops + dashedTabStop
         : solidTabStops.slice(0, -2),
       "background-size": "1px 100%, "
@@ -870,7 +863,7 @@ class ParsonsWidget {
     );
   }
 
-    /////////////////////////////// ACCESSIBILITY HELPERS ////////////////////////////
+  /////////////////////////////// ACCESSIBILITY HELPERS ////////////////////////////
 
   codelineAriaDetails(codeline) {
     const trays = $(this.config.main).find(".codeline-tray");
@@ -966,37 +959,35 @@ class ParsonsWidget {
   }
 }
 
+/** Only used in unit tests -- do not delete! */
 window.ParsonsWidgetHelpers = {
   buildWidgetConfig,
   buildToolbarHelpContent,
-  keyMotionData,
+  getKeyMotionData,
   clampIndent,
   getIndentAtDragPosition,
   landedInAnotherTray,
 };
 window.ParsonsWidget = ParsonsWidget;
 
-window.ParsonsGlobal ||= /* singleton! */ {
-  widgets: [],
-  uiConfig: {
-    /**
-     * When true, a Tab indents a codeline in the codetray
-     * instead of advancing it into the next tray
-     */
-    allowIndentingInStarterTray: false,
-    /**
-     * When true, a Tab in a fading blank always indents,
-     * otherwise a tab will attempt to advance to the next blank
-     * in the codeline before it changes indents
-     */
-    alwaysIndentOnTab: true,
-    /** Maximum logical indent level of codelines in the solution tray */
-    maxIndentLevel: 5,
-    /** Toggles the visibility of the aria-describedby and aria-details divs */
-    showAriaDescriptor: false,
-    /** Toggles the indicator for the next unused tab stop */
-    showNextTabStop: false,
-    /** Toggles displaying tab stop altogether */
-    showTabStops: false,
-  },
+window.ParsonsGlobalUISettings ||= /* singleton! */ {
+  /**
+   * When true, a Tab indents a codeline in the codetray
+   * instead of advancing it into the next tray
+   */
+  allowIndentingInStarterTray: false,
+  /**
+   * When true, a Tab in a fading blank always indents,
+   * otherwise a tab will attempt to advance to the next blank
+   * in the codeline before it changes indents
+   */
+  alwaysIndentOnTab: true,
+  /** Maximum logical indent level of codelines in the solution tray */
+  maxIndentLevel: 5,
+  /** Toggles the visibility of the aria-describedby and aria-details divs */
+  showAriaDescriptor: false,
+  /** Toggles the indicator for the next unused tab stop */
+  showNextTabStop: false,
+  /** Toggles displaying tab stop altogether */
+  showTabStops: false,
 };

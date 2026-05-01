@@ -79,6 +79,18 @@ class TestReloadIndentRegression(unittest.TestCase):
         self.assertIn("loggingEnabled: true", rendered)
         self.assertIn("problemOpened", rendered)
 
+    def test_render_question_does_not_register_global_widget(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            element_html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
+
+            with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
+                rendered = pl_faded_parsons.render(element_html, data)
+
+        self.assertIn("new ParsonsWidget(", rendered)
+        self.assertNotIn("ParsonsGlobal.widgets.push", rendered)
+
     def test_render_keeps_empty_starter_tray_visible_after_submission(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
