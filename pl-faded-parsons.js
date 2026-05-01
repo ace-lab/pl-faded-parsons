@@ -35,7 +35,10 @@ function keyMotionData(e) {
   };
 }
 
-function clampIndent(indent, maxIndentLevel = ParsonsGlobal.uiConfig.maxIndentLevel) {
+function clampIndent(
+  indent,
+  maxIndentLevel = ParsonsGlobal.uiConfig.maxIndentLevel,
+) {
   return Math.max(0, Math.min(maxIndentLevel, indent));
 }
 
@@ -98,550 +101,18 @@ class ParsonsWidget {
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     widget.enterBlankOnCodelineFocus = true;
     widget.activeSortablePlaceholder = $();
-    widget.syncSortablePlaceholder = (
-      codeline,
-      indent = widget.getCodelineIndent(codeline),
-    ) => {
-      const placeholder = widget.activeSortablePlaceholder;
-      if (!placeholder || !placeholder.exists()) return;
-
-      placeholder.empty().css("--pl-faded-parsons-indent", indent);
-    };
 
     widget.validateConfig();
-
-    // add the toolbar button bindings /////////////////////////////////////////
-    {
-      $(widget.config.toolbar)
-        .find(`.widget-help`)
-        .popover({
-          placement: "auto",
-          trigger: "focus",
-          html: true,
-          title: "Faded Parsons Help",
-          content: buildToolbarHelpContent(), // changes here should be reflected in keyMotionModifiers!
-        });
-
-      $(widget.config.toolbar)
-        .find(`.widget-copy`)
-        .popover({
-          placement: "auto",
-          trigger: "focus",
-          content: "Copied to Clipboard!",
-        })
-        .on({
-          click: () => {
-            if (navigator.clipboard) {
-              navigator.clipboard
-                .writeText(widget.asPlaintext())
-                .catch((err) => {
-                  console.error("Unable to copy text to clipboard", err);
-                  alert("Your browser blocked clipboard write access :(");
-                });
-            } else {
-              alert("Your browser does not yet support this :(");
-            }
-          },
-        });
-
-      $(widget.config.toolbar)
-        .find(".widget-dark")
-        .on({ click: () => this.toggleDarkmode() });
-    } // end toolbar button setup
-
-    // make solution and starter tray sortable, and linked together ////////////
-    {
-      /** Does the arithmetic to update the indent after a drag motion */
-      const updateIndentAfterDrag = (ui) => {
-        widget.updateIndent(ui.item[0], getIndentAtDragPosition(widget, ui), true);
-      };
-
-      const starterTray = $(widget.config.starterList); // may not exist!
-      const solutionTray = $(widget.config.solutionList);
-
-      const grid = widget.config.canIndent && [
-        widget.config.xIndent * ParsonsGlobal.charWidthInPx,
-        1,
-      ];
-      const sortableOptions = {
-        placeholder: "codeline-sortable-placeholder",
-        forcePlaceholderSize: true,
-        tolerance: "pointer",
-      };
-
-      // ok if DNE, does nothing
-      starterTray.sortable({
-        connectWith: solutionTray,
-        ...sortableOptions,
-        start: (_, ui) => {
-          widget.activeSortablePlaceholder = ui.placeholder;
-          ui.item.addClass("codeline-dragging");
-          setCodelineInMotion(ui.item, true);
-          widget.syncSortablePlaceholder(ui.item);
-        },
-        sort: (_, ui) => {
-          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(widget, ui));
-        },
-        receive: (_, ui) =>
-          widget.addLogEntry("removeOutput", widget.codelineLogEntry(ui.item)),
-        stop: (event, ui) => {
-          ui.item.removeClass("codeline-dragging");
-          setCodelineInMotion(ui.item, false);
-          widget.activeSortablePlaceholder = $();
-          widget.storeStudentProgress();
-
-          if (landedInAnotherTray(event, ui)) return;
-
-          widget.addLogEntry("moveInput", widget.codelineLogEntry(ui.item));
-        },
-        grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
-      });
-
-      solutionTray.sortable({
-        connectWith: starterTray, // ok if DNE, does nothing
-        ...sortableOptions,
-        start: (_, ui) => {
-          widget.activeSortablePlaceholder = ui.placeholder;
-          ui.item.addClass("codeline-dragging");
-          setCodelineInMotion(ui.item, true);
-          widget.syncSortablePlaceholder(ui.item);
-        },
-        sort: (_, ui) => {
-          widget.syncSortablePlaceholder(ui.item, getIndentAtDragPosition(widget, ui));
-        },
-        stop: (event, ui) => {
-          ui.item.removeClass("codeline-dragging");
-          setCodelineInMotion(ui.item, false);
-          widget.activeSortablePlaceholder = $();
-          widget.storeStudentProgress();
-
-          if (landedInAnotherTray(event, ui)) return;
-
-          updateIndentAfterDrag(ui);
-
-          widget.addLogEntry("moveOutput", widget.codelineLogEntry(ui.item));
-        },
-        receive: (_, ui) => {
-          updateIndentAfterDrag(ui);
-          widget.addLogEntry("addOutput", widget.codelineLogEntry(ui.item));
-        },
-        update: (e, ui) => widget.config.onSortableUpdate(e, ui),
-        grid: grid,
-      });
-    } // end solution and start tray setup
-
-    // make keyboard interactivity helper functions ///////////////////////////
-
-    /** Finds the blanks within a query subject */
-    const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
-
-    widget.findBlanksIn = findBlanksIn;
-
-    /** Manages the codeline's drag state */
-    const setCodelineInMotion = (codeline, inMotion) =>
-      $(codeline)
-        .attr("aria-grabbed", inMotion)
-        .toggleClass("codeline-in-motion", inMotion);
-
-    widget.getCodelineInMotion = (codeline) =>
-      $(codeline).hasClass("codeline-in-motion");
-    widget.isSortablePlaceholder = (codeline) =>
-      $(codeline).hasClass("ui-sortable-placeholder") ||
-      $(codeline).hasClass("codeline-sortable-placeholder");
-
-    /**
-     * Takes a codeline or codeline-query and focuses either on its blanks
-     * (if `widget.autoEnterBlank` and if it has one) or on the codeline itself.
-     */
-    const focusCodeline = (codeline, firstBlankNotLast = true) => {
-      let target = $(codeline);
-      if (!target.exists()) return;
-      if (widget.enterBlankOnCodelineFocus) {
-        const blanks = findBlanksIn(target);
-        const blank = firstBlankNotLast ? blanks.first() : blanks.last();
-        target = blank.or(target);
-      }
-      target.focus();
-    };
-
-    /**
-     * Returns the result of a search for the codeline in searchTray that is
-     * centered closest to the given codeline's center. (i.e find the codeline
-     * that has a y-midpoint closest to the moving line's y-midpoint.)
-     */
-    const findHorizontalTarget = (codeline, searchTray) => {
-      const getMiddleY = (domObj) => {
-        const { top, bottom } = domObj.getBoundingClientRect();
-        return (top + bottom) / 2.0;
-      };
-
-      const middle = getMiddleY(codeline);
-      const target = $(searchTray)
-        .find("li.codeline")
-        .minBy((_, line) => Math.abs(middle - getMiddleY(line)));
-
-      const found = target.exists();
-      const targetIsLower = found ? getMiddleY(target[0]) > middle : undefined;
-
-      return { found, targetIsLower, target };
-    };
-
-    /** Move codeline (or just cursor) horizontally across trays */
-    const moveHorizontally = (codeline, { moveForward, moveCodeline }) => {
-      // find the tray that we will move the codeline into (works for arbitrary m)
-      const codeboxes = $(widget.config.main).find(".codeline-tray");
-      const m = codeboxes.length;
-      if (m < 2) return;
-      const codeboxIdx = codeboxes
-        .toArray()
-        .findIndex((c) => $(c).has(codeline).exists());
-      const k = codeboxIdx + (moveForward ? +1 : -1);
-      if (k < 0 || m <= k) return; // don't wrap around!
-      const newTray = codeboxes.eq(k).find(".codeline-list");
-
-      const { found, targetIsLower, target } = findHorizontalTarget(
-        codeline,
-        newTray,
-      );
-
-      if (!moveCodeline) {
-        focusCodeline(target, moveForward);
-        return;
-      }
-
-      // capture active element (like blank) to re-focus on after motion
-      const selection = $(document.activeElement).or(codeline);
-
-      if (found) {
-        if (targetIsLower) {
-          $(codeline).insertBefore(target);
-        } else {
-          $(codeline).insertAfter(target);
-        }
-      } else {
-        $(newTray).append(codeline);
-      }
-
-      $(selection).focus();
-    };
-
-    /**
-     * Navigates cursor horizontally, advancing between blanks and across
-     * trays/codelines as necessary. Returns `true` if a special motion
-     * happened, `false` otherwise.
-     */
-    const moveCursorInBlankHorizontally = (
-      e,
-      codeline,
-      blankIdx,
-      { moveForward },
-    ) => {
-      const codelineBlanks = findBlanksIn(codeline);
-      const blank = codelineBlanks.get(blankIdx);
-      // if user selecting text, return allowing default
-      if (blank.selectionEnd != blank.selectionStart) return false;
-
-      const cursorIdx = blank.selectionStart;
-      const [lastTextIdx, lastBlankIdx, blankDelta] = moveForward
-        ? [blank.value.length, codelineBlanks.length - 1, +1]
-        : [0, 0, -1];
-
-      // if cursor not on the edge of a blank, return allowing default
-      if (cursorIdx != lastTextIdx) return false;
-
-      // we are on the edge of a blank, and not selecting text,
-      // so we don't want the cursor to move normally.
-      e.preventDefault();
-
-      // if the blank is the first/last in the row...
-      if (blankIdx == lastBlankIdx) {
-        // then move cursor between codelines
-        moveHorizontally(codeline, { moveForward, moveCodeline: false });
-      } else {
-        // otherwise move cursor between blanks within the codeline.
-        // if exitting rightward, then enter on left, and vice-versa
-        codelineBlanks
-          .eq(blankIdx + blankDelta)
-          .focus()
-          .each((_, input) => {
-            const l = moveForward ? 0 : input.value.length;
-            input.setSelectionRange(l, l);
-          });
-      }
-      return true;
-    };
-
-    const jumpToNextBlank = (blank, { jumpForward }) => {
-      const delta = jumpForward ? +1 : -1;
-      const allBlanks = findBlanksIn(widget.config.main);
-      const m = allBlanks.length;
-      const nextIndex = (allBlanks.index(blank) + m + delta) % m;
-      allBlanks.eq(nextIndex).focus();
-    };
-
-    /**
-     * Moves a codeline up/down in its own tray.
-     * Will not move if the codeline is stuck at the top/bottom.
-     * Setting `moveToEnd` will jump a codeline to the top/bottom.
-     * Setting `moveCodeline` reorders lines with the cursor.
-     */
-    const moveVertically = (
-      codeline,
-      { moveForward, moveToEnd, moveCodeline },
-    ) => {
-      const parent = $(codeline).parent();
-      const nextChild = moveForward ? $(codeline).next() : $(codeline).prev();
-
-      if (!nextChild.exists()) return;
-
-      if (!moveCodeline) {
-        const children = parent.children();
-        const extremeChild = moveForward ? children.last() : children.first();
-        focusCodeline(moveToEnd ? extremeChild : nextChild);
-        return;
-      }
-
-      // capture active element (like blank) to re-focus on after motion
-      const selection = $(document.activeElement).or(codeline);
-
-      if (moveToEnd) {
-        if (moveForward) {
-          parent.append(codeline);
-        } else {
-          parent.prepend(codeline);
-        }
-      } else {
-        if (moveForward) {
-          nextChild.insertBefore(codeline);
-        } else {
-          nextChild.insertAfter(codeline);
-        }
-      }
-
-      $(selection).focus();
-    };
-
-    const onCodelineKeydown = (e, codeline) => {
-      const motionData = keyMotionData(e);
-      setCodelineInMotion(codeline, motionData.moveCodeline);
-
-      if (!$(codeline).is(":focus")) return;
-
-      // Tab/Shift+Tab to Indent/Dedent,
-      // or Tab out of Starter Tray into Codeline
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const moveInsteadOfIndent =
-          !ParsonsGlobal.uiConfig.allowIndentingInStarterTray &&
-          motionData.jumpForward &&
-          $(widget.config.starter).has(codeline).exists(); // in starter tray?
-        if (moveInsteadOfIndent) {
-          moveHorizontally(codeline, {
-            moveForward: true,
-            moveCodeline: true,
-          });
-        } else {
-          const delta = motionData.jumpForward ? +1 : -1;
-          widget.updateIndent(codeline, delta, false);
-        }
-        return;
-      }
-
-      // Enter to refocus on the blanks
-      if (e.key === "Enter") {
-        e.preventDefault();
-        findBlanksIn(codeline).first().focus();
-        widget.enterBlankOnCodelineFocus = true;
-        return;
-      }
-
-      // Escape removes focus
-      if (e.key === "Escape") {
-        e.preventDefault();
-        $(codeline).blur();
-        widget.enterBlankOnCodelineFocus = false;
-        return;
-      }
-
-      // (Alt/Option)+Arrow to Reorder Lines, Arrow to Navigate
-      switch (e.key) {
-        case "ArrowLeft":
-        case "ArrowRight":
-          e.preventDefault();
-          moveHorizontally(codeline, motionData);
-          return;
-        case "ArrowUp":
-        case "ArrowDown":
-          e.preventDefault();
-          moveVertically(codeline, motionData);
-          return;
-      }
-    };
-
-    const onBlankKeydown = (e, codeline, blank) => {
-      const blanks = findBlanksIn(codeline);
-      const blankIdx = blanks.index(blank);
-      const motionData = keyMotionData(e);
-      // Tab/Shift+Tab to Indent/Dedent if on the first/last blank of line,
-      // otherwise advance/retreat blanks on the line
-      if (e.key === "Tab") {
-        const [boundary, delta] = motionData.jumpForward
-          ? [blanks.length - 1, +1]
-          : [0, -1];
-        if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || blankIdx == boundary) {
-          e.preventDefault();
-          widget.updateIndent(codeline, delta, false);
-        }
-        return;
-      }
-      // Escape to loose focus on the blank
-      if (e.key === "Escape") {
-        $(codeline).focus();
-        e.stopPropagation();
-        widget.enterBlankOnCodelineFocus = false;
-        return;
-      }
-      // Enter/Shift+Enter to advance/retreat blanks
-      if (e.key === "Enter") {
-        e.preventDefault();
-        widget.enterBlankOnCodelineFocus = true;
-        jumpToNextBlank(blank, motionData);
-        return;
-      }
-      // (Alt/Option)+Arrow to Reorder Lines
-      // Arrow Up/Down to Navigate Lines
-      // Arrow Right/Left to move cursor (including between input boxes)
-      switch (e.key) {
-        case "ArrowUp":
-        case "ArrowDown":
-          e.preventDefault();
-          moveVertically(codeline, motionData);
-          return;
-        case "ArrowRight":
-        case "ArrowLeft":
-          if (motionData.moveCodeline) {
-            e.preventDefault();
-            moveHorizontally(codeline, motionData);
-          } else {
-            moveCursorInBlankHorizontally(e, codeline, blankIdx, motionData);
-          }
-          return;
-      }
-    };
-
-    // init gui ///////////////////////////////////////////////////////////////
-    {
-      widget.redrawTabStops();
-
-      // attaching to submit causes "Warning: Unsaved Changes" alerts
-      // even when there's no unsaved changes...
-      // $("form.question-form").submit(() => widget.storeStudentProgress());
-      widget.storeStudentProgress();
-
-      // resize blanks to fit text
-      findBlanksIn(widget.config.main).each((_, blank) =>
-        widget.autoSizeBlank(blank),
-      );
-    }
-
-    // ready the aria accessibility ///////////////////////////////////////////
-    {
-      const descriptor = $(widget.config.ariaDescriptor);
-      const details = $(widget.config.ariaDetails);
-      if (ParsonsGlobal.uiConfig.showAriaDescriptor) {
-        descriptor.css("display", "inline-block");
-        details.css("display", "inline-block");
-      }
-
-      $(widget.config.main)
-        .find("li.codeline")
-        .attr("aria-labelledby", descriptor.attr("id"))
-        .attr("aria-details", details.attr("id"));
-
-      findBlanksIn(widget.config.main)
-        .attr("aria-labelledby", descriptor.attr("id"))
-        .attr("aria-details", details.attr("id"));
-    }
-
-    // add interactivity to codelines and blanks //////////////////////////////
-
-    $(widget.config.main)
-      .find("li.codeline")
-      // fix the aria labels
-      .each((_, codeline) => widget.updateAriaInfo(codeline, false))
-      // setup callbacks on each codeline (this)
-      .on({
-        focus() {
-          widget.updateAriaInfo(this);
-        },
-        blur() {
-          setCodelineInMotion(this, false);
-          widget.updateAriaInfo(this, false);
-        },
-        click(e) {
-          // Let code text clicks focus the line too; keep blank inputs handling themselves.
-          if ($(e.target).is("input.parsons-blank")) return;
-          widget.enterBlankOnCodelineFocus = false;
-          focusCodeline(this);
-        },
-        keyup(e) {
-          const { moveCodeline } = keyMotionData(e);
-          setCodelineInMotion(this, moveCodeline);
-          widget.updateAriaInfo(this);
-        },
-        keydown(e) {
-          onCodelineKeydown(e, this);
-          widget.updateAriaInfo(this);
-          widget.storeStudentProgress();
-        },
-      })
-      // setup callbacks on each blank (this) in every codeline
-      .each((_, codeline) =>
-        findBlanksIn(codeline).on({
-          focus() {
-            widget.enterBlankOnCodelineFocus = true;
-            widget.updateAriaInfo(codeline);
-          },
-          input(e) {
-            widget.autoSizeBlank(this);
-            widget.storeStudentProgress();
-            widget.config.onBlankUpdate(e, this);
-          },
-          keydown(e) {
-            onBlankKeydown(e, codeline, this);
-            widget.storeStudentProgress();
-          },
-        }),
-      );
-
-    // add uids to each line and blank for logging ////////////////////////////
-    $(widget.config.main)
-      .find(".codeline-tray")
-      .each((trayNumber, tray) =>
-        $(tray)
-          .find("li.codeline")
-          .each((codelineNumber, codeline) => {
-            if ($(codeline).attr("logging-id")) return;
-            const codelineId = `${trayNumber}.${codelineNumber}`;
-            $(codeline).attr("logging-id", codelineId);
-            findBlanksIn(codeline).each((blankNumber, blank) => {
-              $(blank).attr("logging-id", `${codelineId}.${blankNumber}`);
-            });
-          }),
-      );
-
-    //  add logging hooks for blank edits  //////////////////////////////////
-    findBlanksIn(widget.config.main).on({
-      input(e) {
-        widget.addLogEntry("editBlank", {
-          value: $(e.target).val(),
-          id: $(e.target).attr("logging-id"),
-        });
-      },
-    });
-
-    widget.addLogEntry("problemOpened", {});
+    widget.setupToolbarBindings();
+    widget.setupTraySortables();
+    widget.setupCoreDomHelpers();
+    widget.setupInitialGuiState();
+    widget.setupAccessibilityBindings();
+    widget.setupInteractivityBindings();
   }
+
+  /////////////////////////////// CONSTRUCTOR HELPERS ////////////////////////////
+
   validateConfig() {
     if (this.config.prettyPrint) {
       if (window.prettyPrint) {
@@ -668,6 +139,482 @@ class ParsonsWidget {
         `ParsonsWidget config requires field(s) ${missing} to be non-null`,
       );
   }
+
+  setupToolbarBindings() {
+    const toolbar = $(this.config.toolbar);
+
+    toolbar.find(`.widget-help`).popover({
+      placement: "auto",
+      trigger: "focus",
+      html: true,
+      title: "Faded Parsons Help",
+      content: buildToolbarHelpContent(), // changes here should be reflected in keyMotionModifiers!
+    });
+
+    toolbar
+      .find(`.widget-copy`)
+      .popover({
+        placement: "auto",
+        trigger: "focus",
+        content: "Copied to Clipboard!",
+      })
+      .on({
+        click: () => {
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(this.asPlaintext()).catch((err) => {
+              console.error("Unable to copy text to clipboard", err);
+              alert("Your browser blocked clipboard write access :(");
+            });
+          } else {
+            alert("Your browser does not yet support this :(");
+          }
+        },
+      });
+
+    toolbar.find(".widget-dark").on({ click: () => this.toggleDarkmode() });
+  }
+
+  setupTraySortables() {
+    const updateIndentAfterDrag = (ui) => {
+      this.updateIndent(ui.item[0], getIndentAtDragPosition(this, ui), true);
+    };
+
+    const starterTray = $(this.config.starterList); // may not exist!
+    const solutionTray = $(this.config.solutionList);
+
+    const grid = this.config.canIndent && [
+      this.config.xIndent * ParsonsGlobal.charWidthInPx,
+      1,
+    ];
+    const sortableOptions = {
+      placeholder: "codeline-sortable-placeholder",
+      forcePlaceholderSize: true,
+      tolerance: "pointer",
+    };
+
+    starterTray.sortable({
+      connectWith: solutionTray,
+      ...sortableOptions,
+      start: (_, ui) => {
+        this.activeSortablePlaceholder = ui.placeholder;
+        ui.item.addClass("codeline-dragging");
+        this.setCodelineInMotion(ui.item, true);
+        this.syncSortablePlaceholder(ui.item);
+      },
+      sort: (_, ui) => {
+        this.syncSortablePlaceholder(
+          ui.item,
+          getIndentAtDragPosition(this, ui),
+        );
+      },
+      receive: (_, ui) =>
+        this.addLogEntry("removeOutput", this.codelineLogEntry(ui.item)),
+      stop: (event, ui) => {
+        ui.item.removeClass("codeline-dragging");
+        this.setCodelineInMotion(ui.item, false);
+        this.activeSortablePlaceholder = $();
+        this.storeStudentProgress();
+
+        if (landedInAnotherTray(event, ui)) return;
+
+        this.addLogEntry("moveInput", this.codelineLogEntry(ui.item));
+      },
+      grid: ParsonsGlobal.uiConfig.allowIndentingInStarterTray && grid,
+    });
+
+    solutionTray.sortable({
+      connectWith: starterTray, // ok if DNE, does nothing
+      ...sortableOptions,
+      start: (_, ui) => {
+        this.activeSortablePlaceholder = ui.placeholder;
+        ui.item.addClass("codeline-dragging");
+        this.setCodelineInMotion(ui.item, true);
+        this.syncSortablePlaceholder(ui.item);
+      },
+      sort: (_, ui) => {
+        this.syncSortablePlaceholder(
+          ui.item,
+          getIndentAtDragPosition(this, ui),
+        );
+      },
+      stop: (event, ui) => {
+        ui.item.removeClass("codeline-dragging");
+        this.setCodelineInMotion(ui.item, false);
+        this.activeSortablePlaceholder = $();
+        this.storeStudentProgress();
+
+        if (landedInAnotherTray(event, ui)) return;
+
+        updateIndentAfterDrag(ui);
+
+        this.addLogEntry("moveOutput", this.codelineLogEntry(ui.item));
+      },
+      receive: (_, ui) => {
+        updateIndentAfterDrag(ui);
+        this.addLogEntry("addOutput", this.codelineLogEntry(ui.item));
+      },
+      update: (e, ui) => this.config.onSortableUpdate(e, ui),
+      grid: grid,
+    });
+  }
+
+  setupCoreDomHelpers() {
+    /** Finds the blanks within a query subject */
+    const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
+
+    this.findBlanksIn = findBlanksIn;
+
+    /** Manages the codeline's drag state */
+    this.setCodelineInMotion = (codeline, inMotion) =>
+      $(codeline)
+        .attr("aria-grabbed", inMotion)
+        .toggleClass("codeline-in-motion", inMotion);
+
+    this.getCodelineInMotion = (codeline) =>
+      $(codeline).hasClass("codeline-in-motion");
+    this.isSortablePlaceholder = (codeline) =>
+      $(codeline).hasClass("ui-sortable-placeholder") ||
+      $(codeline).hasClass("codeline-sortable-placeholder");
+  }
+
+  setupInitialGuiState() {
+    this.redrawTabStops();
+    this.storeStudentProgress();
+    this.findBlanksIn(this.config.main).each((_, blank) =>
+      this.autoSizeBlank(blank),
+    );
+  }
+
+  setupAccessibilityBindings() {
+    const descriptor = $(this.config.ariaDescriptor);
+    const details = $(this.config.ariaDetails);
+    if (ParsonsGlobal.uiConfig.showAriaDescriptor) {
+      descriptor.css("display", "inline-block");
+      details.css("display", "inline-block");
+    }
+
+    $(this.config.main)
+      .find("li.codeline")
+      .attr("aria-labelledby", descriptor.attr("id"))
+      .attr("aria-details", details.attr("id"));
+
+    this.findBlanksIn(this.config.main)
+      .attr("aria-labelledby", descriptor.attr("id"))
+      .attr("aria-details", details.attr("id"));
+  }
+
+  setupInteractivityBindings() {
+    $(this.config.main)
+      .find("li.codeline")
+      .each((_, codeline) => this.updateAriaInfo(codeline, false))
+      .on({
+        focus: (event) => {
+          this.updateAriaInfo(event.currentTarget);
+        },
+        blur: (event) => {
+          this.setCodelineInMotion(event.currentTarget, false);
+          this.updateAriaInfo(event.currentTarget, false);
+        },
+        click: (e) => {
+          if ($(e.target).is("input.parsons-blank")) return;
+          this.enterBlankOnCodelineFocus = false;
+          this.focusCodeline(e.currentTarget);
+        },
+        keyup: (e) => {
+          const { moveCodeline } = keyMotionData(e);
+          this.setCodelineInMotion(e.currentTarget, moveCodeline);
+          this.updateAriaInfo(e.currentTarget);
+        },
+        keydown: (e) => {
+          this.onCodelineKeydown(e, e.currentTarget);
+          this.updateAriaInfo(e.currentTarget);
+          this.storeStudentProgress();
+        },
+      })
+      .each((_, codeline) =>
+        this.findBlanksIn(codeline).on({
+          focus: () => {
+            this.enterBlankOnCodelineFocus = true;
+            this.updateAriaInfo(codeline);
+          },
+          input: (e) => {
+            this.autoSizeBlank(e.currentTarget);
+            this.storeStudentProgress();
+            this.config.onBlankUpdate(e, e.currentTarget);
+          },
+          keydown: (e) => {
+            this.onBlankKeydown(e, codeline, e.currentTarget);
+            this.storeStudentProgress();
+          },
+        }),
+      );
+
+    $(this.config.main)
+      .find(".codeline-tray")
+      .each((trayNumber, tray) =>
+        $(tray)
+          .find("li.codeline")
+          .each((codelineNumber, codeline) => {
+            if ($(codeline).attr("logging-id")) return;
+            const codelineId = `${trayNumber}.${codelineNumber}`;
+            $(codeline).attr("logging-id", codelineId);
+            this.findBlanksIn(codeline).each((blankNumber, blank) => {
+              $(blank).attr("logging-id", `${codelineId}.${blankNumber}`);
+            });
+          }),
+      );
+
+    this.findBlanksIn(this.config.main).on({
+      input: (e) => {
+        this.addLogEntry("editBlank", {
+          value: $(e.target).val(),
+          id: $(e.target).attr("logging-id"),
+        });
+      },
+    });
+
+    this.addLogEntry("problemOpened", {});
+  }
+
+  /////////////////////////////// MOTION HELPERS ////////////////////////////
+
+  focusCodeline(codeline, firstBlankNotLast = true) {
+    let target = $(codeline);
+    if (!target.exists()) return;
+    if (this.enterBlankOnCodelineFocus) {
+      const blanks = this.findBlanksIn(target);
+      const blank = firstBlankNotLast ? blanks.first() : blanks.last();
+      target = blank.or(target);
+    }
+    target.focus();
+  }
+
+  findHorizontalTarget(codeline, searchTray) {
+    const getMiddleY = (domObj) => {
+      const { top, bottom } = domObj.getBoundingClientRect();
+      return (top + bottom) / 2.0;
+    };
+
+    const middle = getMiddleY(codeline);
+    const target = $(searchTray)
+      .find("li.codeline")
+      .minBy((_, line) => Math.abs(middle - getMiddleY(line)));
+
+    const found = target.exists();
+    const targetIsLower = found ? getMiddleY(target[0]) > middle : undefined;
+
+    return { found, targetIsLower, target };
+  }
+
+  moveHorizontally(codeline, { moveForward, moveCodeline }) {
+    const codeboxes = $(this.config.main).find(".codeline-tray");
+    const m = codeboxes.length;
+    if (m < 2) return;
+    const codeboxIdx = codeboxes
+      .toArray()
+      .findIndex((c) => $(c).has(codeline).exists());
+    const k = codeboxIdx + (moveForward ? +1 : -1);
+    if (k < 0 || m <= k) return;
+    const newTray = codeboxes.eq(k).find(".codeline-list");
+
+    const { found, targetIsLower, target } = this.findHorizontalTarget(
+      codeline,
+      newTray,
+    );
+
+    if (!moveCodeline) {
+      this.focusCodeline(target, moveForward);
+      return;
+    }
+
+    const selection = $(document.activeElement).or(codeline);
+
+    if (found) {
+      if (targetIsLower) {
+        $(codeline).insertBefore(target);
+      } else {
+        $(codeline).insertAfter(target);
+      }
+    } else {
+      $(newTray).append(codeline);
+    }
+
+    $(selection).focus();
+  }
+
+  moveCursorInBlankHorizontally(e, codeline, blankIdx, { moveForward }) {
+    const codelineBlanks = this.findBlanksIn(codeline);
+    const blank = codelineBlanks.get(blankIdx);
+    if (blank.selectionEnd != blank.selectionStart) return false;
+
+    const cursorIdx = blank.selectionStart;
+    const [lastTextIdx, lastBlankIdx, blankDelta] = moveForward
+      ? [blank.value.length, codelineBlanks.length - 1, +1]
+      : [0, 0, -1];
+
+    if (cursorIdx != lastTextIdx) return false;
+
+    e.preventDefault();
+
+    if (blankIdx == lastBlankIdx) {
+      this.moveHorizontally(codeline, { moveForward, moveCodeline: false });
+    } else {
+      codelineBlanks
+        .eq(blankIdx + blankDelta)
+        .focus()
+        .each((_, input) => {
+          const l = moveForward ? 0 : input.value.length;
+          input.setSelectionRange(l, l);
+        });
+    }
+    return true;
+  }
+
+  jumpToNextBlank(blank, { jumpForward }) {
+    const delta = jumpForward ? +1 : -1;
+    const allBlanks = this.findBlanksIn(this.config.main);
+    const m = allBlanks.length;
+    const nextIndex = (allBlanks.index(blank) + m + delta) % m;
+    allBlanks.eq(nextIndex).focus();
+  }
+
+  moveVertically(codeline, { moveForward, moveToEnd, moveCodeline }) {
+    const parent = $(codeline).parent();
+    const nextChild = moveForward ? $(codeline).next() : $(codeline).prev();
+
+    if (!nextChild.exists()) return;
+
+    if (!moveCodeline) {
+      const children = parent.children();
+      const extremeChild = moveForward ? children.last() : children.first();
+      this.focusCodeline(moveToEnd ? extremeChild : nextChild);
+      return;
+    }
+
+    const selection = $(document.activeElement).or(codeline);
+
+    if (moveToEnd) {
+      if (moveForward) {
+        parent.append(codeline);
+      } else {
+        parent.prepend(codeline);
+      }
+    } else if (moveForward) {
+      nextChild.insertBefore(codeline);
+    } else {
+      nextChild.insertAfter(codeline);
+    }
+
+    $(selection).focus();
+  }
+
+  onCodelineKeydown(e, codeline) {
+    const motionData = keyMotionData(e);
+    this.setCodelineInMotion(codeline, motionData.moveCodeline);
+
+    if (!$(codeline).is(":focus")) return;
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const moveInsteadOfIndent =
+        !ParsonsGlobal.uiConfig.allowIndentingInStarterTray &&
+        motionData.jumpForward &&
+        $(this.config.starter).has(codeline).exists();
+      if (moveInsteadOfIndent) {
+        this.moveHorizontally(codeline, {
+          moveForward: true,
+          moveCodeline: true,
+        });
+      } else {
+        const delta = motionData.jumpForward ? +1 : -1;
+        this.updateIndent(codeline, delta, false);
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.findBlanksIn(codeline).first().focus();
+      this.enterBlankOnCodelineFocus = true;
+      return;
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      $(codeline).blur();
+      this.enterBlankOnCodelineFocus = false;
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowLeft":
+      case "ArrowRight":
+        e.preventDefault();
+        this.moveHorizontally(codeline, motionData);
+        return;
+      case "ArrowUp":
+      case "ArrowDown":
+        e.preventDefault();
+        this.moveVertically(codeline, motionData);
+        return;
+    }
+  }
+
+  onBlankKeydown(e, codeline, blank) {
+    const blanks = this.findBlanksIn(codeline);
+    const blankIdx = blanks.index(blank);
+    const motionData = keyMotionData(e);
+
+    if (e.key === "Tab") {
+      const [boundary, delta] = motionData.jumpForward
+        ? [blanks.length - 1, +1]
+        : [0, -1];
+      if (ParsonsGlobal.uiConfig.alwaysIndentOnTab || blankIdx == boundary) {
+        e.preventDefault();
+        this.updateIndent(codeline, delta, false);
+      }
+      return;
+    }
+    if (e.key === "Escape") {
+      $(codeline).focus();
+      e.stopPropagation();
+      this.enterBlankOnCodelineFocus = false;
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.enterBlankOnCodelineFocus = true;
+      this.jumpToNextBlank(blank, motionData);
+      return;
+    }
+    switch (e.key) {
+      case "ArrowUp":
+      case "ArrowDown":
+        e.preventDefault();
+        this.moveVertically(codeline, motionData);
+        return;
+      case "ArrowRight":
+      case "ArrowLeft":
+        if (motionData.moveCodeline) {
+          e.preventDefault();
+          this.moveHorizontally(codeline, motionData);
+        } else {
+          this.moveCursorInBlankHorizontally(e, codeline, blankIdx, motionData);
+        }
+        return;
+    }
+  }
+
+  /////////////////////////////// GENERAL HELPERS ////////////////////////////
+
+  syncSortablePlaceholder(codeline, indent = 0) {
+    indent ||= widget.getCodelineIndent(codeline);
+    const placeholder = widget.activeSortablePlaceholder;
+    if (!placeholder || !placeholder.exists()) return;
+
+    placeholder.empty().css("--pl-faded-parsons-indent", indent);
+  }
+
   /** Returns the indentation level of the codeline */
   getCodelineIndent(codeline) {
     codeline = $(codeline).get(0);
@@ -686,6 +633,7 @@ class ParsonsWidget {
     const indentLevel = indentChar / this.config.xIndent;
     return isNaN(indentLevel) ? 0 : indentLevel;
   }
+
   getCodelineSegments(codeline) {
     let elemClone = $(codeline).clone();
     let blankValues = [];
@@ -699,29 +647,34 @@ class ParsonsWidget {
       blankValues: blankValues,
     };
   }
-  codelineLogEntry(line) {
-    return {
-      indent: this.getCodelineIndent(line),
-      segments: this.getCodelineSegments(line),
-      id: $(line).attr("logging-id"),
-      index: line.index(),
-    };
+
+  generateMockPLData() {
+    const txInputs = [$(this.config.storage), $(this.config.logStorage)];
+    const data = {};
+    for (let inp of txInputs) {
+      data[inp.attr("name")] = inp.val();
+    }
+    return JSON.stringify({ raw_submitted_answers: data });
   }
+
   autoSizeBlank(el) {
     $(el).width(el.value.length.toString() + "ch");
   }
+
   getSourceLines() {
     return $(this.config.starterList)
       .children()
       .filter((_, line) => !this.isSortablePlaceholder(line))
       .toArray();
   }
+
   getSolutionLines() {
     return $(this.config.solutionList)
       .children()
       .filter((_, line) => !this.isSortablePlaceholder(line))
       .toArray();
   }
+
   /** Reads a codeline element and interpolates the blanks with their value */
   getCodelineText(codeline) {
     let elemClone = $(codeline).clone();
@@ -733,6 +686,7 @@ class ParsonsWidget {
     const spaceCount = this.config.xIndent * this.getCodelineIndent(codeline);
     return " ".repeat(spaceCount) + elemClone[0].innerText;
   }
+
   /** Returns all the codeline in the widget as formatted code plaintext */
   asPlaintext() {
     const toText = (lines) =>
@@ -760,6 +714,7 @@ class ParsonsWidget {
     const sols = toText(this.getSolutionLines());
     return [...starters, ...sols].join("\n");
   }
+
   /** Sets the indent of the element in language terms (not pxs),
    *  if not absolute, then it will update relative to the current indent.
    */
@@ -791,6 +746,7 @@ class ParsonsWidget {
     this.storeStudentProgress();
     return newCodeIndent;
   }
+
   /** Redraws the tab stops in the solution box if this.config.canIndent */
   redrawTabStops() {
     if (!this.config.canIndent || !ParsonsGlobal.uiConfig.showTabStops) return;
@@ -830,6 +786,7 @@ class ParsonsWidget {
       "background-color": backgroundColor,
     });
   }
+
   storeStudentProgress() {
     // this schema is used in pl-faded-parsons.py `ProblemState.from_pl_data`!
     const storage = $(this.config.storage);
@@ -850,12 +807,14 @@ class ParsonsWidget {
       }),
     );
   }
+
   toggleDarkmode() {
     $(this.config.main)
       .find(ParsonsGlobal.prettifyOutputClasses)
       .add($(this.config.main))
       .each((_, e) => $(e).toggleClass("dark"));
   }
+
   updateAriaInfo(codeline, hasFocus = true) {
     const defaultText = "no codeline selected. select a codeline to begin. ";
 
@@ -871,6 +830,9 @@ class ParsonsWidget {
             "use shift to reverse motion, and option/ctrl to jump.",
     );
   }
+
+    /////////////////////////////// ACCESSIBILITY HELPERS ////////////////////////////
+
   codelineAriaDetails(codeline) {
     const trays = $(this.config.main).find(".codeline-tray");
     const tray =
@@ -894,6 +856,7 @@ class ParsonsWidget {
         .join("; Under ") + trayText
     );
   }
+
   codelineAriaDescription(codeline) {
     const lineUiDescription = (codeline) => {
       const motionText = this.getCodelineInMotion(codeline) ? "moving " : "";
@@ -925,6 +888,18 @@ class ParsonsWidget {
     const bodyDesc = bodyDescription(codeline);
     return `${lineUIDesc}, ${indentDesc}, ${bodyDesc}`;
   }
+
+  /////////////////////////////// LOGGING HELPERS ////////////////////////////
+
+  codelineLogEntry(line) {
+    return {
+      indent: this.getCodelineIndent(line),
+      segments: this.getCodelineSegments(line),
+      id: $(line).attr("logging-id"),
+      index: line.index(),
+    };
+  }
+
   /** Add a tagged, timestamped log entry to `this.config.logStorage` */
   addLogEntry(tag, data) {
     const timestamp = new Date();
@@ -950,14 +925,6 @@ class ParsonsWidget {
     prev_log.push(entry);
     s.val(JSON.stringify(prev_log));
   }
-  generateMockPLData() {
-    const txInputs = [$(this.config.storage), $(this.config.logStorage)];
-    const data = {};
-    for (let inp of txInputs) {
-      data[inp.attr("name")] = inp.val();
-    }
-    return JSON.stringify({ raw_submitted_answers: data });
-  }
 }
 
 window.ParsonsWidgetHelpers = {
@@ -968,8 +935,9 @@ window.ParsonsWidgetHelpers = {
   getIndentAtDragPosition,
   landedInAnotherTray,
 };
+window.ParsonsWidget = ParsonsWidget;
 
-/////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////// ParsonsGlobal ////////////////////////////////////////
 window.ParsonsGlobal ||= /* singleton! */ {
   widgets: [],
   prettifyOutputClasses:
