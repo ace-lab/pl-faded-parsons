@@ -166,6 +166,10 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
             "pre-text and post-text are not supported in right mode. "
             'Use `format="bottom"` or `format="no-code"` instead.'
         )
+    if (pre_text or post_text) and not _has_child_tag(element, "code-lines"):
+        raise ValueError(
+            "pre-text and post-text require an explicit <code-lines> child."
+        )
 
     question_path = Path(data["options"]["question_path"])
     solution_path = question_path / pl.get_string_attrib(
@@ -193,6 +197,12 @@ def _get_child_text(element: xml.HtmlElement, tag: str) -> str:
         if child.tag == tag:
             return child.text or ""
     return ""
+
+
+def _has_child_tag(element: xml.HtmlElement, tag: str) -> bool:
+    """Return whether the element contains a direct child with the given tag."""
+
+    return any(child.tag == tag for child in element)
 
 
 def _load_markup(element: xml.HtmlElement, question_path: Path) -> str:

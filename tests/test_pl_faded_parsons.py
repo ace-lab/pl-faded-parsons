@@ -96,6 +96,21 @@ class TestPlFadedParsonsController(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pre-text and post-text are not supported"):
             pl_faded_parsons._build_config(html, self.data)
 
+    def test_build_config_requires_code_lines_when_pre_or_post_text_present(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="bottom">
+            <pre-text>before()</pre-text>
+            pass
+            <post-text>after()</post-text>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "pre-text and post-text require an explicit <code-lines> child",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
+
     def test_build_initial_state_parses_givens_blanks_and_distractors(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
