@@ -489,7 +489,7 @@ def _render_template(template_name: str, params: dict[str, Any]) -> str:
     working directory, which makes local tests and upstream integration simpler.
     """
 
-    template_path = Path(__file__).resolve().parent / template_name
+    template_path = Path(template_name)
     with template_path.open(encoding="utf-8") as template_file:
         return chevron.render(
             template_file,
