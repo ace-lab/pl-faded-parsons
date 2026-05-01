@@ -251,7 +251,6 @@ class ParsonsWidget {
 
         this.addLogEntry("moveInput", this.codelineLogEntry(ui.item));
       },
-      grid: ParsonsGlobalUISettings.allowIndentingInStarterTray && grid,
     });
 
     solutionTray.sortable({
@@ -549,9 +548,7 @@ class ParsonsWidget {
     if (e.key === "Tab") {
       e.preventDefault();
       const moveInsteadOfIndent =
-        !ParsonsGlobalUISettings.allowIndentingInStarterTray &&
-        motionData.jumpForward &&
-        $(this.config.starter).has(codeline).exists();
+        motionData.jumpForward && $(this.config.starter).has(codeline).exists();
       if (moveInsteadOfIndent) {
         this.moveHorizontally(codeline, {
           moveForward: true,
@@ -971,11 +968,6 @@ window.ParsonsWidgetHelpers = {
 window.ParsonsWidget = ParsonsWidget;
 
 window.ParsonsGlobalUISettings ||= /* singleton! */ {
-  /**
-   * When true, a Tab indents a codeline in the codetray
-   * instead of advancing it into the next tray
-   */
-  allowIndentingInStarterTray: false,
   /**
    * When true, a Tab in a fading blank always indents,
    * otherwise a tab will attempt to advance to the next blank

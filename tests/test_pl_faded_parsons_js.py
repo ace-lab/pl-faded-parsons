@@ -326,7 +326,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   captured.solution.receive({}, { item, position: { left: 32 } });
                   captured.solution.stop({ target: parent }, { item, position: { left: 32 } });
                   return {
-                    starterGrid: captured.starter.grid,
                     solutionGrid: captured.solution.grid,
                     logs: logTags,
                     updatedIndent: captured.updatedIndent,
@@ -338,7 +337,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result["starterGrid"], [32, 1])
         self.assertEqual(result["solutionGrid"], [32, 1])
         self.assertIn("removeOutput", result["logs"])
         self.assertIn("addOutput", result["logs"])
