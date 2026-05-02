@@ -233,7 +233,6 @@ class ParsonsWidget {
         },
       });
 
-    toolbar.find(".widget-dark").on({ click: () => this.toggleDarkmode() });
   }
 
   setupTraySortables() {

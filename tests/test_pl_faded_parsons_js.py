@@ -279,7 +279,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result, [False, True])
 
-    def test_setup_toolbar_bindings_wires_help_copy_and_dark_actions(self):
+    def test_setup_toolbar_bindings_wires_help_and_copy_actions(self):
         result = run_js(
             textwrap.dedent(
                 """
@@ -301,17 +301,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       return this;
                     },
                   };
-                  const dark = {
-                    on(handlers) {
-                      calls.darkClick = handlers.click;
-                      return this;
-                    },
-                  };
                   const toolbar = {
                     find(selector) {
                       if (selector === '.widget-help') return help;
                       if (selector === '.widget-copy') return copy;
-                      if (selector === '.widget-dark') return dark;
                       throw new Error(selector);
                     },
                   };
@@ -332,18 +325,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     asPlaintext() {
                       return 'plain-text';
                     },
-                    toggleDarkmode() {
-                      calls.darkToggled = true;
-                    },
                   };
                   Widget.prototype.setupToolbarBindings.call(widget);
                   calls.copyClick();
-                  calls.darkClick();
                   return {
                     helpTitle: calls.help.title,
                     helpContent: calls.help.content,
                     copiedText: calls.copiedText,
-                    darkToggled: calls.darkToggled,
                     copyTrigger: calls.copyPopover.trigger,
                   };
                 })()
@@ -354,7 +342,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertEqual(result["helpTitle"], "Faded Parsons Help")
         self.assertIn("Arrow Keys: Select<br>", result["helpContent"])
         self.assertEqual(result["copiedText"], "plain-text")
-        self.assertTrue(result["darkToggled"])
         self.assertEqual(result["copyTrigger"], "focus")
 
     def test_setup_tray_sortables_uses_global_config_and_callbacks(self):
