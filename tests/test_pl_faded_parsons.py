@@ -289,6 +289,15 @@ value = !BLANK #blank
         self.assertEqual(text, "before()\n  helper()\n")
         self.assertEqual(indent, 2.0)
 
+    def test_build_text_block_uses_first_line_as_baseline_indent(self):
+        text, indent = pl_faded_parsons._build_text_block(
+            "        before()\n            helper()\n        tail()",
+            placement="pre",
+        )
+
+        self.assertEqual(text, "before()\n    helper()\ntail()\n")
+        self.assertEqual(indent, 2.0)
+
     def test_build_text_block_params_returns_normalized_text(self):
         text, indent = pl_faded_parsons._build_text_block(
             "    before()\n        helper()",
@@ -303,6 +312,25 @@ value = !BLANK #blank
 
         self.assertEqual(params["indent"], 1.0)
         self.assertEqual(params["text"], "before()\n    helper()\n")
+
+    def test_build_text_block_rejects_inconsistent_leading_whitespace(self):
+        with self.assertRaisesRegex(
+            IndentationError,
+            "pre-text line 2 does not match the leading whitespace prefix",
+        ):
+            pl_faded_parsons._build_text_block(
+                "        before()\n  helper()",
+                placement="pre",
+            )
+
+    def test_build_text_block_allows_zero_whitespace_at_block_start(self):
+        text, indent = pl_faded_parsons._build_text_block(
+            "before()\n    helper()",
+            placement="pre",
+        )
+
+        self.assertEqual(text, "before()\n    helper()\n")
+        self.assertEqual(indent, 0.0)
 
     def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
         line = pl_faded_parsons._parse_markup_line(
@@ -476,7 +504,7 @@ starter()</code-lines>
             html, make_question_data(self.tmp_path, panel="answer")
         )
 
-        self.assertIn("<p>Submission:</p>", submission_rendered)
+        self.assertIn("SUBMISSION", submission_rendered)
         self.assertIn("answer()", submission_rendered)
         self.assertIn("<p>The reference solution:</p>", answer_rendered)
         self.assertIn("source-file-name=", answer_rendered)
@@ -497,8 +525,8 @@ starter()</code-lines>
 
         rendered = pl_faded_parsons.render(html, submission_data)
 
-        self.assertIn("<p>Submission:</p>", rendered)
-        self.assertNotIn("Feedback", rendered)
+        self.assertIn("SUBMISSION", rendered)
+        self.assertNotIn("FEEDBACK", rendered)
 
     def test_render_respects_logging_toggle_and_no_code_layout(self):
         html = """

@@ -125,12 +125,14 @@ File: `pl-faded-parsons.py`
 - `pre_text`
   - optional block before the solution tray
   - only supported when `format="no-code"`
-  - normalized in Python to infer its own leading indent from whitespace
+  - normalized in Python using the first non-empty line as the shared leading whitespace baseline
+  - raises `IndentationError` if later lines do not preserve that baseline prefix
   - rendered with `lines` and `indent` fields
 - `post_text`
   - optional block after the solution tray
   - only supported when `format="no-code"`
-  - normalized in Python to infer its own leading indent from whitespace
+  - normalized in Python using the first non-empty line as the shared leading whitespace baseline
+  - raises `IndentationError` if later lines do not preserve that baseline prefix
   - rendered with `lines` and `indent` fields
 
 ### Mustache -> DOM

@@ -28,7 +28,6 @@ import base64
 import json
 import random
 import re
-import textwrap
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -529,8 +528,16 @@ def _build_text_block(
         return "", 0.0
 
     expanded = text.expandtabs(4)
-    indent_spaces = _infer_text_indent_spaces(expanded)
-    normalized = textwrap.dedent(expanded)
+    lines = _trim_outer_blank_lines(expanded.splitlines())
+    if not lines:
+        return "", 0.0
+
+    indent_spaces = _infer_text_baseline_spaces(lines[0])
+    normalized_lines = [
+        _normalize_text_block_line(line, indent_spaces, placement=placement, line_number=index + 1)
+        for index, line in enumerate(lines)
+    ]
+    normalized = "\n".join(normalized_lines)
     if placement == "pre":
         normalized = normalized.rstrip("\n") + "\n"
     else:
@@ -553,15 +560,45 @@ def _build_text_block_params(
     return {"text": text, "language": language, "indent": indent}
 
 
-def _infer_text_indent_spaces(text: str) -> int:
-    """Infer the common leading whitespace width across non-empty lines."""
+def _trim_outer_blank_lines(lines: list[str]) -> list[str]:
+    """Drop leading and trailing blank lines from a text block."""
 
-    indents = [
-        len(line) - len(line.lstrip(" "))
-        for line in text.splitlines()
-        if line.strip()
-    ]
-    return min(indents) if indents else 0
+    start = 0
+    end = len(lines)
+
+    while start < end and not lines[start].strip():
+        start += 1
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+
+    return lines[start:end]
+
+
+def _infer_text_baseline_spaces(line: str) -> int:
+    """Infer the leading whitespace width from the first text line."""
+
+    return len(line) - len(line.lstrip(" "))
+
+
+def _normalize_text_block_line(
+    line: str,
+    indent_spaces: int,
+    *,
+    placement: Literal["pre", "post"],
+    line_number: int,
+) -> str:
+    """Validate and remove the shared leading whitespace prefix from one line."""
+
+    if not line.strip():
+        return ""
+
+    prefix = " " * indent_spaces
+    if indent_spaces and not line.startswith(prefix):
+        raise IndentationError(
+            f"{placement}-text line {line_number} does not match the leading whitespace prefix "
+            "established by the first non-empty line."
+        )
+    return line[len(prefix):] if prefix else line
 
 
 def _line_to_mustache(line: SavedLine, language: str) -> dict[str, Any]:

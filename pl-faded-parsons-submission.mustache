@@ -1,13 +1,11 @@
-<p>Submission:</p>
-
-<div class="border">
-  <pl-code language="python">
+<!-- TEST-HOOK:SUBMISSION: this tag belongs where submissions are rendered -->
+<pl-code language="python">
 {{code}}
-  </pl-code>
-  {{#has_feedback}}
-  <p> Feedback </p>
-  <div>
-    <pl-external-grader-results></pl-external-grader-results>
-  </div>
-  {{/has_feedback}}
+</pl-code>
+
+{{#has_feedback}}
+<!-- TEST-HOOK:FEEDBACK: this tag belongs where the feedback is rendered -->
+<div>
+  <pl-external-grader-results></pl-external-grader-results>
 </div>
+{{/has_feedback}}
