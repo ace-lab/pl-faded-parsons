@@ -14,6 +14,41 @@ code {
   overflow-x: clip;
 }
 
+.pl-faded-parsons-layout-row {
+  align-items: stretch;
+  margin: 0px;
+  position: relative;
+}
+
+.pl-faded-parsons .fpp-tray-flex {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex.starter-code-tray {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex.solution-code-tray {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.pl-faded-parsons-layout-row .starter-code-tray.fpp-tray-flex {
+  padding-right: 0.4em;
+}
+
+.pl-faded-parsons-layout-row .solution-code-tray.fpp-tray-flex {
+  padding-left: 0.4em;
+}
 
 .aria-descriptor, .aria-details {
   display: none;
@@ -54,6 +89,10 @@ code {
   padding-bottom: 0;
   padding-left: 0;
   margin-left: 0;
+}
+
+.starter-code-tray .codeline-list {
+  padding-bottom: 1rem;
 }
 
 .solution-code-tray .codeline-list {

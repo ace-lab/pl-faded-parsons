@@ -254,6 +254,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       calls.help = options;
                       return this;
                     },
+                    attr(name, value) {
+                      calls.helpAttr = [name, value];
+                      return this;
+                    },
                   };
                   const copy = {
                     popover(options) {
@@ -295,6 +299,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   return {
                     helpTitle: calls.help.title,
                     helpContent: calls.help.content,
+                    helpAriaDescription: calls.helpAttr,
                     copiedText: calls.copiedText,
                     copyTrigger: calls.copyPopover.trigger,
                   };
@@ -305,6 +310,8 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result["helpTitle"], "Faded Parsons Help")
         self.assertIn("Arrow Keys: Select<br>", result["helpContent"])
+        self.assertEqual(result["helpAriaDescription"][0], "aria-description")
+        self.assertIn("Arrow Keys: Select", result["helpAriaDescription"][1])
         self.assertEqual(result["copiedText"], "plain-text")
         self.assertEqual(result["copyTrigger"], "focus")
 
@@ -580,9 +587,17 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     attrs: {},
                   }];
                   const main = {
+                    attr(name, value) {
+                      attrs.main[name] = value;
+                      return this;
+                    },
                     find(selector) {
                       if (selector === 'li.codeline') {
                         return {
+                          each(fn) {
+                            codelines.forEach((line, idx) => fn(idx, line));
+                            return this;
+                          },
                           attr(name, value) {
                             codelines.forEach((line) => { line.attrs[name] = value; });
                             return this;
@@ -628,7 +643,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   };
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
                   Widget.prototype.setupAccessibilityBindings.call(widget);
-                  return { descriptor: attrs.descriptor, details: attrs.details, codeline: codelines[0].attrs, blank: blanks[0].attrs };
+                  return { descriptor: attrs.descriptor, details: attrs.details, main: attrs.main, codeline: codelines[0].attrs, blank: blanks[0].attrs };
                 })()
                 """
             )
@@ -636,8 +651,326 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result["descriptor"]["display"], "inline-block")
         self.assertEqual(result["details"]["display"], "inline-block")
+        self.assertEqual(result["main"]["aria-labelledby"], "descriptor-id")
+        self.assertEqual(result["main"]["aria-details"], "details-id")
         self.assertEqual(result["codeline"]["aria-labelledby"], "descriptor-id")
         self.assertEqual(result["blank"]["aria-details"], "details-id")
+
+    def test_setup_accessibility_bindings_marks_blank_free_lines_as_code_lines(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const codeline = { attrs: {} };
+                  const main = {
+                    attr(name, value) {
+                      this[name] = value;
+                      return this;
+                    },
+                    find(selector) {
+                      if (selector === 'li.codeline') {
+                        return {
+                          each(fn) {
+                            fn(0, codeline);
+                            return this;
+                          },
+                          attr(name, value) {
+                            codeline.attrs[name] = value;
+                            return this;
+                          },
+                        };
+                      }
+                      return {
+                        attr() { return this; },
+                      };
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#descriptor') {
+                      return {
+                        css() { return this; },
+                        attr(name) { return name === 'id' ? 'descriptor-id' : null; },
+                      };
+                    }
+                    if (selector === '#details') {
+                      return {
+                        css() { return this; },
+                        attr(name) { return name === 'id' ? 'details-id' : null; },
+                      };
+                    }
+                    if (selector === '#main') return main;
+                    if (selector === codeline) {
+                      return {
+                        attr(name, value) {
+                          if (value !== undefined) {
+                            codeline.attrs[name] = value;
+                          }
+                          return this;
+                        },
+                      };
+                    }
+                    return {
+                      attr() { return this; },
+                      find() { return { attr() { return this; } }; },
+                    };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const widget = {
+                    config: { ariaDescriptor: '#descriptor', ariaDetails: '#details', main: '#main' },
+                    findBlanksIn() {
+                      return {
+                        length: 0,
+                        attr() { return this; },
+                      };
+                    },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.setupAccessibilityBindings.call(widget);
+                  return codeline.attrs;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result["aria-roledescription"], "code line")
+
+    def test_update_aria_info_mentions_root_capture_controls(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const descriptor = { text(value) { this.value = value; return this; } };
+                  const details = { text(value) { this.value = value; return this; } };
+                  const widget = {
+                    config: { ariaDescriptor: '#descriptor', ariaDetails: '#details' },
+                    codelineAriaDescription() {
+                      return 'line description';
+                    },
+                    codelineAriaDetails() {
+                      return 'line details';
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#descriptor') return descriptor;
+                    if (selector === '#details') return details;
+                    return { text() { return this; } };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.updateAriaInfo.call(widget, null, false);
+                  return { descriptor: descriptor.value, details: details.value };
+                })()
+                """
+            )
+        )
+
+        self.assertIn("press enter on the widget to focus the lines of code", result["descriptor"])
+        self.assertIn("escape to exit", result["details"])
+
+    def test_setup_interactivity_bindings_enters_capture_from_widget_root(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const events = {};
+                  const firstLine = { id: 'first-line' };
+                  const codelineList = {
+                    each(fn) {
+                      fn(0, firstLine);
+                      return this;
+                    },
+                    attr(name, value) {
+                      events.codelineTabStop = [name, value];
+                      return this;
+                    },
+                    on(handlers) {
+                      events.codelineHandlers = handlers;
+                      return this;
+                    },
+                  };
+                  const main = {
+                    on(handlers) {
+                      events.mainHandlers = handlers;
+                      return this;
+                    },
+                    find(selector) {
+                      if (selector === 'li.codeline') return codelineList;
+                      if (selector === 'input.parsons-blank') {
+                        return {
+                          on() { return this; },
+                          each() { return this; },
+                        };
+                      }
+                      if (selector === '.codeline-tray') {
+                        return {
+                          each() { return this; },
+                        };
+                      }
+                      throw new Error(selector);
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#main') return main;
+                    if (selector === firstLine) {
+                      return {
+                        is() { return false; },
+                        closest() { return { exists() { return false; } }; },
+                        find() { return { on() { return this; }, each() { return this; } }; },
+                      };
+                    }
+                    return {
+                      on() { return this; },
+                      each() { return this; },
+                      find() { return this; },
+                      closest() { return { exists() { return false; } }; },
+                      is() { return false; },
+                    };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const widget = {
+                    config: { main: '#main' },
+                    codelineCaptureActive: false,
+                    enterBlankOnCodelineFocus: false,
+                    getSolutionLines() {
+                      return [firstLine];
+                    },
+                    getSourceLines() {
+                      return [];
+                    },
+                    focusCodeline(line) {
+                      events.focusedLine = line;
+                      events.enterBlankAtFocus = this.enterBlankOnCodelineFocus;
+                    },
+                    updateAriaInfo() {},
+                    setCodelineInMotion() {},
+                    storeStudentProgress() {},
+                    addLogEntry(tag) {
+                      events.logTag = tag;
+                    },
+                    findBlanksIn() {
+                      return {
+                        on() { return this; },
+                        each() { return this; },
+                      };
+                    },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.setupCoreDomHelpers.call(widget);
+                  widget.enterCodelineCapture = Widget.prototype.enterCodelineCapture;
+                  Widget.prototype.setupInteractivityBindings.call(widget);
+                  events.mainHandlers.keydown({
+                    key: 'Enter',
+                    target: main,
+                    currentTarget: main,
+                    preventDefault() { events.prevented = true; },
+                  });
+                  return {
+                    capture: widget.codelineCaptureActive,
+                    enterBlank: widget.enterBlankOnCodelineFocus,
+                    focused: events.focusedLine === firstLine,
+                    enterBlankAtFocus: events.enterBlankAtFocus,
+                    codelineTabStop: events.codelineTabStop,
+                    prevented: events.prevented,
+                  };
+                })()
+                """
+            )
+        )
+
+        self.assertTrue(result["capture"])
+        self.assertFalse(result["enterBlank"])
+        self.assertTrue(result["focused"])
+        self.assertFalse(result["enterBlankAtFocus"])
+        self.assertEqual(result["codelineTabStop"], ["tabindex", "0"])
+        self.assertTrue(result["prevented"])
+
+    def test_enter_codeline_capture_announces_mode_change(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const live = {
+                    text(value) {
+                      this.value = value;
+                      return this;
+                    },
+                  };
+                  const widget = {
+                    config: { ariaDetails: '#details' },
+                    codelineCaptureActive: false,
+                    enterBlankOnCodelineFocus: true,
+                    setCodelinesTabStops(active) {
+                      this.tabStops = active;
+                    },
+                    getSolutionLines() {
+                      return [null];
+                    },
+                    getSourceLines() {
+                      return [null];
+                    },
+                    focusCodeline(line) {
+                      this.focused = line;
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#details') return live;
+                    return { text() { return this; } };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.announceMode = Widget.prototype.announceMode;
+                  Widget.prototype.enterCodelineCapture.call(widget);
+                  return { message: live.value, tabStops: widget.tabStops, focused: widget.focused };
+                })()
+                """
+            )
+        )
+
+        self.assertIn("Arrow-key mode on", result["message"])
+        self.assertTrue(result["tabStops"])
+
+    def test_escape_from_codeline_announces_tabbing_mode(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const live = {
+                    text(value) {
+                      this.value = value;
+                      return this;
+                    },
+                  };
+                  const widget = {
+                    config: { ariaDetails: '#details' },
+                    setCodelinesTabStops(active) {
+                      this.tabStops = active;
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#details') return live;
+                    if (selector === '#line') {
+                      return {
+                        is() { return true; },
+                        blur() { this.blurred = true; return this; },
+                      };
+                    }
+                    return { text() { return this; } };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.announceMode = Widget.prototype.announceMode;
+                  Widget.prototype.onCodelineKeydown.call(widget, {
+                    key: 'Escape',
+                    preventDefault() {},
+                  }, '#line');
+                  return { message: live.value, tabStops: widget.tabStops };
+                })()
+                """
+            )
+        )
+
+        self.assertIn("Tabbing mode on", result["message"])
+        self.assertFalse(result["tabStops"])
 
     def test_focus_codeline_enters_first_or_last_blank(self):
         result = run_js(
@@ -849,6 +1182,61 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         )
 
         self.assertEqual(result, ["target"])
+
+    def test_find_horizontal_target_falls_back_to_last_line(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const sourceLine = { id: 'source' };
+                  const lastLine = { id: 'last', exists() { return true; } };
+                  const targetLines = {
+                    length: 1,
+                    eq(idx) {
+                      return {
+                        exists() { return false; },
+                      };
+                    },
+                    last() {
+                      return lastLine;
+                    },
+                    filter() {
+                      return this;
+                    },
+                  };
+                  sandbox.$ = (value) => ({
+                    parent() {
+                      return {
+                        children() {
+                          return {
+                            filter() {
+                              return {
+                                index() {
+                                  return 3;
+                                },
+                              };
+                            },
+                          };
+                        },
+                      };
+                    },
+                    find() {
+                      return targetLines;
+                    },
+                    or() { return this; },
+                  });
+                  const widget = {
+                    isSortablePlaceholder() { return false; },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const resultTarget = Widget.prototype.findHorizontalTarget.call(widget, sourceLine, {});
+                  return resultTarget.target.id === 'last';
+                })()
+                """
+            )
+        )
+
+        self.assertTrue(result)
 
     def test_move_horizontally_inserts_before_same_row_target(self):
         result = run_js(
@@ -1082,6 +1470,46 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertTrue(result["moved"])
         self.assertEqual(result["calls"], ["prevent", "move"])
 
+    def test_move_cursor_in_blank_horizontally_sets_selection_before_focus(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const firstBlank = {
+                    value: 'abc',
+                    selectionStart: 3,
+                    selectionEnd: 3,
+                  };
+                  const nextBlank = {
+                    value: 'xyz',
+                    setSelectionRange(start, end) { calls.push(['range', start, end]); },
+                  };
+                  const widget = {
+                    findBlanksIn() {
+                      return {
+                        length: 2,
+                        get(idx) { return idx === 0 ? firstBlank : nextBlank; },
+                        eq(idx) {
+                          return {
+                            each(fn) { fn(0, nextBlank); return this; },
+                            focus() { calls.push('focus'); return this; },
+                          };
+                        },
+                      };
+                    },
+                  };
+                  const e = { preventDefault() { calls.push('prevent'); } };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.moveCursorInBlankHorizontally.call(widget, e, {}, 0, { moveForward: true });
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, ["prevent", ["range", 0, 0], "focus"])
+
     def test_jump_to_next_blank_wraps_around(self):
         result = run_js(
             textwrap.dedent(
@@ -1170,6 +1598,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     moveHorizontally(line, motionData) { calls.push(['horizontal', motionData.moveForward]); },
                     moveVertically(line, motionData) { calls.push(['vertical', motionData.moveForward]); },
                     setCodelineInMotion(line, inMotion) { calls.push(['motion', inMotion]); },
+                    setCodelinesTabStops(active) { calls.push(['tabstops', active]); },
                     findBlanksIn() {
                       return { first() { calls.push(['blank-first']); return { focus() {} }; } };
                     },
@@ -1193,6 +1622,96 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertIn(["horizontal", True], result)
         self.assertIn("prevent", result)
         self.assertIn("blur", result)
+
+    def test_codeline_keydown_does_not_overwrite_focus_announcement(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const line1 = { id: 'line1' };
+                  const line2 = { id: 'line2' };
+                  const codelineList = {
+                    each(fn) {
+                      fn(0, line1);
+                      fn(1, line2);
+                      return this;
+                    },
+                    on(eventMap) {
+                      this.handlers = eventMap;
+                      return this;
+                    },
+                  };
+                  const main = {
+                    on() { return this; },
+                    find(selector) {
+                      if (selector === 'li.codeline') return codelineList;
+                      if (selector === 'input.parsons-blank') {
+                        return { on() { return this; }, each() { return this; } };
+                      }
+                      if (selector === '.codeline-tray') return { each() { return this; } };
+                      throw new Error(selector);
+                    },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#main') return main;
+                    if (selector === line1) {
+                      return {
+                        is(query) { return query === ':focus'; },
+                        closest() { return { exists() { return false; } }; },
+                        find() { return { on() { return this; }, each() { return this; } }; },
+                      };
+                    }
+                    if (selector === line2) {
+                      return {
+                        is(query) { return query === ':focus'; },
+                        closest() { return { exists() { return false; } }; },
+                        find() { return { on() { return this; }, each() { return this; } }; },
+                      };
+                    }
+                    return {
+                      on() { return this; },
+                      each() { return this; },
+                      find() { return this; },
+                      closest() { return { exists() { return false; } }; },
+                      is() { return false; },
+                    };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const widget = {
+                    config: { main: '#main' },
+                    enterBlankOnCodelineFocus: false,
+                    setCodelineInMotion() {},
+                    storeStudentProgress() {},
+                    addLogEntry() {},
+                    moveHorizontally() {
+                      codelineList.handlers.focus({ currentTarget: line2 });
+                    },
+                    updateAriaInfo(line) {
+                      calls.push(line === line1 ? 'line1' : 'line2');
+                    },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.onCodelineKeydown = Widget.prototype.onCodelineKeydown;
+                  Widget.prototype.setupCoreDomHelpers.call(widget);
+                  widget.setCodelineInMotion = () => {};
+                  Widget.prototype.setupInteractivityBindings.call(widget);
+                  calls.length = 0;
+                  codelineList.handlers.keydown({
+                    key: 'ArrowRight',
+                    preventDefault() {},
+                    altKey: false,
+                    ctrlKey: false,
+                    metaKey: false,
+                    shiftKey: false,
+                  });
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, ["line2"])
 
     def test_on_blank_keydown_handles_tab_enter_escape_and_cursor_motion(self):
         result = run_js(
@@ -1298,6 +1817,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   sandbox.$ = (selector) => {
                     if (selector === '#main') {
                       return {
+                        on() { return this; },
                         find(q) {
                           if (q === 'li.codeline') return codelines;
                           if (q === '.codeline-tray') return trays;

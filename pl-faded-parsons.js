@@ -13,7 +13,8 @@ function buildWidgetConfig(config) {
 
 function buildToolbarHelpContent() {
   return [
-    "Use the mouse or keyboard to rearrange and reindent the lines of code and then fill in the blanks.",
+    "The code in the tray on the right is the solution that will be submitted.",
+    "Use the mouse or keyboard to rearrange and reindent the code-lines and then fill in the blanks.",
     "Arrow Keys: Select",
     "Alt/Opt+Arrow Keys: Reorder",
     "(Shift+)Tab: Down/Up Indent",
@@ -163,6 +164,8 @@ class ParsonsWidget {
 
     /** When true, navigating to a codeline with arrow keys enters its first blank */
     widget.enterBlankOnCodelineFocus = true;
+    /** When true, the widget is in "codeline capture" mode. */
+    widget.codelineCaptureActive = false;
     widget.activeSortablePlaceholder = $();
 
     widget.validateConfig();
@@ -213,6 +216,10 @@ class ParsonsWidget {
       title: "Faded Parsons Help",
       content: buildToolbarHelpContent(), // changes here should be reflected in keyMotionModifiers!
     });
+    toolbar.find(`.widget-help`).attr(
+      "aria-description",
+      buildToolbarHelpContent().replaceAll("<br>", " "),
+    );
 
     toolbar
       .find(`.widget-copy`)
@@ -234,6 +241,34 @@ class ParsonsWidget {
         },
       });
 
+  }
+
+  enterCodelineCapture() {
+    this.codelineCaptureActive = true;
+    this.enterBlankOnCodelineFocus = false;
+    this.setCodelinesTabStops(true);
+    const solutionLines = this.getSolutionLines();
+    const starterLines = this.getSourceLines();
+    const firstSolutionLine = solutionLines?.get?.(0) ?? solutionLines?.[0];
+    const firstStarterLine = starterLines?.get?.(0) ?? starterLines?.[0];
+    this.announceMode?.(
+      "Arrow-key mode on. Use arrow keys to move between code-lines and option or alt with arrow keys to move code-lines. Escape returns to tabbing mode.",
+    );
+    this.focusCodeline(firstSolutionLine || firstStarterLine);
+  }
+
+  announceMode(message) {
+    const liveRegion = $(this.config.ariaDetails);
+    liveRegion.text("");
+    const schedule =
+      window.setTimeout || (typeof setTimeout === "function" ? setTimeout : null);
+    if (schedule) {
+      schedule(() => {
+        liveRegion.text(message);
+      }, 0);
+    } else {
+      liveRegion.text(message);
+    }
   }
 
   setupTraySortables() {
@@ -329,6 +364,10 @@ class ParsonsWidget {
     const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
 
     this.findBlanksIn = findBlanksIn;
+    this.setCodelinesTabStops = (tabbable) =>
+      $(this.config.main)
+        .find("li.codeline")
+        .attr("tabindex", tabbable ? "0" : "-1");
 
     /** Manages the codeline's drag state */
     this.setCodelineInMotion = (codeline, inMotion) =>
@@ -360,9 +399,17 @@ class ParsonsWidget {
     }
 
     $(this.config.main)
-      .find("li.codeline")
       .attr("aria-labelledby", descriptor.attr("id"))
       .attr("aria-details", details.attr("id"));
+
+    $(this.config.main)
+      .find("li.codeline")
+      .attr("aria-labelledby", descriptor.attr("id"))
+      .attr("aria-details", details.attr("id"))
+      .each((_, codeline) => {
+        const hasBlanks = this.findBlanksIn(codeline).length > 0;
+        $(codeline).attr("aria-roledescription", hasBlanks ? null : "code line");
+      });
 
     this.findBlanksIn(this.config.main)
       .attr("aria-labelledby", descriptor.attr("id"))
@@ -370,15 +417,48 @@ class ParsonsWidget {
   }
 
   setupInteractivityBindings() {
+    $(this.config.main).on({
+      focus: (e) => {
+        if (e.target !== e.currentTarget) return;
+        this.updateAriaInfo(null, false);
+      },
+      keydown: (e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        this.enterCodelineCapture?.();
+      },
+      click: (e) => {
+        if (e.target !== e.currentTarget) return;
+        this.enterCodelineCapture?.();
+      },
+    });
+
     $(this.config.main)
       .find("li.codeline")
       .each((_, codeline) => this.updateAriaInfo(codeline, false))
       .on({
         focus: (event) => {
+          if (this.codelineCaptureActive) {
+            this.enterBlankOnCodelineFocus = true;
+          }
           this.updateAriaInfo(event.currentTarget);
         },
         blur: (event) => {
           this.setCodelineInMotion(event.currentTarget, false);
+          const nextFocus = event.relatedTarget;
+          const staysInCodeArea =
+            nextFocus &&
+            ($(nextFocus).closest("li.codeline").exists() ||
+              $(nextFocus).is("input.parsons-blank"));
+          if (!staysInCodeArea) {
+            this.codelineCaptureActive = false;
+            this.enterBlankOnCodelineFocus = false;
+            this.setCodelinesTabStops(false);
+            this.announceMode?.(
+              "Tabbing mode on. Press Enter on the widget to focus the code-lines again.",
+            );
+          }
           this.updateAriaInfo(event.currentTarget, false);
         },
         click: (e) => {
@@ -392,8 +472,10 @@ class ParsonsWidget {
           this.updateAriaInfo(e.currentTarget);
         },
         keydown: (e) => {
-          this.onCodelineKeydown(e, e.currentTarget);
-          this.updateAriaInfo(e.currentTarget);
+          const handled = this.onCodelineKeydown(e, e.currentTarget);
+          if (!handled) {
+            this.updateAriaInfo(e.currentTarget);
+          }
           this.storeStudentProgress();
         },
       })
@@ -464,7 +546,10 @@ class ParsonsWidget {
     const targetLines = $(searchTray)
       .find("li.codeline")
       .filter((_, line) => !this.isSortablePlaceholder(line));
-    const target = targetLines.eq(sourceIndex);
+    const target =
+      sourceIndex < targetLines.length
+        ? targetLines.eq(sourceIndex)
+        : targetLines.last();
 
     return { found: target.exists(), target };
   }
@@ -518,13 +603,10 @@ class ParsonsWidget {
     if (blankIdx == lastBlankIdx) {
       this.moveHorizontally(codeline, { moveForward, moveCodeline: false });
     } else {
-      codelineBlanks
-        .eq(blankIdx + blankDelta)
-        .focus()
-        .each((_, input) => {
-          const l = moveForward ? 0 : input.value.length;
-          input.setSelectionRange(l, l);
-        });
+      codelineBlanks.eq(blankIdx + blankDelta).each((_, input) => {
+        const l = moveForward ? 0 : input.value.length;
+        input.setSelectionRange(l, l);
+      }).focus();
     }
     return true;
   }
@@ -569,9 +651,9 @@ class ParsonsWidget {
 
   onCodelineKeydown(e, codeline) {
     const motionData = getKeyMotionData(e);
-    this.setCodelineInMotion(codeline, motionData.moveCodeline);
+    this.setCodelineInMotion?.(codeline, motionData.moveCodeline);
 
-    if (!$(codeline).is(":focus")) return;
+    if (!$(codeline).is(":focus")) return false;
 
     if (e.key === "Tab") {
       e.preventDefault();
@@ -586,21 +668,32 @@ class ParsonsWidget {
         const delta = motionData.jumpForward ? +1 : -1;
         this.updateIndent(codeline, delta, false);
       }
-      return;
+      return true;
     }
 
     if (e.key === "Enter") {
       e.preventDefault();
-      this.findBlanksIn(codeline).first().focus();
+      this.codelineCaptureActive = true;
       this.enterBlankOnCodelineFocus = true;
-      return;
+      this.findBlanksIn(codeline).first().focus();
+      return true;
     }
 
     if (e.key === "Escape") {
       e.preventDefault();
-      $(codeline).blur();
+      this.codelineCaptureActive = false;
       this.enterBlankOnCodelineFocus = false;
-      return;
+      this.setCodelinesTabStops(false);
+      this.announceMode?.(
+        "Tabbing mode on. Press Enter on the widget to focus the code-lines again.",
+      );
+      const widgetRoot = $(this.config.main);
+      if (widgetRoot.focus) {
+        widgetRoot.focus();
+      } else {
+        $(codeline).blur();
+      }
+      return true;
     }
 
     switch (e.key) {
@@ -608,13 +701,15 @@ class ParsonsWidget {
       case "ArrowRight":
         e.preventDefault();
         this.moveHorizontally(codeline, motionData);
-        return;
+        return true;
       case "ArrowUp":
       case "ArrowDown":
         e.preventDefault();
         this.moveVertically(codeline, motionData);
-        return;
+        return true;
     }
+
+    return false;
   }
 
   onBlankKeydown(e, codeline, blank) {
@@ -875,7 +970,8 @@ class ParsonsWidget {
   }
 
   updateAriaInfo(codeline, hasFocus = true) {
-    const defaultText = "no codeline selected. select a codeline to begin. ";
+    const defaultText =
+      "no code-line selected. press enter on the widget to focus the lines of code, and escape to exit. when inside, use arrow keys and option or alt with arrow keys to navigate. ";
 
     $(this.config.ariaDescriptor).text(
       hasFocus ? this.codelineAriaDescription(codeline) : defaultText,
@@ -885,7 +981,7 @@ class ParsonsWidget {
       hasFocus
         ? this.codelineAriaDetails(codeline)
         : defaultText +
-            "use arrow keys, tab, and enter to navigate and indent." +
+            "use arrow keys to navigate, option or alt with arrow keys to move code-lines, tab and shift tab to indent, and enter to focus the code-lines." +
             "use shift to reverse motion, and option/ctrl to jump.",
     );
   }
@@ -912,7 +1008,9 @@ class ParsonsWidget {
     return (
       [codeline, ...visualDedentParents]
         .map((cl) => this.codelineAriaDescription(cl))
-        .join("; Under ") + trayText
+        .join("; Under ") +
+      trayText +
+      " Press escape on a code-line to return to the widget."
     );
   }
 
