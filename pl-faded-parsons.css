@@ -238,14 +238,13 @@ code {
   border-radius: 5px;
 }
 
-.codeline-tray input.parsons-blank-missing {
+.solution-code-tray input.parsons-blank-missing {
   border-bottom-color: var(--invalid-blank-border-color);
   outline: 1px solid rgba(192, 57, 43, 0.18);
   outline-offset: -1px;
 }
 
-.codeline-tray li.codeline-has-missing-blank {
-  /* Keep the row itself neutral so the missing state does not change layout. */
+.solution-code-tray li.codeline:has(.parsons-blank-missing) {
   border-color: var(--invalid-blank-border-color);
 }
 
@@ -253,7 +252,7 @@ code {
   outline-color: var(--focus-border-color);
 }
 
-.codeline-tray input.parsons-blank-missing:focus {
+.solution-code-tray input.parsons-blank-missing:focus {
   outline-color: var(--invalid-blank-border-color);
 }
 

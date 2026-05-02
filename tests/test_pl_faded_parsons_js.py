@@ -699,8 +699,11 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     autoSizeBlank(blank) {
                       sandbox.calls.sized.push(blank.value);
                     },
+                    syncMissingBlankState(blank) {
+                      sandbox.calls.synced.push(blank.value);
+                    },
                   };
-                  sandbox.calls = { sized: [] };
+                  sandbox.calls = { sized: [], synced: [] };
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
                   Widget.prototype.setupInitialGuiState.call(widget);
                   return sandbox.calls;
@@ -711,6 +714,45 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertTrue(result["stored"])
         self.assertEqual(result["sized"], ["x", "yy"])
+        self.assertEqual(result["synced"], ["x", "yy"])
+
+    def test_sync_missing_blank_state_toggles_class_and_aria_invalid(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const blank = {
+                    value: '',
+                    toggleClass(name, enabled) {
+                      calls.push(['toggleClass', name, enabled]);
+                      return this;
+                    },
+                    attr(name, value) {
+                      calls.push(['attr', name, value]);
+                      return this;
+                    },
+                  };
+                  sandbox.$ = sandbox.jQuery = () => blank;
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.syncMissingBlankState.call({}, blank);
+                  blank.value = 'text';
+                  Widget.prototype.syncMissingBlankState.call({}, blank);
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(
+            result,
+            [
+                ["toggleClass", "parsons-blank-missing", True],
+                ["attr", "aria-invalid", "true"],
+                ["toggleClass", "parsons-blank-missing", False],
+                ["attr", "aria-invalid", None],
+            ],
+        )
 
     def test_setup_accessibility_bindings_sets_aria_hooks(self):
         result = run_js(

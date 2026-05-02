@@ -454,61 +454,6 @@ ignored() #distractor
         self.assertEqual(rendered["segments"][1]["blank"]["width"], 6)
         self.assertEqual(rendered["segments"][2]["code"]["content"], ")")
 
-    def test_line_to_mustache_marks_missing_blanks(self):
-        line = {
-            "indent": 0,
-            "codeSnippets": ["print(", ")"],
-            "blankValues": [""],
-        }
-
-        rendered = pl_faded_parsons._line_to_mustache(
-            line, "python", highlight_missing=True
-        )
-
-        self.assertTrue(rendered["has_missing_blank"])
-        self.assertTrue(rendered["segments"][1]["blank"]["missing"])
-        self.assertEqual(rendered["segments"][1]["blank"]["width"], 4)
-
-    def test_line_to_mustache_does_not_mark_missing_blanks_without_highlight(self):
-        line = {
-            "indent": 0,
-            "codeSnippets": ["print(", ")"],
-            "blankValues": [""],
-        }
-
-        rendered = pl_faded_parsons._line_to_mustache(line, "python")
-
-        self.assertFalse(rendered["has_missing_blank"])
-        self.assertFalse(rendered["segments"][1]["blank"]["missing"])
-
-    def test_render_question_marks_missing_blank_inputs(self):
-        html = """
-        <pl-faded-parsons answers-name="demo" language="python">
-            <code-lines>print(!BLANK) #blank</code-lines>
-        </pl-faded-parsons>
-        """
-
-        self.data["raw_submitted_answers"] = {
-            "demo.main": json.dumps(
-                {
-                    "solution": [
-                        {
-                            "indent": 0,
-                            "codeSnippets": ["print(", ")"],
-                            "blankValues": [""],
-                        }
-                    ],
-                    "starter": [],
-                }
-            )
-        }
-
-        rendered = render_with_uuid(html, self.data)
-
-        self.assertIn("codeline-has-missing-blank", rendered)
-        self.assertIn("parsons-blank-missing", rendered)
-        self.assertIn('aria-invalid="true"', rendered)
-
     def test_render_question_does_not_mark_missing_blank_inputs_on_first_load(self):
         html = """
         <pl-faded-parsons answers-name="demo" language="python">
@@ -518,35 +463,6 @@ ignored() #distractor
 
         rendered = render_with_uuid(html, self.data)
 
-        self.assertNotIn("codeline-has-missing-blank", rendered)
-        self.assertNotIn("parsons-blank-missing", rendered)
-        self.assertNotIn('aria-invalid="true"', rendered)
-
-    def test_render_question_does_not_mark_filled_blanks_as_missing(self):
-        html = """
-        <pl-faded-parsons answers-name="demo" language="python">
-            <code-lines>print(!BLANK) #blank value</code-lines>
-        </pl-faded-parsons>
-        """
-
-        self.data["raw_submitted_answers"] = {
-            "demo.main": json.dumps(
-                {
-                    "solution": [
-                        {
-                            "indent": 0,
-                            "codeSnippets": ["print(", ")"],
-                            "blankValues": ["value"],
-                        }
-                    ],
-                    "starter": [],
-                }
-            )
-        }
-
-        rendered = render_with_uuid(html, self.data)
-
-        self.assertNotIn("codeline-has-missing-blank", rendered)
         self.assertNotIn("parsons-blank-missing", rendered)
         self.assertNotIn('aria-invalid="true"', rendered)
 

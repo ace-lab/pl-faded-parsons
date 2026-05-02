@@ -416,6 +416,9 @@ class ParsonsWidget {
     this.findBlanksIn(this.config.main).each((_, blank) =>
       this.autoSizeBlank(blank),
     );
+    this.findBlanksIn(this.config.main).each((_, blank) =>
+      this.syncMissingBlankState(blank),
+    );
   }
 
   setupAccessibilityBindings() {
@@ -516,6 +519,7 @@ class ParsonsWidget {
           },
           input: (e) => {
             this.autoSizeBlank(e.currentTarget);
+            this.syncMissingBlankState(e.currentTarget);
             this.storeStudentProgress();
             this.config.onBlankUpdate(e, e.currentTarget);
           },
@@ -847,6 +851,14 @@ class ParsonsWidget {
 
   autoSizeBlank(el) {
     $(el).width(el.value.length.toString() + "ch");
+  }
+
+  syncMissingBlankState(el) {
+    const blank = $(el);
+    const missing = !((el && el.value) || "").trim();
+    blank
+      .toggleClass("parsons-blank-missing", missing)
+      .attr("aria-invalid", missing ? "true" : null);
   }
 
   getSourceLines() {
