@@ -233,11 +233,16 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     solution_path = question_path / pl.get_string_attrib(
         element, "solution-path", "./solution"
     )
+    language = pl.get_string_attrib(element, "language", "")
+    if language in ("py", "ipynb", "python") and not solution_path.exists():
+        ans_path = question_path / "tests" / "ans.py"
+        if ans_path.exists():
+            solution_path = ans_path
 
     return {
         "answers_name": pl.get_string_attrib(element, "answers-name"),
         "format": format_name,
-        "language": pl.get_string_attrib(element, "language", ""),
+        "language": language,
         "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
         "logging_enabled": pl.get_boolean_attrib(element, "log", False),
         "enable_copy_code": pl.get_boolean_attrib(
@@ -690,7 +695,10 @@ def _require_solution_path(config: ElementConfig) -> str:
         raise FileNotFoundError(
             "\n"
             f"\tCorrect answer not found at `{solution_path}`!\n"
-            '\tProvide an answer or set "showCorrectAnswer" to false in `./info.json`'
+            '\tEither:\n'
+            f' - Provide an answer at {solution_path}\n'
+            '  - Set the language to python and provide a tests/ans.py file\n'
+            '  - Set "showCorrectAnswer" to false in `./info.json`'
         )
     return str(solution_path)
 
