@@ -70,7 +70,9 @@
         new ParsonsWidget({
             main: '#pl-faded-parsons-{{uuid}}',
             uuid: '{{uuid}}',
-            loggingEnabled: {{#logging_enabled}}true{{/logging_enabled}}{{^logging_enabled}}false{{/logging_enabled}},
+            {{#logging_enabled}}
+            loggingEnabled: true,
+            {{/logging_enabled}}
 
             maxIndentLevel: {{max_indent_level}},
             visualIndent: {{visual_indent}},

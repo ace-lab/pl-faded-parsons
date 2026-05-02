@@ -6,6 +6,7 @@ function buildWidgetConfig(config) {
       maxIndentLevel: 5,
       visualIndent: 0,
       prettyPrint: true,
+      loggingEnabled: false,
       onSortableUpdate: (_event, _ui) => {},
       onBlankUpdate: (_event, _input) => {},
     },
@@ -1045,15 +1046,14 @@ class ParsonsWidget {
 
   /** Add a tagged, timestamped log entry to `this.config.logStorage` */
   addLogEntry(tag, data) {
+    if (!this.config.loggingEnabled) return;
+
     const timestamp = new Date();
 
     const entry = { timestamp, tag, data };
 
-    const s = $(this.config.logStorage);
+    const s = $(this.config.logStorage).checkExists("log storage");
     if (!s.exists()) {
-      const msg = "Could not save log!\nStorage missing at: " + selector;
-      console.error(msg);
-      alert(msg);
       return;
     }
 
