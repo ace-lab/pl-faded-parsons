@@ -250,6 +250,18 @@ starter()</code-lines>
         self.assertIn('name="demo.log"', rendered)
         self.assertIn("before()", rendered)
         self.assertIn("after()", rendered)
+
+    def test_render_question_makes_widget_root_the_tab_stop(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="bottom" language="python">
+            <code-lines>given() #0given
+starter()</code-lines>
+        </pl-faded-parsons>
+        """
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('id="pl-faded-parsons-uuid-123" role="application" tabindex="0"', rendered)
+        self.assertIn('tabindex="-1" aria-grabbed="false"', rendered)
         self.assertIn("starter-code-uuid-123", rendered)
         self.assertIn("solution-uuid-123", rendered)
 
@@ -357,6 +369,38 @@ return 3 #1given</code-lines>
             ),
             "",
         )
+
+    def test_parse_reports_empty_blanks_as_format_errors(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" file-name="student.py">
+            <code-lines>print(!BLANK) #blank</code-lines>
+        </pl-faded-parsons>
+        """
+
+        self.data["raw_submitted_answers"] = {
+            "demo.main": json.dumps(
+                {
+                    "solution": [
+                        {
+                            "indent": 0,
+                            "codeSnippets": ["print(", ")"],
+                            "blankValues": [""],
+                        }
+                    ],
+                    "starter": [],
+                }
+            ),
+            "demo.log": "[]",
+        }
+
+        pl_faded_parsons.parse(html, self.data)
+
+        self.assertEqual(
+            self.data["format_errors"]["demo"],
+            "Empty blanks are not allowed. Fill in every blank before submitting.",
+        )
+        self.assertNotIn("demo", self.data["submitted_answers"])
+        self.assertNotIn("_files", self.data["submitted_answers"])
 
     def test_no_code_format_moves_starter_lines_into_solution(self):
         html = """

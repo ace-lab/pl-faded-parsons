@@ -126,7 +126,13 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
     """Compile the student's solution tray into PrairieLearn outputs."""
 
     config = _build_config(element_html, data)
-    student_code = _compile_code(_load_state(config, data)["solution"])
+    state = _load_state(config, data)
+    empty_blank_message = _find_empty_blank_message(state["solution"])
+    if empty_blank_message is not None:
+        data["format_errors"][config["answers_name"]] = empty_blank_message
+        return
+
+    student_code = _compile_code(state["solution"])
 
     data["submitted_answers"][config["answers_name"]] = student_code
     pl.add_submitted_file(
@@ -358,6 +364,18 @@ def _build_initial_state(
         "starter": starter_lines,
         "log": [],
     }
+
+
+def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
+    """Return a parse error message when any submitted blank is empty."""
+
+    for line in lines:
+        for blank in line["blankValues"]:
+            if not blank.strip():
+                return (
+                    "Empty blanks are not allowed. Fill in every blank before submitting."
+                )
+    return None
 
 
 def _parse_markup_line(line_text: str) -> SavedLine:
