@@ -144,14 +144,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result, 5)
 
-    def test_get_indent_at_drag_position_prefers_explicit_parent(self):
+    def test_get_indent_at_drag_position_uses_item_parent_by_default(self):
         result = run_js(
             textwrap.dedent(
                 """
                 (() => {
                   sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
                   const staleTray = { position() { return { left: 0 }; } };
-                  const liveTray = { position() { return { left: 100 }; } };
                   const widget = {
                     config: { xIndent: 4 },
                     getCodelineIndent() { return 0; },
@@ -163,48 +162,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     position: { left: 164 },
                   };
                   ui.item.parent = () => staleTray;
-                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui, liveTray);
+                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui);
                 })()
                 """
             )
         )
 
-        self.assertEqual(result, 2)
-
-    def test_get_indent_at_drag_position_uses_placeholder_tray_when_dragging_across_trays(self):
-        result = run_js(
-            textwrap.dedent(
-                """
-                (() => {
-                  const startTray = { position() { return { left: 0 }; } };
-                  const liveTray = { position() { return { left: 100 }; } };
-                  const widget = {
-                    config: { xIndent: 4 },
-                    getCodelineIndent() { return 0; },
-                  };
-                  const ui = {
-                    item: [{
-                      style: {},
-                    }],
-                    position: { left: 164 },
-                    placeholder: {
-                      parent() {
-                        return liveTray;
-                      },
-                    },
-                  };
-                  ui.item.parent = () => startTray;
-                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(
-                    widget,
-                    ui,
-                    sandbox.window.ParsonsWidgetHelpers.getCurrentDragTray(ui),
-                  );
-                })()
-                """
-            )
-        )
-
-        self.assertEqual(result, 2)
+        self.assertEqual(result, 5)
 
     def test_get_indent_at_drag_position_falls_back_when_parent_has_no_position(self):
         result = run_js(
@@ -471,6 +435,31 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         )
 
         self.assertEqual(result, ["empty", ["--pl-faded-parsons-indent", 3]])
+
+    def test_sync_sortable_placeholder_allows_zero_indent(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  const placeholder = {
+                    exists() { return true; },
+                    empty() { calls.push('empty'); return this; },
+                    css(name, value) { calls.push([name, value]); return this; },
+                  };
+                  const widget = {
+                    activeSortablePlaceholder: placeholder,
+                    getCodelineIndent() { return 3; },
+                  };
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  Widget.prototype.syncSortablePlaceholder.call(widget, { id: 'line' }, 0);
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, ["empty", ["--pl-faded-parsons-indent", 0]])
 
     def test_setup_core_dom_helpers_exposes_dom_adapters(self):
         result = run_js(

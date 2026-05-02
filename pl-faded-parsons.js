@@ -38,9 +38,10 @@ function clampIndent(indent) {
   return Math.max(0, Math.min(indent, ParsonsGlobalUISettings.maxIndentLevel));
 }
 
-function getIndentAtDragPosition(widget, ui, tray = ui.item.parent()) {
+function getIndentAtDragPosition(widget, ui) {
   const { item, position } = ui;
   const codeline = item[0];
+  const tray = getCurrentDragTray(ui);
   const trayPosition = tray?.position?.() ?? item.parent()?.position?.() ?? {};
   const pxDelta = position.left - (trayPosition.left ?? 0);
   const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
@@ -267,7 +268,7 @@ class ParsonsWidget {
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui, getCurrentDragTray(ui)),
+          getIndentAtDragPosition(this, ui),
         );
       },
       receive: (_, ui) =>
@@ -298,7 +299,7 @@ class ParsonsWidget {
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui, getCurrentDragTray(ui)),
+          getIndentAtDragPosition(this, ui),
         );
       },
       stop: (event, ui) => {
@@ -663,8 +664,10 @@ class ParsonsWidget {
 
   /////////////////////////////// GENERAL HELPERS ////////////////////////////
 
-  syncSortablePlaceholder(codeline, indent = 0) {
-    indent ||= this.getCodelineIndent(codeline);
+  syncSortablePlaceholder(codeline, indent) {
+    if (indent === undefined) {
+      indent = this.getCodelineIndent(codeline);
+    }
     const placeholder = this.activeSortablePlaceholder;
     if (!placeholder || !placeholder.exists()) return;
 
