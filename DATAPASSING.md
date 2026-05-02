@@ -125,9 +125,13 @@ File: `pl-faded-parsons.py`
 - `pre_text`
   - optional block before the solution tray
   - only supported when `format="no-code"`
+  - normalized in Python to infer its own leading indent from whitespace
+  - rendered with `lines` and `indent` fields
 - `post_text`
   - optional block after the solution tray
   - only supported when `format="no-code"`
+  - normalized in Python to infer its own leading indent from whitespace
+  - rendered with `lines` and `indent` fields
 
 ### Mustache -> DOM
 
@@ -204,6 +208,8 @@ File: `pl-faded-parsons-question.mustache`
 - `toolbar`
 - `solution`
 - `solutionList`
+- `maxIndentLevel`
+- `visualIndent`
 - optionally `starter`
 - optionally `starterList`
 

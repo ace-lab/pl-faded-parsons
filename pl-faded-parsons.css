@@ -70,19 +70,46 @@ code {
 
 .codeline-tray {
   --pl-faded-parsons-visual-indent: 0;
+  --pl-faded-parsons-visual-indent-correction: 0ch;
+  --pl-faded-parsons-visual-indent-offset: calc(
+    var(--pl-faded-parsons-visual-indent, 0) * var(--pl-faded-parsons-indent-width) - var(--pl-faded-parsons-visual-indent-correction)
+  );
   padding: 0 0.5em;
-  position: static;
+  position: relative;
   float: none;
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  margin-left: calc(
-    var(--pl-faded-parsons-visual-indent, 0) * var(--pl-faded-parsons-indent-width)
-  );
+  left: var(--pl-faded-parsons-visual-indent-offset);
+  width: calc(100% - var(--pl-faded-parsons-visual-indent-offset));
+  box-sizing: border-box;
 }
 
 .codeline-tray.starter-code-tray {
   background: #4448;
+}
+
+.pl-faded-parsons .fpp-tray-corner-label {
+  position: absolute;
+  bottom: 0.2em;
+  font-family: monospace;
+  font-size: smaller;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.pl-faded-parsons .fpp-tray-corner-label-starter {
+  right: 0.45em;
+  color: #fff;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.pl-faded-parsons .fpp-tray-corner-label-solution {
+  left: 0.45em;
+  color: var(--pln-txt-color, rgba(0, 0, 0, 0.8));
 }
 
 .codeline-tray ol {
@@ -222,5 +249,9 @@ code {
 }
 
 .pre-text, .post-text {
-  width: 100%;
+  font-family: monospace;
+  font-size: smaller;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0;
 }

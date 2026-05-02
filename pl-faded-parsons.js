@@ -41,6 +41,22 @@ function getCurrentDragTray(ui) {
   return ui?.placeholder?.parent?.() ?? ui?.item?.parent?.();
 }
 
+function getPageLeft(target) {
+  const element = target?.[0] ?? target;
+  if (!element) return undefined;
+
+  const rect = element.getBoundingClientRect?.();
+  if (rect) {
+    return rect.left + (window.scrollX ?? window.pageXOffset ?? 0);
+  }
+
+  const offsetLeft = $(element).offset?.()?.left;
+  if (offsetLeft != null) return offsetLeft;
+
+  const positionLeft = $(element).position?.()?.left;
+  return positionLeft;
+}
+
 const DRAG_START_TRAY_KEY = "__plFppDragStartTray";
 
 function getDragTray(ui) {
@@ -233,9 +249,10 @@ class ParsonsWidget {
 
   applyVisualIndent() {
     const visualIndent = Number(this.config.visualIndent ?? 0) || 0;
-    $(this.config.main)
-      .find(".codeline-tray")
-      .css("--pl-faded-parsons-visual-indent", visualIndent);
+    const visualIndentCorrection = visualIndent > 0 ? "1ch" : "0ch";
+    const trays = $(this.config.main).find(".codeline-tray");
+    trays.css("--pl-faded-parsons-visual-indent-correction", visualIndentCorrection);
+    trays.css("--pl-faded-parsons-visual-indent", visualIndent);
   }
 
   enterCodelineCapture() {
@@ -763,8 +780,10 @@ class ParsonsWidget {
     const { item, position } = ui;
     const codeline = item[0];
     const tray = getCurrentDragTray(ui);
-    const trayPosition = tray?.position?.() ?? item.parent()?.position?.() ?? {};
-    const pxDelta = position.left - (trayPosition.left ?? 0);
+    const dragLeft =
+      getPageLeft(ui?.helper) ?? ui?.offset?.left ?? position?.left ?? 0;
+    const trayLeft = getPageLeft(tray) ?? getPageLeft(item.parent()) ?? 0;
+    const pxDelta = dragLeft - trayLeft;
     const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
     const levelDelta = Math.floor(charDelta / this.config.xIndent);
     return this.clampIndent(this.getCodelineIndent(codeline) + levelDelta);

@@ -85,7 +85,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertTrue(result["prettyPrint"])
         self.assertEqual(result["extra"], 1)
 
-    def test_apply_visual_indent_sets_css_variable_on_trays(self):
+    def test_apply_visual_indent_subtracts_one_from_positive_values_on_trays(self):
         result = run_js(
             textwrap.dedent(
                 """
@@ -113,7 +113,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(
             result,
-            [["#widget", ".codeline-tray", "--pl-faded-parsons-visual-indent", 3]],
+            [
+                ["#widget", ".codeline-tray", "--pl-faded-parsons-visual-indent-correction", "1ch"],
+                ["#widget", ".codeline-tray", "--pl-faded-parsons-visual-indent", 3],
+            ],
         )
 
     def test_build_toolbar_help_content_joins_lines(self):
@@ -161,14 +164,26 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   const widget = Object.create(Widget.prototype);
                   widget.config = { xIndent: 4, maxIndentLevel: 5 };
                   widget.getCodelineIndent = () => 2;
+                  const tray = {
+                    0: {
+                      getBoundingClientRect() {
+                        return { left: 0 };
+                      },
+                    },
+                  };
                   const ui = {
                     item: [
                       {
                         },
                       ],
+                    helper: [{
+                      getBoundingClientRect() {
+                        return { left: 96 };
+                      },
+                    }],
                     position: { left: 96 },
                   };
-                  ui.item.parent = () => ({ position: () => ({ left: 0 }) });
+                  ui.item.parent = () => tray;
                   return widget.getIndentAtDragPosition(ui);
                 })()
                 """
@@ -182,8 +197,56 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  const staleTray = { position() { return { left: 0 }; } };
-                  const liveTray = { position() { return { left: 100 }; } };
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 0;
+                  const tray = {
+                    0: {
+                      getBoundingClientRect() {
+                        return { left: 100 };
+                      },
+                    },
+                  };
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    helper: [{
+                      getBoundingClientRect() {
+                        return { left: 164 };
+                      },
+                    }],
+                    position: { left: 164 },
+                  };
+                  ui.item.parent = () => tray;
+                  return widget.getIndentAtDragPosition(ui);
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 2)
+
+    def test_get_indent_at_drag_position_uses_placeholder_tray_when_dragging_across_trays(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const startTray = {
+                    0: {
+                      getBoundingClientRect() {
+                        return { left: 0 };
+                      },
+                    },
+                  };
+                  const liveTray = {
+                    0: {
+                      getBoundingClientRect() {
+                        return { left: 100 };
+                      },
+                    },
+                  };
                   const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
                   const widget = Object.create(Widget.prototype);
                   widget.config = { xIndent: 4, maxIndentLevel: 5 };
@@ -192,31 +255,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     item: [{
                       style: {},
                     }],
-                    position: { left: 164 },
-                  };
-                  ui.item.parent = () => staleTray;
-                  return widget.getIndentAtDragPosition(ui, liveTray);
-                })()
-                """
-            )
-        )
-
-        self.assertEqual(result, 5)
-
-    def test_get_indent_at_drag_position_uses_placeholder_tray_when_dragging_across_trays(self):
-        result = run_js(
-            textwrap.dedent(
-                """
-                (() => {
-                  const startTray = { position() { return { left: 0 }; } };
-                  const liveTray = { position() { return { left: 100 }; } };
-                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
-                  const widget = Object.create(Widget.prototype);
-                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
-                  widget.getCodelineIndent = () => 0;
-                  const ui = {
-                    item: [{
-                      style: {},
+                    helper: [{
+                      getBoundingClientRect() {
+                        return { left: 164 };
+                      },
                     }],
                     position: { left: 164 },
                     placeholder: {
@@ -226,10 +268,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     },
                   };
                   ui.item.parent = () => startTray;
-                  return widget.getIndentAtDragPosition(
-                    ui,
-                    sandbox.window.ParsonsWidgetHelpers.getCurrentDragTray(ui),
-                  );
+                  return widget.getIndentAtDragPosition(ui);
                 })()
                 """
             )
@@ -260,6 +299,42 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         )
 
         self.assertEqual(result, 1)
+
+    def test_get_indent_at_drag_position_survives_positioned_tray(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 0;
+                  const tray = {
+                    0: {
+                      getBoundingClientRect() {
+                        return { left: 240 };
+                      },
+                    },
+                  };
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    helper: [{
+                      getBoundingClientRect() {
+                        return { left: 324 };
+                      },
+                    }],
+                    position: { left: 80 },
+                  };
+                  ui.item.parent = () => tray;
+                  return widget.getIndentAtDragPosition(ui);
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 2)
 
     def test_landed_in_another_tray_detects_tray_change(self):
         result = run_js(

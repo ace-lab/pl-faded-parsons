@@ -28,8 +28,9 @@ import base64
 import json
 import random
 import re
+import textwrap
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import chevron
 import lxml.html as xml
@@ -95,6 +96,8 @@ class ElementConfig(TypedDict):
     markup: str
     pre_text: str
     post_text: str
+    pre_text_indent: float
+    post_text_indent: float
     visual_indent: int
     max_indent_level: int
     size: str
@@ -184,14 +187,17 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     if format_name == FORMAT_NO_CODE and code_lines_element is None:
         raise ValueError("no-code format requires an explicit <code-lines> child.")
 
-    pre_text = (
-        (pre_text_element.text or "").strip("\n") if pre_text_element is not None else ""
-    )
-    post_text = (
-        (post_text_element.text or "").strip("\n") if post_text_element is not None else ""
-    )
     if format_name == FORMAT_NO_CODE and not (code_lines_element.text or "").strip():
         raise ValueError("no-code format requires non-empty <code-lines> content.")
+
+    pre_text, pre_text_indent = _build_text_block(
+        pre_text_element.text if pre_text_element is not None else "",
+        placement="pre",
+    )
+    post_text, post_text_indent = _build_text_block(
+        post_text_element.text if post_text_element is not None else "",
+        placement="post",
+    )
 
     max_indent_level = pl.get_integer_attrib(element, "max-indent-level", 5)
     if max_indent_level < 0:
@@ -221,6 +227,8 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "markup": _load_markup(element, question_path, code_lines_element),
         "pre_text": pre_text,
         "post_text": post_text,
+        "pre_text_indent": pre_text_indent,
+        "post_text_indent": post_text_indent,
         "visual_indent": visual_indent,
         "max_indent_level": max_indent_level,
         "size": "narrow" if format_name == FORMAT_RIGHT else "wide",
@@ -447,7 +455,12 @@ def _build_question_params(
             visual_indent=config["visual_indent"],
             allow_empty=config["format"] == FORMAT_NO_CODE,
         ),
-        "pre_text": _build_text_block(config["pre_text"], config["language"]),
+        "pre_text": _build_text_block_params(
+            config["pre_text"],
+            config["language"],
+            config["pre_text_indent"],
+            placement="pre",
+        ),
         "given": _build_tray_params(
             state["solution"],
             config["language"],
@@ -455,7 +468,12 @@ def _build_question_params(
             visual_indent=config["visual_indent"],
             allow_empty=False,
         ),
-        "post_text": _build_text_block(config["post_text"], config["language"]),
+        "post_text": _build_text_block_params(
+            config["post_text"],
+            config["language"],
+            config["post_text_indent"],
+            placement="post",
+        ),
         "visual_indent": config["visual_indent"],
     }
 
@@ -482,12 +500,48 @@ def _build_tray_params(
     return tray
 
 
-def _build_text_block(text: str, language: str) -> dict[str, str] | bool:
-    """Return the optional pre/post text block for Mustache rendering."""
+def _build_text_block(
+    text: str, *, placement: Literal["pre", "post"]
+) -> tuple[str, float]:
+    """Normalize author-authored pre/post text and infer its indent."""
+
+    if not text:
+        return "", 0.0
+
+    expanded = text.expandtabs(4)
+    indent_spaces = _infer_text_indent_spaces(expanded)
+    normalized = textwrap.dedent(expanded)
+    if placement == "pre":
+        normalized = normalized.rstrip("\n") + "\n"
+    else:
+        normalized = "\n" + normalized.lstrip("\n")
+    return normalized, indent_spaces / 4
+
+
+def _build_text_block_params(
+    text: str,
+    language: str,
+    indent: float,
+    *,
+    placement: Literal["pre", "post"],
+) -> dict[str, Any] | bool:
+    """Return the Mustache payload for an optional pre/post text block."""
 
     if not text:
         return False
-    return {"text": text, "language": language}
+
+    return {"text": text, "language": language, "indent": indent}
+
+
+def _infer_text_indent_spaces(text: str) -> int:
+    """Infer the common leading whitespace width across non-empty lines."""
+
+    indents = [
+        len(line) - len(line.lstrip(" "))
+        for line in text.splitlines()
+        if line.strip()
+    ]
+    return min(indents) if indents else 0
 
 
 def _line_to_mustache(line: SavedLine, language: str) -> dict[str, Any]:

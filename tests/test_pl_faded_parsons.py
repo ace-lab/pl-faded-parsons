@@ -239,6 +239,45 @@ value = !BLANK #blank
         ):
             pl_faded_parsons._build_config(html, self.data)
 
+    def test_build_text_block_standardizes_pre_and_post_newlines(self):
+        pre_text, pre_indent = pl_faded_parsons._build_text_block(
+            "before()\nclass ListHelpers:\n  @staticmethod",
+            placement="pre",
+        )
+        post_text, post_indent = pl_faded_parsons._build_text_block(
+            "after()\nend",
+            placement="post",
+        )
+
+        self.assertEqual(pre_text, "before()\nclass ListHelpers:\n  @staticmethod\n")
+        self.assertEqual(post_text, "\nafter()\nend")
+        self.assertEqual(pre_indent, 0)
+        self.assertEqual(post_indent, 0)
+
+    def test_build_text_block_expands_tabs_for_indent_inference(self):
+        text, indent = pl_faded_parsons._build_text_block(
+            "\t\tbefore()\n\t\t  helper()",
+            placement="pre",
+        )
+
+        self.assertEqual(text, "before()\n  helper()\n")
+        self.assertEqual(indent, 2.0)
+
+    def test_build_text_block_params_returns_normalized_text(self):
+        text, indent = pl_faded_parsons._build_text_block(
+            "    before()\n        helper()",
+            placement="pre",
+        )
+        params = pl_faded_parsons._build_text_block_params(
+            text,
+            "python",
+            indent,
+            placement="pre",
+        )
+
+        self.assertEqual(params["indent"], 1.0)
+        self.assertEqual(params["text"], "before()\n    helper()\n")
+
     def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
         line = pl_faded_parsons._parse_markup_line(
             "print(!BLANK, !BLANK) #blank first #blank"
@@ -308,9 +347,12 @@ value = !BLANK #blank
     def test_render_question_includes_hidden_fields_and_text_blocks(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code" language="python">
-            <pre-text>before()</pre-text>
+            <pre-text>    before()
+        class ListHelpers:
+            @staticmethod</pre-text>
             <code-lines>given()</code-lines>
-            <post-text>after()</post-text>
+            <post-text>    after()
+        end</post-text>
         </pl-faded-parsons>
         """
 
@@ -320,8 +362,14 @@ value = !BLANK #blank
         self.assertIn('name="demo.log"', rendered)
         self.assertIn("before()", rendered)
         self.assertIn("after()", rendered)
+        self.assertIn('class="pre-text-wrapper"', rendered)
+        self.assertIn('class="post-text-wrapper"', rendered)
+        self.assertIn('class="prettyprint pre-text"', rendered)
+        self.assertIn('class="prettyprint post-text"', rendered)
         self.assertIn("maxIndentLevel: 5,", rendered)
         self.assertIn("visualIndent: 0,", rendered)
+        self.assertIn('class="pre-text-wrapper"', rendered)
+        self.assertIn('class="post-text-wrapper"', rendered)
 
     def test_render_question_threads_visual_indent_into_trays(self):
         html = """
