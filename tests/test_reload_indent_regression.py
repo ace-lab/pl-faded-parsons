@@ -118,7 +118,7 @@ class TestReloadIndentRegression(unittest.TestCase):
         self.assertIn('id="starter-code-uuid-123"', rendered)
         self.assertIn('id="ol-starter-code-uuid-123"', rendered)
 
-    def test_render_hides_empty_starter_tray_in_no_code_format(self):
+    def test_render_hides_empty_starter_tray_in_one_tray_format(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
             data = make_question_data(tmp_path)
@@ -138,7 +138,7 @@ class TestReloadIndentRegression(unittest.TestCase):
                 "demo.log": "[]",
             }
             element_html = (
-                '<pl-faded-parsons answers-name="demo" format="no-code">'
+                '<pl-faded-parsons answers-name="demo" format="one-tray">'
                 "<code-lines>kept()</code-lines>"
                 "</pl-faded-parsons>"
             )
@@ -148,6 +148,19 @@ class TestReloadIndentRegression(unittest.TestCase):
 
         self.assertNotIn('id="starter-code-uuid-123"', rendered)
         self.assertNotIn('id="ol-starter-code-uuid-123"', rendered)
+
+    def test_render_rejects_legacy_no_code_format(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            element_html = '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+
+            with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "format `no-code` has been renamed to `one-tray`",
+                ):
+                    pl_faded_parsons.render(element_html, data)
 
     def test_saved_indent_level_rerenders_as_logical_indent_property(self):
         with tempfile.TemporaryDirectory() as temp_dir:

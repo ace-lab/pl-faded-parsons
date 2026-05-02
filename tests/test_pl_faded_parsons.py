@@ -95,24 +95,24 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "pre-text and post-text are only supported in no-code format",
+            "pre-text and post-text are only supported in one-tray format",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
     def test_build_config_requires_code_lines_when_pre_or_post_text_present(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <pre-text>before()</pre-text>
         </pl-faded-parsons>
         """
 
         with self.assertRaisesRegex(
             ValueError,
-            "no-code format requires an explicit <code-lines> child",
+            "one-tray format requires an explicit <code-lines> child",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
-    def test_build_config_rejects_pre_and_post_text_outside_no_code_format(self):
+    def test_build_config_rejects_pre_and_post_text_outside_one_tray_format(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom">
             <pre-text>before()</pre-text>
@@ -123,33 +123,42 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "pre-text and post-text are only supported in no-code format",
+            "pre-text and post-text are only supported in one-tray format",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
-    def test_build_config_requires_code_lines_in_no_code_format(self):
+    def test_build_config_requires_code_lines_in_one_tray_format(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <pre-text>before()</pre-text>
         </pl-faded-parsons>
         """
 
         with self.assertRaisesRegex(
             ValueError,
-            "no-code format requires an explicit <code-lines> child",
+            "one-tray format requires an explicit <code-lines> child",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
-    def test_build_config_allows_no_code_without_code_lines_when_text_blocks_absent(self):
-        html = '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+    def test_build_config_allows_one_tray_without_code_lines_when_text_blocks_absent(self):
+        html = '<pl-faded-parsons answers-name="demo" format="one-tray"></pl-faded-parsons>'
 
         config = pl_faded_parsons._build_config(html, self.data)
         state = pl_faded_parsons._build_initial_state(config, self.data)
 
-        self.assertEqual(config["format"], "no-code")
+        self.assertEqual(config["format"], "one-tray")
         self.assertEqual(config["markup"], "")
         self.assertEqual(state["solution"], [])
         self.assertEqual(state["starter"], [])
+
+    def test_build_config_rejects_legacy_no_code_alias(self):
+        html = '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "format `no-code` has been renamed to `one-tray`",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
 
     def test_build_config_uses_inner_html_when_code_lines_are_omitted(self):
         html = """
@@ -174,7 +183,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
     def test_build_config_rejects_duplicate_child_tags(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <code-lines>first()</code-lines>
             <code-lines>second()</code-lines>
         </pl-faded-parsons>
@@ -217,9 +226,9 @@ ignored() #distractor</code-lines>
         self.assertEqual(state["starter"], [])
         self.assertEqual(state["log"], [])
 
-    def test_build_initial_state_moves_all_lines_into_solution_in_no_code_mode(self):
+    def test_build_initial_state_moves_all_lines_into_solution_in_one_tray_mode(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <code-lines>kept()
 starter()
 value = !BLANK #blank
@@ -236,9 +245,26 @@ value = !BLANK #blank
         )
         self.assertEqual(state["starter"], [])
 
+    def test_build_initial_state_rejects_distractors_in_one_tray_mode(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="one-tray">
+            <code-lines>kept()
+ignored() #distractor
+</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "one-tray format does not allow distractor lines",
+        ):
+            pl_faded_parsons._build_initial_state(config, self.data)
+
     def test_build_config_reads_visual_indent_from_code_lines(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <pre-text>before()</pre-text>
             <code-lines visual-indent="2">kept()</code-lines>
             <post-text>after()</post-text>
@@ -260,7 +286,7 @@ value = !BLANK #blank
 
         self.assertEqual(config["max_indent_level"], 7)
 
-    def test_build_config_rejects_visual_indent_outside_no_code_format(self):
+    def test_build_config_rejects_visual_indent_outside_one_tray_format(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom">
             <code-lines visual-indent="2">kept()</code-lines>
@@ -269,20 +295,20 @@ value = !BLANK #blank
 
         with self.assertRaisesRegex(
             ValueError,
-            "visual-indent is only supported in no-code format",
+            "visual-indent is only supported in one-tray format",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
     def test_build_config_rejects_visual_indent_without_pre_or_post_text(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <code-lines visual-indent="2">kept()</code-lines>
         </pl-faded-parsons>
         """
 
         with self.assertRaisesRegex(
             ValueError,
-            "visual-indent requires pre-text or post-text in no-code format",
+            "visual-indent requires pre-text or post-text in one-tray format",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
@@ -430,7 +456,7 @@ value = !BLANK #blank
 
     def test_render_question_includes_hidden_fields_and_text_blocks(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="python">
             <pre-text>    before()
         class ListHelpers:
             @staticmethod</pre-text>
@@ -479,9 +505,9 @@ end</post-text>
         self.assertIn("widget-controls-uuid-123", rendered)
         self.assertIn('class="widget-copy btn btn-light border d-flex align-items-center"', rendered)
 
-    def test_render_question_omits_outer_border_in_borderless_no_code_mode(self):
+    def test_render_question_omits_outer_border_in_borderless_one_tray_mode(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="python">
             <code-lines>given()</code-lines>
         </pl-faded-parsons>
         """
@@ -491,9 +517,9 @@ end</post-text>
         self.assertIn("pl-faded-parsons-borderless", rendered)
         self.assertNotIn("fpp-tray-corner-label-solution", rendered)
 
-    def test_render_question_keeps_outer_border_when_no_code_mode_has_text(self):
+    def test_render_question_keeps_outer_border_when_one_tray_mode_has_text(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="python">
             <pre-text>before()</pre-text>
             <code-lines>given()</code-lines>
         </pl-faded-parsons>
@@ -516,7 +542,7 @@ end</post-text>
 
     def test_render_question_threads_visual_indent_into_trays(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <pre-text>before()</pre-text>
             <code-lines visual-indent="3">kept()</code-lines>
             <post-text>after()</post-text>
@@ -594,9 +620,9 @@ starter()</code-lines>
         self.assertIn("SUBMISSION", rendered)
         self.assertNotIn("FEEDBACK", rendered)
 
-    def test_render_respects_logging_toggle_and_no_code_layout(self):
+    def test_render_respects_logging_toggle_and_one_tray_layout(self):
         html = """
-        <pl-faded-parsons answers-name="demo" log="true" format="no-code">
+        <pl-faded-parsons answers-name="demo" log="true" format="one-tray">
             <code-lines>print("hello")</code-lines>
         </pl-faded-parsons>
         """
@@ -689,9 +715,9 @@ return 3 #1given</code-lines>
         self.assertNotIn("demo", self.data["submitted_answers"])
         self.assertNotIn("_files", self.data["submitted_answers"])
 
-    def test_no_code_format_moves_starter_lines_into_solution(self):
+    def test_one_tray_format_moves_starter_lines_into_solution(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="no-code">
+        <pl-faded-parsons answers-name="demo" format="one-tray">
             <code-lines>given() #0given
 starter()</code-lines>
         </pl-faded-parsons>

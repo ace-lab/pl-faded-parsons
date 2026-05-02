@@ -124,13 +124,13 @@ File: `pl-faded-parsons.py`
   - always rendered
 - `pre_text`
   - optional block before the solution tray
-  - only supported when `format="no-code"`
+  - only supported when `format="one-tray"` or the legacy alias `format="no-code"`
   - normalized in Python using the first non-empty line as the shared leading whitespace baseline
   - raises `IndentationError` if later lines do not preserve that baseline prefix
   - rendered with `lines` and `indent` fields
 - `post_text`
   - optional block after the solution tray
-  - only supported when `format="no-code"`
+  - only supported when `format="one-tray"` or the legacy alias `format="no-code"`
   - normalized in Python using the last non-empty line as the shared leading whitespace baseline
   - raises `IndentationError` if earlier lines do not preserve that baseline prefix
   - rendered with `lines` and `indent` fields
@@ -423,11 +423,11 @@ These names must stay aligned:
 ### Child element rules
 
 - `pre-text` and `post-text`
-  - only allowed when `format="no-code"`
+  - only allowed when `format="one-tray"` or the legacy alias `format="no-code"`
   - at most one of each
 - `code-lines`
   - at most one direct child
-  - required when `format="no-code"`
+  - required when `format="one-tray"` or the legacy alias `format="no-code"`
 
 ## Audit Notes And Inconsistencies
 

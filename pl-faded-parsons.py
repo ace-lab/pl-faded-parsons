@@ -47,14 +47,16 @@ OPTIONAL_ATTRIBS = [
 
 FORMAT_RIGHT = "right"
 FORMAT_BOTTOM = "bottom"
+FORMAT_ONE_TRAY = "one-tray"
 FORMAT_NO_CODE = "no-code"
-VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_NO_CODE}
+VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
 
 GIVEN_PATTERN = re.compile(r"#(\d+)given")
 DISTRACTOR_PATTERN = re.compile(r"#distractor")
 BLANK_PATTERN = re.compile(r"#blank [^#]*")
 INDENT = "    "
 MAX_DISTRACTORS = 10
+DEBUG = False
 
 
 class ParsingError(Exception):
@@ -146,6 +148,11 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
 
     student_code = _compile_code(state["solution"])
 
+    if DEBUG:
+        print("DEBUG parse answers_name:", config["answers_name"])
+        print("DEBUG parse solution state:", state["solution"])
+        print("DEBUG parse compiled student_code:", repr(student_code))
+
     data["submitted_answers"][config["answers_name"]] = student_code
     pl.add_submitted_file(
         data,
@@ -170,7 +177,14 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     """Collect the element configuration needed across the lifecycle."""
 
     element = _parse_element(element_html)
-    format_name = pl.get_string_attrib(element, "format", FORMAT_RIGHT)
+    raw_format_name = pl.get_string_attrib(element, "format", FORMAT_RIGHT)
+    if raw_format_name == FORMAT_NO_CODE:
+        raise ValueError(
+            "format `no-code` has been renamed to `one-tray`; use `one-tray` instead."
+        )
+    format_name = (
+        raw_format_name
+    )
     if format_name not in VALID_FORMATS:
         raise ValueError(
             f"Unsupported format `{format_name}`. Expected one of: "
@@ -182,25 +196,25 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     code_lines_element = _get_unique_child(element, "code-lines")
     has_text_blocks = pre_text_element is not None or post_text_element is not None
 
-    if format_name != FORMAT_NO_CODE and has_text_blocks:
+    if format_name != FORMAT_ONE_TRAY and has_text_blocks:
         raise ValueError(
-            "pre-text and post-text are only supported in no-code format."
+            "pre-text and post-text are only supported in one-tray format."
         )
     if (
-        format_name == FORMAT_NO_CODE
+        format_name == FORMAT_ONE_TRAY
         and code_lines_element is None
         and has_text_blocks
     ):
         raise ValueError(
-            "no-code format requires an explicit <code-lines> child when pre-text or post-text is present."
+            "one-tray format requires an explicit <code-lines> child when pre-text or post-text is present."
         )
 
     if (
-        format_name == FORMAT_NO_CODE
+        format_name == FORMAT_ONE_TRAY
         and code_lines_element is not None
         and not (code_lines_element.text or "").strip()
     ):
-        raise ValueError("no-code format requires non-empty <code-lines> content.")
+        raise ValueError("one-tray format requires non-empty <code-lines> content.")
 
     pre_text, pre_text_indent = _build_text_block(
         pre_text_element.text if pre_text_element is not None else "",
@@ -222,11 +236,11 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     )
     if visual_indent < 0:
         raise ValueError("Attribute `visual-indent` must be nonnegative.")
-    if format_name != FORMAT_NO_CODE and visual_indent:
-        raise ValueError("visual-indent is only supported in no-code format.")
-    if format_name == FORMAT_NO_CODE and visual_indent and not has_text_blocks:
+    if format_name != FORMAT_ONE_TRAY and visual_indent:
+        raise ValueError("visual-indent is only supported in one-tray format.")
+    if format_name == FORMAT_ONE_TRAY and visual_indent and not has_text_blocks:
         raise ValueError(
-            "visual-indent requires pre-text or post-text in no-code format."
+            "visual-indent requires pre-text or post-text in one-tray format."
         )
 
     question_path = Path(data["options"]["question_path"])
@@ -433,6 +447,9 @@ def _build_initial_state(
         else:
             starter_lines.append(line)
 
+    if config["format"] == FORMAT_ONE_TRAY and distractor_lines:
+        raise ValueError("one-tray format does not allow distractor lines.")
+
     # Seed from the variant so repeated renders keep the same initial tray order.
     rng = random.Random(f"{data['variant_seed']}:{config['answers_name']}")
     starter_lines.extend(
@@ -440,7 +457,7 @@ def _build_initial_state(
     )
     rng.shuffle(starter_lines)
 
-    if config["format"] == FORMAT_NO_CODE:
+    if config["format"] == FORMAT_ONE_TRAY:
         return {
             "solution": given_lines + starter_lines,
             "starter": [],
@@ -504,7 +521,7 @@ def _build_question_params(
             config["language"],
             config["size"],
             visual_indent=config["visual_indent"],
-            allow_empty=config["format"] == FORMAT_NO_CODE,
+            allow_empty=config["format"] == FORMAT_ONE_TRAY,
         ),
         "pre_text": _build_text_block_params(
             config["pre_text"],
