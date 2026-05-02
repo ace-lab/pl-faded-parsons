@@ -306,7 +306,6 @@ class ParsonsWidget {
       ...sortableOptions,
       start: (_, ui) => {
         this.activeSortablePlaceholder = ui.placeholder;
-        this.activeSortablePlaceholder.addClass("no-indent")
         ui.item.addClass("codeline-dragging");
         this.setCodelineInMotion(ui.item, true);
         rememberDragStartTray(ui);
