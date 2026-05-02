@@ -298,6 +298,15 @@ value = !BLANK #blank
         self.assertEqual(text, "before()\n    helper()\ntail()\n")
         self.assertEqual(indent, 2.0)
 
+    def test_build_text_block_uses_last_line_as_post_baseline_indent(self):
+        text, indent = pl_faded_parsons._build_text_block(
+            "            before()\n        helper()\n    tail()",
+            placement="post",
+        )
+
+        self.assertEqual(text, "\n        before()\n    helper()\ntail()")
+        self.assertEqual(indent, 1.0)
+
     def test_build_text_block_params_returns_normalized_text(self):
         text, indent = pl_faded_parsons._build_text_block(
             "    before()\n        helper()",
@@ -406,7 +415,7 @@ value = !BLANK #blank
             @staticmethod</pre-text>
             <code-lines>given()</code-lines>
             <post-text>    after()
-        end</post-text>
+end</post-text>
         </pl-faded-parsons>
         """
 

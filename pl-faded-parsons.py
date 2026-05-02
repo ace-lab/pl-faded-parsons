@@ -532,7 +532,8 @@ def _build_text_block(
     if not lines:
         return "", 0.0
 
-    indent_spaces = _infer_text_baseline_spaces(lines[0])
+    baseline_line = lines[0] if placement == "pre" else _find_last_nonempty_line(lines)
+    indent_spaces = _infer_text_baseline_spaces(baseline_line)
     normalized_lines = [
         _normalize_text_block_line(line, indent_spaces, placement=placement, line_number=index + 1)
         for index, line in enumerate(lines)
@@ -575,9 +576,18 @@ def _trim_outer_blank_lines(lines: list[str]) -> list[str]:
 
 
 def _infer_text_baseline_spaces(line: str) -> int:
-    """Infer the leading whitespace width from the first text line."""
+    """Infer the leading whitespace width from a baseline text line."""
 
     return len(line) - len(line.lstrip(" "))
+
+
+def _find_last_nonempty_line(lines: list[str]) -> str:
+    """Return the last non-empty line in a text block."""
+
+    for line in reversed(lines):
+        if line.strip():
+            return line
+    return ""
 
 
 def _normalize_text_block_line(
@@ -596,7 +606,7 @@ def _normalize_text_block_line(
     if indent_spaces and not line.startswith(prefix):
         raise IndentationError(
             f"{placement}-text line {line_number} does not match the leading whitespace prefix "
-            "established by the first non-empty line."
+            "established by the baseline line."
         )
     return line[len(prefix):] if prefix else line
 

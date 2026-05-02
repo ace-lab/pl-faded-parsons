@@ -131,8 +131,8 @@ File: `pl-faded-parsons.py`
 - `post_text`
   - optional block after the solution tray
   - only supported when `format="no-code"`
-  - normalized in Python using the first non-empty line as the shared leading whitespace baseline
-  - raises `IndentationError` if later lines do not preserve that baseline prefix
+  - normalized in Python using the last non-empty line as the shared leading whitespace baseline
+  - raises `IndentationError` if earlier lines do not preserve that baseline prefix
   - rendered with `lines` and `indent` fields
 
 ### Mustache -> DOM
