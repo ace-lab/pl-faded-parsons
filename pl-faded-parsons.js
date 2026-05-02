@@ -661,48 +661,43 @@ class ParsonsWidget {
 
     if (!$(codeline).is(":focus")) return false;
 
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const moveInsteadOfIndent =
-        motionData.jumpForward && $(this.config.starter).has(codeline).exists();
-      if (moveInsteadOfIndent) {
-        this.moveHorizontally(codeline, {
-          moveForward: true,
-          moveCodeline: true,
-        });
-      } else {
-        const delta = motionData.jumpForward ? +1 : -1;
-        this.updateIndent(codeline, delta, false);
-      }
-      return true;
-    }
-
-    if (e.key === "Enter") {
-      e.preventDefault();
-      this.codelineCaptureActive = true;
-      this.enterBlankOnCodelineFocus = true;
-      this.findBlanksIn(codeline).first().focus();
-      return true;
-    }
-
-    if (e.key === "Escape") {
-      e.preventDefault();
-      this.codelineCaptureActive = false;
-      this.enterBlankOnCodelineFocus = false;
-      this.setCodelinesTabStops(false);
-      this.announceMode?.(
-        "Tabbing mode on. Press Enter on the widget to focus the code-lines again.",
-      );
-      const widgetRoot = $(this.config.main);
-      if (widgetRoot.focus) {
-        widgetRoot.focus();
-      } else {
-        $(codeline).blur();
-      }
-      return true;
-    }
-
     switch (e.key) {
+      case "Tab":
+        e.preventDefault();
+        if (
+          motionData.jumpForward &&
+          $(this.config.starter).has(codeline).exists()
+        ) {
+          this.moveHorizontally(codeline, {
+            moveForward: true,
+            moveCodeline: true,
+          });
+        } else {
+          const delta = motionData.jumpForward ? +1 : -1;
+          this.updateIndent(codeline, delta, false);
+        }
+        return true;
+      case "Enter":
+        e.preventDefault();
+        this.codelineCaptureActive = true;
+        this.enterBlankOnCodelineFocus = true;
+        this.findBlanksIn(codeline).first().focus();
+        return true;
+      case "Escape":
+        e.preventDefault();
+        this.codelineCaptureActive = false;
+        this.enterBlankOnCodelineFocus = false;
+        this.setCodelinesTabStops(false);
+        this.announceMode?.(
+          "Tabbing mode on. Press Enter on the widget to focus the code-lines again.",
+        );
+        const widgetRoot = $(this.config.main);
+        if (widgetRoot.focus) {
+          widgetRoot.focus();
+        } else {
+          $(codeline).blur();
+        }
+        return true;
       case "ArrowLeft":
       case "ArrowRight":
         e.preventDefault();
@@ -723,25 +718,23 @@ class ParsonsWidget {
     const blankIdx = blanks.index(blank);
     const motionData = getKeyMotionData(e);
 
-    if (e.key === "Tab") {
-      const delta = motionData.jumpForward ? +1 : -1;
-      e.preventDefault();
-      this.updateIndent(codeline, delta, false);
-      return;
-    }
-    if (e.key === "Escape") {
-      $(codeline).focus();
-      e.stopPropagation();
-      this.enterBlankOnCodelineFocus = false;
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      this.enterBlankOnCodelineFocus = true;
-      this.jumpToNextBlank(blank, motionData);
-      return;
-    }
     switch (e.key) {
+      case "Tab": {
+        const delta = motionData.jumpForward ? +1 : -1;
+        e.preventDefault();
+        this.updateIndent(codeline, delta, false);
+        return;
+      }
+      case "Escape":
+        $(codeline).focus();
+        e.stopPropagation();
+        this.enterBlankOnCodelineFocus = false;
+        return;
+      case "Enter":
+        e.preventDefault();
+        this.enterBlankOnCodelineFocus = true;
+        this.jumpToNextBlank(blank, motionData);
+        return;
       case "ArrowUp":
       case "ArrowDown":
         e.preventDefault();
