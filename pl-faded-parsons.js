@@ -923,7 +923,6 @@ class ParsonsWidget {
     $(codeline).css("--pl-faded-parsons-indent", newCodeIndent);
 
     this.updateAriaInfo(codeline);
-    console.log("update indent");
     this.storeStudentProgress();
     return newCodeIndent;
   }
