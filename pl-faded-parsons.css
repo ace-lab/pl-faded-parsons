@@ -68,6 +68,10 @@ code {
   border-radius: 5px;
 }
 
+.pl-faded-parsons.pl-faded-parsons-borderless {
+  border: 0;
+}
+
 .codeline-tray {
   --pl-faded-parsons-visual-indent: 0;
   --pl-faded-parsons-visual-indent-correction: 0ch;

@@ -140,6 +140,17 @@ class TestPlFadedParsonsController(unittest.TestCase):
         ):
             pl_faded_parsons._build_config(html, self.data)
 
+    def test_build_config_allows_no_code_without_code_lines_when_text_blocks_absent(self):
+        html = '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(config["format"], "no-code")
+        self.assertEqual(config["markup"], "")
+        self.assertEqual(state["solution"], [])
+        self.assertEqual(state["starter"], [])
+
     def test_build_config_rejects_duplicate_child_tags(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code">
@@ -207,7 +218,9 @@ value = !BLANK #blank
     def test_build_config_reads_visual_indent_from_code_lines(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code">
+            <pre-text>before()</pre-text>
             <code-lines visual-indent="2">kept()</code-lines>
+            <post-text>after()</post-text>
         </pl-faded-parsons>
         """
 
@@ -236,6 +249,19 @@ value = !BLANK #blank
         with self.assertRaisesRegex(
             ValueError,
             "visual-indent is only supported in no-code format",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
+
+    def test_build_config_rejects_visual_indent_without_pre_or_post_text(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <code-lines visual-indent="2">kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "visual-indent requires pre-text or post-text in no-code format",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
@@ -371,10 +397,35 @@ value = !BLANK #blank
         self.assertIn('class="pre-text-wrapper"', rendered)
         self.assertIn('class="post-text-wrapper"', rendered)
 
+    def test_render_question_omits_outer_border_in_borderless_no_code_mode(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("pl-faded-parsons-borderless", rendered)
+
+    def test_render_question_keeps_outer_border_when_no_code_mode_has_text(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
+            <pre-text>before()</pre-text>
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertNotIn("pl-faded-parsons-borderless", rendered)
+
     def test_render_question_threads_visual_indent_into_trays(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code">
+            <pre-text>before()</pre-text>
             <code-lines visual-indent="3">kept()</code-lines>
+            <post-text>after()</post-text>
         </pl-faded-parsons>
         """
 

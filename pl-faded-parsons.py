@@ -179,15 +179,26 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     pre_text_element = _get_unique_child(element, "pre-text")
     post_text_element = _get_unique_child(element, "post-text")
     code_lines_element = _get_unique_child(element, "code-lines")
+    has_text_blocks = pre_text_element is not None or post_text_element is not None
 
-    if format_name != FORMAT_NO_CODE and (pre_text_element is not None or post_text_element is not None):
+    if format_name != FORMAT_NO_CODE and has_text_blocks:
         raise ValueError(
             "pre-text and post-text are only supported in no-code format."
         )
-    if format_name == FORMAT_NO_CODE and code_lines_element is None:
-        raise ValueError("no-code format requires an explicit <code-lines> child.")
+    if (
+        format_name == FORMAT_NO_CODE
+        and code_lines_element is None
+        and has_text_blocks
+    ):
+        raise ValueError(
+            "no-code format requires an explicit <code-lines> child when pre-text or post-text is present."
+        )
 
-    if format_name == FORMAT_NO_CODE and not (code_lines_element.text or "").strip():
+    if (
+        format_name == FORMAT_NO_CODE
+        and code_lines_element is not None
+        and not (code_lines_element.text or "").strip()
+    ):
         raise ValueError("no-code format requires non-empty <code-lines> content.")
 
     pre_text, pre_text_indent = _build_text_block(
@@ -212,6 +223,10 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         raise ValueError("Attribute `visual-indent` must be nonnegative.")
     if format_name != FORMAT_NO_CODE and visual_indent:
         raise ValueError("visual-indent is only supported in no-code format.")
+    if format_name == FORMAT_NO_CODE and visual_indent and not has_text_blocks:
+        raise ValueError(
+            "visual-indent requires pre-text or post-text in no-code format."
+        )
 
     question_path = Path(data["options"]["question_path"])
     solution_path = question_path / pl.get_string_attrib(
@@ -445,6 +460,11 @@ def _build_question_params(
         "answers_name": config["answers_name"],
         "language": config["language"],
         "max_indent_level": config["max_indent_level"],
+        "borderless": (
+            not config["pre_text"]
+            and not config["post_text"]
+            and config["format"] == FORMAT_NO_CODE
+        ),
         "previous_log": json.dumps(state["log"] if config["logging_enabled"] else []),
         "logging_enabled": config["logging_enabled"],
         "uuid": pl.get_uuid(),

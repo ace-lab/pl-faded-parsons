@@ -6,7 +6,7 @@
 
 {{! if not vertical (horizontal), keep half size boxes }}
 {{! if vertical (or no-code), full size boxes }}
-<div id="pl-faded-parsons-{{uuid}}" role="application" tabindex="0" aria-labelledby="pl-faded-parsons-aria-descriptor-{{uuid}}" aria-details="pl-faded-parsons-aria-details-{{uuid}}" class="col fpp-global-defs pl-faded-parsons soft-border" language="{{language}}">
+<div id="pl-faded-parsons-{{uuid}}" role="application" tabindex="0" aria-labelledby="pl-faded-parsons-aria-descriptor-{{uuid}}" aria-details="pl-faded-parsons-aria-details-{{uuid}}" class="col fpp-global-defs pl-faded-parsons soft-border{{#borderless}} pl-faded-parsons-borderless{{/borderless}}" language="{{language}}">
     {{! form field to be filled with order to save the current submission }}
     <input class="main" name="{{answers_name}}.main" type="hidden" value=""/>
     <input class="log" name="{{answers_name}}.log" type="hidden" value="{{previous_log}}" />
