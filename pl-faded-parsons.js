@@ -394,7 +394,6 @@ class ParsonsWidget {
   }
 
   setupInitialGuiState() {
-    this.redrawTabStops();
     this.storeStudentProgress();
     this.findBlanksIn(this.config.main).each((_, blank) =>
       this.autoSizeBlank(blank),
@@ -404,10 +403,6 @@ class ParsonsWidget {
   setupAccessibilityBindings() {
     const descriptor = $(this.config.ariaDescriptor);
     const details = $(this.config.ariaDetails);
-    if (ParsonsGlobalUISettings.showAriaDescriptor) {
-      descriptor.css("display", "inline-block");
-      details.css("display", "inline-block");
-    }
 
     $(this.config.main)
       .attr("aria-labelledby", descriptor.attr("id"))
@@ -729,13 +724,9 @@ class ParsonsWidget {
     const motionData = getKeyMotionData(e);
 
     if (e.key === "Tab") {
-      const [boundary, delta] = motionData.jumpForward
-        ? [blanks.length - 1, +1]
-        : [0, -1];
-      if (ParsonsGlobalUISettings.alwaysIndentOnTab || blankIdx == boundary) {
-        e.preventDefault();
-        this.updateIndent(codeline, delta, false);
-      }
+      const delta = motionData.jumpForward ? +1 : -1;
+      e.preventDefault();
+      this.updateIndent(codeline, delta, false);
       return;
     }
     if (e.key === "Escape") {
@@ -921,52 +912,10 @@ class ParsonsWidget {
 
     $(codeline).css("--pl-faded-parsons-indent", newCodeIndent);
 
-    this.redrawTabStops();
-
     this.updateAriaInfo(codeline);
     console.log("update indent");
     this.storeStudentProgress();
     return newCodeIndent;
-  }
-
-  /** Redraws the tab stops in the solution box if this.config.canIndent */
-  redrawTabStops() {
-    if (!this.config.canIndent || !ParsonsGlobalUISettings.showTabStops) return;
-
-    const max_code_indent = this.getSolutionLines()
-      .map((line) => this.getCodelineIndent(line))
-      .reduce((x, y) => Math.max(x, y), 0);
-    const capped_max_code_indent = Math.min(
-      this.config.maxIndentLevel,
-      max_code_indent,
-    );
-    const [backgroundColor, tabStopColor] = [
-      "var(--code-background)",
-      "var(--pln-txt-color-faded)",
-    ];
-    const [solidTabStops, dashedTabStop] = [
-      `linear-gradient(${tabStopColor}, ${tabStopColor}) no-repeat border-box, `.repeat(
-        capped_max_code_indent,
-      ),
-      `repeating-linear-gradient(0,${tabStopColor},${tabStopColor} 10px,${backgroundColor} 10px,${backgroundColor} 12px) no-repeat border-box`,
-    ];
-    let backgroundPosition = "";
-    for (let i = 1; i <= capped_max_code_indent + 1; i++) {
-      backgroundPosition += i * this.config.xIndent + "ch 0, ";
-    }
-    $(this.config.solutionList).css({
-      background: ParsonsGlobalUISettings.showNextTabStop
-        ? solidTabStops + dashedTabStop
-        : solidTabStops.slice(0, -2),
-      "background-size": "1px 100%, "
-        .repeat(capped_max_code_indent + 1)
-        .slice(0, -2),
-      "background-position": backgroundPosition.slice(0, -2),
-      "background-origin": "padding-box, "
-        .repeat(capped_max_code_indent + 1)
-        .slice(0, -2),
-      "background-color": backgroundColor,
-    });
   }
 
   storeStudentProgress() {
@@ -1124,18 +1073,3 @@ window.ParsonsWidgetHelpers = {
   landedInAnotherTray,
 };
 window.ParsonsWidget = ParsonsWidget;
-
-window.ParsonsGlobalUISettings ||= /* singleton! */ {
-  /**
-   * When true, a Tab in a fading blank always indents,
-   * otherwise a tab will attempt to advance to the next blank
-   * in the codeline before it changes indents
-   */
-  alwaysIndentOnTab: true,
-  /** Toggles the visibility of the aria-describedby and aria-details divs */
-  showAriaDescriptor: false,
-  /** Toggles the indicator for the next unused tab stop */
-  showNextTabStop: false,
-  /** Toggles displaying tab stop altogether */
-  showTabStops: false,
-};

@@ -58,7 +58,6 @@ def run_js(expression: str) -> dict:
 
         vm.createContext(sandbox);
         vm.runInContext(source, sandbox);
-        sandbox.ParsonsGlobalUISettings = sandbox.window.ParsonsGlobalUISettings;
         const result = {expression};
         process.stdout.write(JSON.stringify(result));
         """
@@ -484,7 +483,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     };
                   };
                   sandbox.jQuery = sandbox.$;
-                  sandbox.ParsonsGlobalUISettings.allowIndentingInStarterTray = true;
                   const logTags = [];
                   const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
                   const widget = Object.create(Widget.prototype);
@@ -671,9 +669,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   const blanks = [{ value: 'x' }, { value: 'yy' }];
                   const widget = {
                     config: { main: '#main' },
-                    redrawTabStops() {
-                      sandbox.calls.redrawn = true;
-                    },
                     storeStudentProgress() {
                       sandbox.calls.stored = true;
                     },
@@ -697,7 +692,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             )
         )
 
-        self.assertTrue(result["redrawn"])
         self.assertTrue(result["stored"])
         self.assertEqual(result["sized"], ["x", "yy"])
 
@@ -756,9 +750,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     };
                   };
                   sandbox.jQuery = sandbox.$;
-                  sandbox.ParsonsGlobalUISettings.showAriaDescriptor = true;
                   const widget = {
-                    config: { ariaDescriptor: '#descriptor', ariaDetails: '#details', main: '#main' },
+                    config: {
+                      ariaDescriptor: '#descriptor',
+                      ariaDetails: '#details',
+                      main: '#main',
+                    },
                     findBlanksIn() {
                       return {
                         attr(name, value) {
@@ -776,12 +773,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             )
         )
 
-        self.assertEqual(result["descriptor"]["display"], "inline-block")
-        self.assertEqual(result["details"]["display"], "inline-block")
         self.assertEqual(result["main"]["aria-labelledby"], "descriptor-id")
         self.assertEqual(result["main"]["aria-details"], "details-id")
         self.assertEqual(result["codeline"]["aria-labelledby"], "descriptor-id")
         self.assertEqual(result["blank"]["aria-details"], "details-id")
+        self.assertEqual(result["descriptor"], {})
+        self.assertEqual(result["details"], {})
 
     def test_setup_accessibility_bindings_marks_blank_free_lines_as_code_lines(self):
         result = run_js(
@@ -1730,7 +1727,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       return { first() { calls.push(['blank-first']); return { focus() {} }; } };
                     },
                   };
-                  sandbox.ParsonsGlobalUISettings.allowIndentingInStarterTray = false;
                   sandbox.$ = (value) => ({
                     is() { return true; },
                     has() { return { exists() { return true; } }; },
@@ -1872,7 +1868,6 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       };
                     },
                   };
-                  sandbox.ParsonsGlobalUISettings.alwaysIndentOnTab = true;
                   sandbox.$ = (value) => ({
                     focus() { calls.push('focus'); return this; },
                     is() { return true; },
