@@ -150,8 +150,7 @@ $.fn.extend({
  *    <div#{{config.toolbar}}>
  *       ...
  *       <div.fpp-help></div>
- *       <div.fpp-copy></div>
- *       <div.fpp-dark></div>
+ *       <div.fpp-copy></div> <!-- A copy button is optional -->
  *       ...
  *    </div>
  *     ...
@@ -226,7 +225,7 @@ class ParsonsWidget {
     );
 
     toolbar
-      .find(`.widget-copy`)
+      .find(`.widget-copy`) // could not exist, that's ok.
       .popover({
         placement: "auto",
         trigger: "focus",

@@ -42,6 +42,7 @@ OPTIONAL_ATTRIBS = [
     "solution-path",
     "log",
     "max-indent-level",
+    "enable-copy-code",
 ]
 
 FORMAT_RIGHT = "right"
@@ -92,6 +93,7 @@ class ElementConfig(TypedDict):
     language: str
     file_name: str
     logging_enabled: bool
+    enable_copy_code: bool
     markup: str
     pre_text: str
     post_text: str
@@ -238,6 +240,9 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "language": pl.get_string_attrib(element, "language", ""),
         "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
         "logging_enabled": pl.get_boolean_attrib(element, "log", False),
+        "enable_copy_code": pl.get_boolean_attrib(
+            element, "enable-copy-code", False
+        ),
         "markup": _load_markup(
             element,
             question_path,
@@ -487,6 +492,7 @@ def _build_question_params(
         "borderless": not config["pre_text"] and not config["post_text"],
         "previous_log": json.dumps(state["log"] if config["logging_enabled"] else []),
         "logging_enabled": config["logging_enabled"],
+        "enable_copy_code": config["enable_copy_code"],
         "uuid": pl.get_uuid(),
         "starter": _build_tray_params(
             state["starter"],

@@ -455,6 +455,30 @@ end</post-text>
         self.assertIn('class="pre-text-wrapper"', rendered)
         self.assertIn('class="post-text-wrapper"', rendered)
 
+    def test_render_question_omits_copy_button_by_default(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertNotIn('class="widget-copy', rendered)
+        self.assertNotIn('aria-label="copy to clipboard"', rendered)
+
+    def test_render_question_includes_copy_button_when_enabled(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python" enable-copy-code="true">
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("widget-controls-uuid-123", rendered)
+        self.assertIn('class="widget-copy btn btn-light border d-flex align-items-center"', rendered)
+
     def test_render_question_omits_outer_border_in_borderless_no_code_mode(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code" language="python">
