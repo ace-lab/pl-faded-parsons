@@ -261,14 +261,16 @@ class ParsonsWidget {
           }
         },
       });
-
   }
 
   applyVisualIndent() {
     const visualIndent = Number(this.config.visualIndent ?? 0) || 0;
     const visualIndentCorrection = visualIndent > 0 ? "1ch" : "0ch";
     const trays = $(this.config.main).find(".codeline-tray");
-    trays.css("--pl-faded-parsons-visual-indent-correction", visualIndentCorrection);
+    trays.css(
+      "--pl-faded-parsons-visual-indent-correction",
+      visualIndentCorrection,
+    );
     trays.css("--pl-faded-parsons-visual-indent", visualIndent);
   }
 
@@ -290,7 +292,8 @@ class ParsonsWidget {
     const liveRegion = $(this.config.ariaDetails);
     liveRegion.text("");
     const schedule =
-      window.setTimeout || (typeof setTimeout === "function" ? setTimeout : null);
+      window.setTimeout ||
+      (typeof setTimeout === "function" ? setTimeout : null);
     if (schedule) {
       schedule(() => {
         liveRegion.text(message);
@@ -307,7 +310,9 @@ class ParsonsWidget {
 
     $(this.config.main).find(".codeline-tray").checkExists("codeline trays");
     const starterTray = $(this.config.starterList);
-    const solutionTray = $(this.config.solutionList).checkUnique("solution tray");
+    const solutionTray = $(this.config.solutionList).checkUnique(
+      "solution tray",
+    );
 
     const grid = this.config.canIndent && [
       this.config.xIndent * CHAR_WIDTH_IN_PX,
@@ -330,10 +335,7 @@ class ParsonsWidget {
         this.syncSortablePlaceholder(ui.item);
       },
       sort: (_, ui) => {
-        this.syncSortablePlaceholder(
-          ui.item,
-          this.getIndentAtDragPosition(ui),
-        );
+        this.syncSortablePlaceholder(ui.item, this.getIndentAtDragPosition(ui));
       },
       receive: (_, ui) =>
         this.addLogEntry("removeOutput", this.codelineLogEntry(ui.item)),
@@ -361,10 +363,7 @@ class ParsonsWidget {
         this.syncSortablePlaceholder(ui.item);
       },
       sort: (_, ui) => {
-        this.syncSortablePlaceholder(
-          ui.item,
-          this.getIndentAtDragPosition(ui),
-        );
+        this.syncSortablePlaceholder(ui.item, this.getIndentAtDragPosition(ui));
       },
       stop: (event, ui) => {
         ui.item.removeClass("codeline-dragging");
@@ -419,7 +418,9 @@ class ParsonsWidget {
   }
 
   setupAccessibilityBindings() {
-    const descriptor = $(this.config.ariaDescriptor).checkUnique("aria descriptor");
+    const descriptor = $(this.config.ariaDescriptor).checkUnique(
+      "aria descriptor",
+    );
     const details = $(this.config.ariaDetails).checkUnique("aria details");
 
     $(this.config.main)
@@ -432,7 +433,10 @@ class ParsonsWidget {
       .attr("aria-details", details.attr("id"))
       .each((_, codeline) => {
         const hasBlanks = this.findBlanksIn(codeline).length > 0;
-        $(codeline).attr("aria-roledescription", hasBlanks ? null : "code line");
+        $(codeline).attr(
+          "aria-roledescription",
+          hasBlanks ? null : "code line",
+        );
       });
 
     this.findBlanksIn(this.config.main)
@@ -441,22 +445,24 @@ class ParsonsWidget {
   }
 
   setupInteractivityBindings() {
-    $(this.config.main).checkUnique("main widget").on({
-      focus: (e) => {
-        if (e.target !== e.currentTarget) return;
-        this.updateAriaInfo(null, false);
-      },
-      keydown: (e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key !== "Enter") return;
-        e.preventDefault();
-        this.enterCodelineCapture?.();
-      },
-      click: (e) => {
-        if (e.target !== e.currentTarget) return;
-        this.enterCodelineCapture?.();
-      },
-    });
+    $(this.config.main)
+      .checkUnique("main widget")
+      .on({
+        focus: (e) => {
+          if (e.target !== e.currentTarget) return;
+          this.updateAriaInfo(null, false);
+        },
+        keydown: (e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          this.enterCodelineCapture?.();
+        },
+        click: (e) => {
+          if (e.target !== e.currentTarget) return;
+          this.enterCodelineCapture?.();
+        },
+      });
 
     $(this.config.main)
       .find("li.codeline")
@@ -589,10 +595,7 @@ class ParsonsWidget {
     if (k < 0 || m <= k) return;
     const newTray = codeboxes.eq(k).find(".codeline-list");
 
-    const { found, target } = this.findHorizontalTarget(
-      codeline,
-      newTray,
-    );
+    const { found, target } = this.findHorizontalTarget(codeline, newTray);
 
     if (!moveCodeline) {
       this.focusCodeline(target, moveForward);
@@ -627,10 +630,13 @@ class ParsonsWidget {
     if (blankIdx == lastBlankIdx) {
       this.moveHorizontally(codeline, { moveForward, moveCodeline: false });
     } else {
-      codelineBlanks.eq(blankIdx + blankDelta).each((_, input) => {
-        const l = moveForward ? 0 : input.value.length;
-        input.setSelectionRange(l, l);
-      }).focus();
+      codelineBlanks
+        .eq(blankIdx + blankDelta)
+        .each((_, input) => {
+          const l = moveForward ? 0 : input.value.length;
+          input.setSelectionRange(l, l);
+        })
+        .focus();
     }
     return true;
   }
@@ -771,7 +777,6 @@ class ParsonsWidget {
   }
 
   /////////////////////////////// GENERAL HELPERS ////////////////////////////
-
 
   clampIndent(indent) {
     return Math.max(0, Math.min(indent, this.config.maxIndentLevel));
