@@ -70,6 +70,12 @@ code {
 
 .pl-faded-parsons.pl-faded-parsons-borderless {
   border: 0;
+  padding: 0;
+}
+
+.pl-faded-parsons.pl-faded-parsons-borderless .codeline-tray {
+  padding-left: 0.75em;
+  padding-right: 0.75em;
 }
 
 .codeline-tray {

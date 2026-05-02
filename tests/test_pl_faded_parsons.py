@@ -151,6 +151,27 @@ class TestPlFadedParsonsController(unittest.TestCase):
         self.assertEqual(state["solution"], [])
         self.assertEqual(state["starter"], [])
 
+    def test_build_config_uses_inner_html_when_code_lines_are_omitted(self):
+        html = """
+        <pl-faded-parsons answers-name="demo">
+            given() #1given
+            starter()
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertIn("given() #1given", config["markup"])
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["    given()"],
+        )
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            ["starter()"],
+        )
+
     def test_build_config_rejects_duplicate_child_tags(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="no-code">
@@ -444,6 +465,7 @@ end</post-text>
         rendered = render_with_uuid(html, self.data)
 
         self.assertIn("pl-faded-parsons-borderless", rendered)
+        self.assertNotIn("fpp-tray-corner-label-solution", rendered)
 
     def test_render_question_keeps_outer_border_when_no_code_mode_has_text(self):
         html = """
@@ -456,6 +478,17 @@ end</post-text>
         rendered = render_with_uuid(html, self.data)
 
         self.assertNotIn("pl-faded-parsons-borderless", rendered)
+
+    def test_render_question_is_borderless_when_no_pre_or_post_text_in_right_mode(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("pl-faded-parsons-borderless", rendered)
 
     def test_render_question_threads_visual_indent_into_trays(self):
         html = """

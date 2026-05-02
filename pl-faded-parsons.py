@@ -238,7 +238,12 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "language": pl.get_string_attrib(element, "language", ""),
         "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
         "logging_enabled": pl.get_boolean_attrib(element, "log", False),
-        "markup": _load_markup(element, question_path, code_lines_element),
+        "markup": _load_markup(
+            element,
+            question_path,
+            code_lines_element,
+            has_text_blocks=has_text_blocks,
+        ),
         "pre_text": pre_text,
         "post_text": post_text,
         "pre_text_indent": pre_text_indent,
@@ -265,6 +270,8 @@ def _load_markup(
     element: xml.HtmlElement,
     question_path: Path,
     code_lines_element: xml.HtmlElement | None,
+    *,
+    has_text_blocks: bool,
 ) -> str:
     """Load author-provided code lines from the element or fallback file."""
 
@@ -275,7 +282,25 @@ def _load_markup(
     if code_lines_path.exists():
         return code_lines_path.read_text(encoding="utf-8")
 
+    if not has_text_blocks:
+        return _get_inner_html(element)
+
     return element.text or ""
+
+
+def _get_inner_html(element: xml.HtmlElement) -> str:
+    """Serialize the element's inner HTML without the outer wrapper."""
+
+    parts: list[str] = []
+    if element.text:
+        parts.append(element.text)
+
+    for child in element:
+        parts.append(xml.tostring(child, encoding="unicode", method="html"))
+        if child.tail:
+            parts.append(child.tail)
+
+    return "".join(parts)
 
 
 def _load_state(config: ElementConfig, data: pl.QuestionData) -> WidgetState:
@@ -459,11 +484,7 @@ def _build_question_params(
         "answers_name": config["answers_name"],
         "language": config["language"],
         "max_indent_level": config["max_indent_level"],
-        "borderless": (
-            not config["pre_text"]
-            and not config["post_text"]
-            and config["format"] == FORMAT_NO_CODE
-        ),
+        "borderless": not config["pre_text"] and not config["post_text"],
         "previous_log": json.dumps(state["log"] if config["logging_enabled"] else []),
         "logging_enabled": config["logging_enabled"],
         "uuid": pl.get_uuid(),
