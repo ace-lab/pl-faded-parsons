@@ -26,7 +26,7 @@ class AutograderConfig(ABC):
         pass
 
     def clean_tests_dir(self, test_dir: str) -> None:
-        return 
+        return
 
     def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
@@ -63,10 +63,7 @@ class PythonAutograder(AutograderConfig):
         return {
             'gradingMethod': 'External',
             'externalGradingOptions': {
-                'enabled': True,
                 'image': 'prairielearn/grader-python',
-                'entrypoint': '/python_autograder/run.sh',
-                'timeout': 5
             }
         }
 
@@ -125,7 +122,7 @@ class RubyAutograder(AutograderConfig):
             "submission_file": "script.rb",
             "submission_root": "",
             "submit_to_line" : -1,
-            "pre-text": f"{pre_code}\n", 
+            "pre-text": f"{pre_code}\n",
             "post-text": f"{post_code}\n",
             "grading_exclusions" : [
             ]
@@ -142,11 +139,10 @@ class RubyAutograder(AutograderConfig):
         print(f"Installing gems locally in `{app_dir}` with `{RUBY_SETUP_CMD}` ... ", end="")
         with popen(f"cd {app_dir} && " + RUBY_SETUP_CMD) as out:
             out.read()
-            # this print is here to join the thread that runs the command and 
+            # this print is here to join the thread that runs the command and
             #   prevent the generator from exiting before gems are installed
-            print("Done") 
+            print("Done")
 
     def generate_server(self, setup_code: str, answer_code: str, *,
                     no_ast: bool = False, tab: str = '    ') -> tuple[str, list[AnnotatedName], list[AnnotatedName]]:
         return super().generate_server(setup_code, answer_code, no_ast=no_ast, tab=tab)
-
