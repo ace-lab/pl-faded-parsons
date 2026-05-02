@@ -894,8 +894,8 @@ class ParsonsWidget {
       "ts",
       "typescript",
     ].includes(lang)
-      ? "# "
-      : "// ";
+      ? "// "
+      : "# ";
     const starters = toText(this.getSourceLines()).map(
       (s) => commentPrefix + s,
     );

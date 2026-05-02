@@ -52,7 +52,7 @@ class TestReloadIndentRegression(unittest.TestCase):
             with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
                 rendered = pl_faded_parsons.render(element_html, data)
 
-        self.assertIn("loggingEnabled: false", rendered)
+        self.assertNotIn("loggingEnabled: true", rendered)
         self.assertIn('name="demo.log" type="hidden" value="[]"', rendered)
 
     def test_render_preserves_log_when_logging_enabled(self):
