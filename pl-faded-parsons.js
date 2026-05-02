@@ -100,6 +100,22 @@ $.fn.extend({
   exists() {
     return this.length !== 0;
   },
+  /** Logs when a setup-time query that must exist is empty. */
+  checkExists(label) {
+    if (!this.exists()) {
+      console.error(`Expected ${label} to exist, but it was missing.`);
+    }
+    return this;
+  },
+  /** Logs when a setup-time query that must be unique is missing or duplicated. */
+  checkUnique(label) {
+    if (this.length !== 1) {
+      console.error(
+        `Expected ${label} to be unique, but found ${this.length} matches.`,
+      );
+    }
+    return this;
+  },
   /** If the query is empty, return alt, otherwise return this */
   or(alt) {
     return this.exists() ? this : alt;
@@ -210,22 +226,23 @@ class ParsonsWidget {
   }
 
   setupToolbarBindings() {
-    const toolbar = $(this.config.toolbar);
+    const toolbar = $(this.config.toolbar).checkUnique("toolbar");
+    const helpButton = toolbar.find(`.widget-help`).checkUnique("widget help");
+    const copyButton = toolbar.find(`.widget-copy`);
 
-    toolbar.find(`.widget-help`).popover({
+    helpButton.popover({
       placement: "auto",
       trigger: "focus",
       html: true,
       title: "Faded Parsons Help",
       content: buildToolbarHelpContent(), // changes here should be reflected in keyMotionModifiers!
     });
-    toolbar.find(`.widget-help`).attr(
+    helpButton.attr(
       "aria-description",
       buildToolbarHelpContent().replaceAll("<br>", " "),
     );
 
-    toolbar
-      .find(`.widget-copy`) // could not exist, that's ok.
+    copyButton
       .popover({
         placement: "auto",
         trigger: "focus",
@@ -287,8 +304,9 @@ class ParsonsWidget {
       this.updateIndent(ui.item[0], this.getIndentAtDragPosition(ui), true);
     };
 
-    const starterTray = $(this.config.starterList); // may not exist!
-    const solutionTray = $(this.config.solutionList);
+    $(this.config.main).find(".codeline-tray").checkExists("codeline trays");
+    const starterTray = $(this.config.starterList);
+    const solutionTray = $(this.config.solutionList).checkUnique("solution tray");
 
     const grid = this.config.canIndent && [
       this.config.xIndent * CHAR_WIDTH_IN_PX,
@@ -400,8 +418,8 @@ class ParsonsWidget {
   }
 
   setupAccessibilityBindings() {
-    const descriptor = $(this.config.ariaDescriptor);
-    const details = $(this.config.ariaDetails);
+    const descriptor = $(this.config.ariaDescriptor).checkUnique("aria descriptor");
+    const details = $(this.config.ariaDetails).checkUnique("aria details");
 
     $(this.config.main)
       .attr("aria-labelledby", descriptor.attr("id"))
@@ -422,7 +440,7 @@ class ParsonsWidget {
   }
 
   setupInteractivityBindings() {
-    $(this.config.main).on({
+    $(this.config.main).checkUnique("main widget").on({
       focus: (e) => {
         if (e.target !== e.currentTarget) return;
         this.updateAriaInfo(null, false);
