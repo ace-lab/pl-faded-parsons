@@ -101,19 +101,23 @@ $.fn.extend({
   exists() {
     return this.length !== 0;
   },
-  /** Logs when a setup-time query that must exist is empty. */
-  checkExists(label) {
-    if (!this.exists()) {
-      console.error(`Expected ${label} to exist, but it was missing.`);
+  /** Throws when a setup-time query that must exist is empty. */
+  expectExists(label) {
+    const length = this.length ?? 0;
+    if (length === 0) {
+      const message = `Expected ${label} to exist, but it was missing.`;
+      console.error(message);
+      throw new Error(message);
     }
     return this;
   },
-  /** Logs when a setup-time query that must be unique is missing or duplicated. */
-  checkUnique(label) {
-    if (this.length !== 1) {
-      console.error(
-        `Expected ${label} to be unique, but found ${this.length} matches.`,
-      );
+  /** Throws when a setup-time query that must be unique is missing or duplicated. */
+  expectUnique(label) {
+    const length = this.length ?? 0;
+    if (length !== 1) {
+      const message = `Expected ${label} to be unique, but found ${length} matches.`;
+      console.error(message);
+      throw new Error(message);
     }
     return this;
   },
@@ -146,9 +150,8 @@ $.fn.extend({
  *    <!-- inputs in the template that will save
  *         the student's progress between reloads
  *    -->
- *    <input#{{config.solutionOrderStorage}}
- *    <input#{{config.starterOrderStorage}}
- *    <input#{{config.solutionSubmissionStorage}}
+ *    <input#{{config.storage}}
+ *    <input#{{config.logStorage}} <!-- optional if !config.loggingEnabled -->
  *   ...
  *   ( <!-- A starter tray is optional -->
  *      <div#{{config.starter}}.codeline-tray>
@@ -227,8 +230,8 @@ class ParsonsWidget {
   }
 
   setupToolbarBindings() {
-    const toolbar = $(this.config.toolbar).checkUnique("toolbar");
-    const helpButton = toolbar.find(`.widget-help`).checkUnique("widget help");
+    const toolbar = $(this.config.toolbar).expectUnique("toolbar");
+    const helpButton = toolbar.find(`.widget-help`).expectUnique("widget help");
     const copyButton = toolbar.find(`.widget-copy`);
 
     helpButton.popover({
@@ -308,11 +311,9 @@ class ParsonsWidget {
       this.updateIndent(ui.item[0], this.getIndentAtDragPosition(ui), true);
     };
 
-    $(this.config.main).find(".codeline-tray").checkExists("codeline trays");
+    $(this.config.main).find(".codeline-tray").expectExists("codeline trays");
     const starterTray = $(this.config.starterList);
-    const solutionTray = $(this.config.solutionList).checkUnique(
-      "solution tray",
-    );
+    const solutionTray = $(this.config.solutionList).expectUnique("solution tray");
 
     const grid = this.config.canIndent && [
       this.config.xIndent * CHAR_WIDTH_IN_PX,
@@ -418,10 +419,8 @@ class ParsonsWidget {
   }
 
   setupAccessibilityBindings() {
-    const descriptor = $(this.config.ariaDescriptor).checkUnique(
-      "aria descriptor",
-    );
-    const details = $(this.config.ariaDetails).checkUnique("aria details");
+    const descriptor = $(this.config.ariaDescriptor).expectUnique("aria descriptor");
+    const details = $(this.config.ariaDetails).expectUnique("aria details");
 
     $(this.config.main)
       .attr("aria-labelledby", descriptor.attr("id"))
@@ -446,7 +445,7 @@ class ParsonsWidget {
 
   setupInteractivityBindings() {
     $(this.config.main)
-      .checkUnique("main widget")
+      .expectUnique("main widget")
       .on({
         focus: (e) => {
           if (e.target !== e.currentTarget) return;
@@ -1057,10 +1056,7 @@ class ParsonsWidget {
 
     const entry = { timestamp, tag, data };
 
-    const s = $(this.config.logStorage).checkExists("log storage");
-    if (!s.exists()) {
-      return;
-    }
+    const s = $(this.config.logStorage).expectExists("log storage");
 
     let prev_log = s.val();
     prev_log = JSON.parse(prev_log);

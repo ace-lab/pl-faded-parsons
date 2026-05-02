@@ -375,6 +375,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const calls = {};
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const help = {
                     popover(options) {
                       calls.help = options;
@@ -397,14 +401,14 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   };
                   const toolbar = {
                     find(selector) {
-                      if (selector === '.widget-help') return help;
-                      if (selector === '.widget-copy') return copy;
+                      if (selector === '.widget-help') return chainable(help);
+                      if (selector === '.widget-copy') return chainable(copy);
                       throw new Error(selector);
                     },
                   };
                   sandbox.$ = (selector) => {
-                    if (selector === '#toolbar') return toolbar;
-                    return { length: 0, exists() { return false; } };
+                    if (selector === '#toolbar') return chainable(toolbar);
+                    return chainable({ length: 0, exists() { return false; } });
                   };
                   sandbox.jQuery = sandbox.$;
                   sandbox.navigator.clipboard = {
@@ -447,6 +451,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const captured = {};
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   function makeItem() {
                     const parentObj = {};
                     const parentWrapper = {
@@ -475,18 +483,27 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     },
                   };
                   sandbox.$ = (selector) => {
-                    if (selector === '#starter') return starter;
-                    if (selector === '#solution') return solution;
-                    return {
+                    if (selector === '#main') {
+                      return chainable({
+                        find(query) {
+                          if (query === '.codeline-tray') return chainable({ length: 1 });
+                          throw new Error(query);
+                        },
+                      });
+                    }
+                    if (selector === '#starter') return chainable(starter);
+                    if (selector === '#solution') return chainable(solution);
+                    return chainable({
                       length: 0,
                       exists() { return false; },
-                    };
+                    });
                   };
                   sandbox.jQuery = sandbox.$;
                   const logTags = [];
                   const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
                   const widget = Object.create(Widget.prototype);
                   widget.config = {
+                    main: '#main',
                     starterList: '#starter',
                     solutionList: '#solution',
                     canIndent: true,
@@ -707,6 +724,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   const blanks = [{
                     attrs: {},
                   }];
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const main = {
                     attr(name, value) {
                       attrs.main[name] = value;
@@ -732,22 +753,22 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   };
                   sandbox.$ = (selector) => {
                     if (selector === '#descriptor') {
-                      return {
+                      return chainable({
                         css(name, value) { attrs.descriptor[name] = value; return this; },
                         attr(name) { return name === 'id' ? 'descriptor-id' : null; },
-                      };
+                      });
                     }
                     if (selector === '#details') {
-                      return {
+                      return chainable({
                         css(name, value) { attrs.details[name] = value; return this; },
                         attr(name) { return name === 'id' ? 'details-id' : null; },
-                      };
+                      });
                     }
                     if (selector === '#main') return main;
-                    return {
+                    return chainable({
                       attr() { return this; },
                       find() { return { attr() { return this; } }; },
-                    };
+                    });
                   };
                   sandbox.jQuery = sandbox.$;
                   const widget = {
@@ -786,6 +807,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const codeline = { attrs: {} };
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const main = {
                     attr(name, value) {
                       this[name] = value;
@@ -804,23 +829,23 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                           },
                         };
                       }
-                      return {
+                      return chainable({
                         attr() { return this; },
-                      };
+                      });
                     },
                   };
                   sandbox.$ = (selector) => {
                     if (selector === '#descriptor') {
-                      return {
+                      return chainable({
                         css() { return this; },
                         attr(name) { return name === 'id' ? 'descriptor-id' : null; },
-                      };
+                      });
                     }
                     if (selector === '#details') {
-                      return {
+                      return chainable({
                         css() { return this; },
                         attr(name) { return name === 'id' ? 'details-id' : null; },
-                      };
+                      });
                     }
                     if (selector === '#main') return main;
                     if (selector === codeline) {
@@ -897,6 +922,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const events = {};
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const firstLine = { id: 'first-line' };
                   const codelineList = {
                     each(fn) {
@@ -934,7 +963,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     },
                   };
                   sandbox.$ = (selector) => {
-                    if (selector === '#main') return main;
+                    if (selector === '#main') return chainable(main);
                     if (selector === firstLine) {
                       return {
                         is() { return false; },
@@ -1752,6 +1781,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const calls = [];
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const line1 = { id: 'line1' };
                   const line2 = { id: 'line2' };
                   const codelineList = {
@@ -1777,7 +1810,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     },
                   };
                   sandbox.$ = (selector) => {
-                    if (selector === '#main') return main;
+                    if (selector === '#main') return chainable(main);
                     if (selector === line1) {
                       return {
                         is(query) { return query === ':focus'; },
@@ -1896,6 +1929,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 (() => {
                   const handlers = {};
                   const blankHandlers = {};
+                  const chainable = (obj) => Object.assign(obj, {
+                    expectExists() { return this; },
+                    expectUnique() { return this; },
+                  });
                   const codeline = { target: 'line', value: 'line' };
                   const blank = { target: 'blank', value: 'abc' };
                   const allBlanks = {
@@ -1938,14 +1975,14 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   };
                   sandbox.$ = (selector) => {
                     if (selector === '#main') {
-                      return {
+                      return chainable({
                         on() { return this; },
                         find(q) {
                           if (q === 'li.codeline') return codelines;
                           if (q === '.codeline-tray') return trays;
                           return allBlanks;
                         },
-                      };
+                      });
                     }
                     if (selector === codeline) {
                       return {
@@ -1968,12 +2005,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                         selectionEnd: 3,
                       };
                     }
-                    return {
+                    return chainable({
                       find() { return allBlanks; },
                       attr() { return this; },
                       on() { return this; },
                       val() { return 'abc'; },
-                    };
+                    });
                   };
                   sandbox.jQuery = sandbox.$;
                   const widget = {
