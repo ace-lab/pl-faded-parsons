@@ -74,7 +74,7 @@ The question template creates:
   - `name="{{answers_name}}.main"`
   - `name="{{answers_name}}.log"`
 - one or two sortable trays
-- toolbar buttons
+- floating help/copy controls
 - a `ParsonsWidget` config whose selectors must match the rendered DOM
 
 ### 4. Browser-side state persistence
@@ -144,8 +144,8 @@ Generated DOM state includes:
   - `#ol-starter-code-{{uuid}}`
   - `#solution-{{uuid}}`
   - `#ol-solution-{{uuid}}`
-- toolbar id
-  - `#widget-toolbar-{{uuid}}`
+- floating controls id
+  - `#widget-controls-{{uuid}}`
 
 These ids must stay aligned with the config object passed into `new ParsonsWidget(...)`.
 

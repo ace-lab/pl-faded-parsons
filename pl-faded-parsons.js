@@ -143,7 +143,7 @@ $.fn.extend({
  *       </ol>
  *    </div>
  *     ...
- *    <div#{{config.toolbar}>
+ *    <div#{{config.toolbar}}>
  *       ...
  *       <div.fpp-help></div>
  *       <div.fpp-copy></div>

@@ -9,8 +9,11 @@ code {
 }
 
 .pl-faded-parsons {
+  position: relative;
   padding: 10px;
+  overflow-x: clip;
 }
+
 
 .aria-descriptor, .aria-details {
   display: none;
@@ -32,7 +35,10 @@ code {
 .codeline-tray {
   padding: 0 0.5em;
   position: static;
-  float: left;
+  float: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 .codeline-tray.starter-code-tray {
@@ -40,16 +46,22 @@ code {
 }
 
 .codeline-tray ol {
+  /* flex: 1 1 auto; */
+  min-height: 100%;
   font-size: smaller;
   font-family: monospace;
   list-style: none;
-  padding-bottom: 60px;
+  padding-bottom: 0;
   padding-left: 0;
   margin-left: 0;
 }
 
+.solution-code-tray .codeline-list {
+  padding-bottom: 2.5rem;
+}
+
 .codeline-tray ol:empty {
-  padding-bottom: 80px;
+  padding-bottom: 0;
 }
 
 .codeline-tray li,
@@ -149,14 +161,21 @@ code {
   outline-color: var(--focus-border-color);
 }
 
-.toolbar {
-  margin: -10px;
-  margin-top: 2px;
-  background: #e0e0e030;
+.fpp-floating-controls {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 2;
   font-size: 90%;
-  align-items: flex-end;
-  flex-direction: row-reverse;
-  border-radius: 0;
+  pointer-events: auto;
+}
+
+.fpp-floating-controls .btn {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .pre-text, .post-text {
