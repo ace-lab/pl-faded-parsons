@@ -8,8 +8,7 @@
     "elementScripts": ["prettify.js", "pl-faded-parsons.js"],
     "elementStyles": [
       "pl-faded-parsons.css",
-      "pl-faded-parsons-prettify-light.css",
-      "pl-faded-parsons-prettify-dark.css"
+      "pl-faded-parsons-prettify-light.css"
     ]
   }
 }
