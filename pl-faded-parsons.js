@@ -780,8 +780,7 @@ class ParsonsWidget {
     const { item, position } = ui;
     const codeline = item[0];
     const tray = getCurrentDragTray(ui);
-    const dragLeft =
-      getPageLeft(ui?.helper) ?? ui?.offset?.left ?? position?.left ?? 0;
+    const dragLeft = ui?.offset?.left ?? position?.left ?? 0;
     const trayLeft = getPageLeft(tray) ?? getPageLeft(item.parent()) ?? 0;
     const pxDelta = dragLeft - trayLeft;
     const charDelta = pxDelta / CHAR_WIDTH_IN_PX;

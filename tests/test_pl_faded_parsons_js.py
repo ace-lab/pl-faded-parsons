@@ -176,11 +176,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       {
                         },
                       ],
-                    helper: [{
-                      getBoundingClientRect() {
-                        return { left: 96 };
-                      },
-                    }],
+                    offset: { left: 96 },
                     position: { left: 96 },
                   };
                   ui.item.parent = () => tray;
@@ -212,11 +208,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     item: [{
                       style: {},
                     }],
-                    helper: [{
-                      getBoundingClientRect() {
-                        return { left: 164 };
-                      },
-                    }],
+                    offset: { left: 164 },
                     position: { left: 164 },
                   };
                   ui.item.parent = () => tray;
@@ -255,11 +247,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     item: [{
                       style: {},
                     }],
-                    helper: [{
-                      getBoundingClientRect() {
-                        return { left: 164 };
-                      },
-                    }],
+                    offset: { left: 164 },
                     position: { left: 164 },
                     placeholder: {
                       parent() {
@@ -289,6 +277,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     item: [{
                       style: {},
                     }],
+                    offset: { left: 0 },
                     position: { left: 0 },
                   };
                   ui.item.parent = () => ({ position() { return undefined; } });
@@ -320,11 +309,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     item: [{
                       style: {},
                     }],
-                    helper: [{
-                      getBoundingClientRect() {
-                        return { left: 324 };
-                      },
-                    }],
+                    offset: { left: 324 },
                     position: { left: 80 },
                   };
                   ui.item.parent = () => tray;
