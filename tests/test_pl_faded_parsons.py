@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-ELEMENT_DIR = Path(__file__).resolve().parents[1]
+ELEMENT_DIR = Path.cwd()
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
 
 if str(ELEMENT_DIR) not in sys.path:
@@ -93,41 +93,77 @@ class TestPlFadedParsonsController(unittest.TestCase):
         </pl-faded-parsons>
         """
 
-        with self.assertRaisesRegex(ValueError, "pre-text and post-text are not supported"):
+        with self.assertRaisesRegex(
+            ValueError,
+            "pre-text and post-text are only supported in no-code format",
+        ):
             pl_faded_parsons._build_config(html, self.data)
 
     def test_build_config_requires_code_lines_when_pre_or_post_text_present(self):
         html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <pre-text>before()</pre-text>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "no-code format requires an explicit <code-lines> child",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
+
+    def test_build_config_rejects_pre_and_post_text_outside_no_code_format(self):
+        html = """
         <pl-faded-parsons answers-name="demo" format="bottom">
             <pre-text>before()</pre-text>
-            pass
+            <code-lines>pass</code-lines>
             <post-text>after()</post-text>
         </pl-faded-parsons>
         """
 
         with self.assertRaisesRegex(
             ValueError,
-            "pre-text and post-text require an explicit <code-lines> child",
+            "pre-text and post-text are only supported in no-code format",
         ):
+            pl_faded_parsons._build_config(html, self.data)
+
+    def test_build_config_requires_code_lines_in_no_code_format(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <pre-text>before()</pre-text>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "no-code format requires an explicit <code-lines> child",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
+
+    def test_build_config_rejects_duplicate_child_tags(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <code-lines>first()</code-lines>
+            <code-lines>second()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(ValueError, "Only one <code-lines> child is allowed"):
             pl_faded_parsons._build_config(html, self.data)
 
     def test_build_initial_state_parses_givens_blanks_and_distractors(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
-            <pre-text>before()</pre-text>
             <code-lines>given() #1given
 starter()
 value = !BLANK #blank 42
 ignored() #distractor</code-lines>
-            <post-text>after()</post-text>
         </pl-faded-parsons>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
         state = pl_faded_parsons._build_initial_state(config, self.data)
 
-        self.assertEqual(config["pre_text"], "before()")
-        self.assertEqual(config["post_text"], "after()")
         self.assertEqual(config["size"], "wide")
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -167,6 +203,41 @@ value = !BLANK #blank
             ["kept()", "starter()", "value = "],
         )
         self.assertEqual(state["starter"], [])
+
+    def test_build_config_reads_visual_indent_from_code_lines(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <code-lines visual-indent="2">kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertEqual(config["visual_indent"], 2)
+
+    def test_build_config_reads_max_indent_level_from_element(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-indent-level="7">
+            <code-lines>kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertEqual(config["max_indent_level"], 7)
+
+    def test_build_config_rejects_visual_indent_outside_no_code_format(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="bottom">
+            <code-lines visual-indent="2">kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "visual-indent is only supported in no-code format",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
 
     def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
         line = pl_faded_parsons._parse_markup_line(
@@ -236,10 +307,9 @@ value = !BLANK #blank
 
     def test_render_question_includes_hidden_fields_and_text_blocks(self):
         html = """
-        <pl-faded-parsons answers-name="demo" format="bottom" language="python">
+        <pl-faded-parsons answers-name="demo" format="no-code" language="python">
             <pre-text>before()</pre-text>
-            <code-lines>given() #0given
-starter()</code-lines>
+            <code-lines>given()</code-lines>
             <post-text>after()</post-text>
         </pl-faded-parsons>
         """
@@ -250,6 +320,30 @@ starter()</code-lines>
         self.assertIn('name="demo.log"', rendered)
         self.assertIn("before()", rendered)
         self.assertIn("after()", rendered)
+        self.assertIn("maxIndentLevel: 5,", rendered)
+        self.assertIn("visualIndent: 0,", rendered)
+
+    def test_render_question_threads_visual_indent_into_trays(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="no-code">
+            <code-lines visual-indent="3">kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("visualIndent: 3,", rendered)
+
+    def test_render_question_threads_max_indent_level_into_widget_config(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-indent-level="7">
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("maxIndentLevel: 7,", rendered)
 
     def test_render_question_makes_widget_root_the_tab_stop(self):
         html = """

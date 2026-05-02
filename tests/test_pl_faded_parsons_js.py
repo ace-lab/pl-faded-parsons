@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 
-ELEMENT_DIR = Path(__file__).resolve().parents[1]
+ELEMENT_DIR = Path.cwd()
 JS_PATH = ELEMENT_DIR / "pl-faded-parsons.js"
 
 
@@ -81,8 +81,40 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result["xIndent"], 4)
         self.assertFalse(result["canIndent"])
+        self.assertEqual(result["visualIndent"], 0)
         self.assertTrue(result["prettyPrint"])
         self.assertEqual(result["extra"], 1)
+
+    def test_apply_visual_indent_sets_css_variable_on_trays(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const calls = [];
+                  sandbox.$ = sandbox.jQuery = (selector) => ({
+                    find(query) {
+                      return {
+                        css(name, value) {
+                          calls.push([selector, query, name, value]);
+                        },
+                      };
+                    },
+                  });
+
+                  sandbox.window.ParsonsWidget.prototype.applyVisualIndent.call({
+                    config: { main: '#widget', visualIndent: 3 },
+                  });
+
+                  return calls;
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(
+            result,
+            [["#widget", ".codeline-tray", "--pl-faded-parsons-visual-indent", 3]],
+        )
 
     def test_build_toolbar_help_content_joins_lines(self):
         result = run_js("sandbox.window.ParsonsWidgetHelpers.buildToolbarHelpContent()")
@@ -105,11 +137,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { maxIndentLevel: 5 };
                   return [
-                    sandbox.window.ParsonsWidgetHelpers.clampIndent(-2),
-                    sandbox.window.ParsonsWidgetHelpers.clampIndent(3),
-                    sandbox.window.ParsonsWidgetHelpers.clampIndent(99),
+                    widget.clampIndent(-2),
+                    widget.clampIndent(3),
+                    widget.clampIndent(99),
                   ];
                 })()
                 """
@@ -123,20 +157,19 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
-                  const widget = {
-                    config: { xIndent: 4 },
-                    getCodelineIndent() { return 2; },
-                  };
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 2;
                   const ui = {
                     item: [
                       {
                         },
-                    ],
+                      ],
                     position: { left: 96 },
                   };
                   ui.item.parent = () => ({ position: () => ({ left: 0 }) });
-                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui);
+                  return widget.getIndentAtDragPosition(ui);
                 })()
                 """
             )
@@ -149,12 +182,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             textwrap.dedent(
                 """
                 (() => {
-                  sandbox.ParsonsGlobalUISettings.maxIndentLevel = 5;
                   const staleTray = { position() { return { left: 0 }; } };
-                  const widget = {
-                    config: { xIndent: 4 },
-                    getCodelineIndent() { return 0; },
-                  };
+                  const liveTray = { position() { return { left: 100 }; } };
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 0;
                   const ui = {
                     item: [{
                       style: {},
@@ -162,7 +195,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     position: { left: 164 },
                   };
                   ui.item.parent = () => staleTray;
-                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui);
+                  return widget.getIndentAtDragPosition(ui, liveTray);
                 })()
                 """
             )
@@ -170,15 +203,49 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertEqual(result, 5)
 
+    def test_get_indent_at_drag_position_uses_placeholder_tray_when_dragging_across_trays(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const startTray = { position() { return { left: 0 }; } };
+                  const liveTray = { position() { return { left: 100 }; } };
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 0;
+                  const ui = {
+                    item: [{
+                      style: {},
+                    }],
+                    position: { left: 164 },
+                    placeholder: {
+                      parent() {
+                        return liveTray;
+                      },
+                    },
+                  };
+                  ui.item.parent = () => startTray;
+                  return widget.getIndentAtDragPosition(
+                    ui,
+                    sandbox.window.ParsonsWidgetHelpers.getCurrentDragTray(ui),
+                  );
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result, 2)
+
     def test_get_indent_at_drag_position_falls_back_when_parent_has_no_position(self):
         result = run_js(
             textwrap.dedent(
                 """
                 (() => {
-                  const widget = {
-                    config: { xIndent: 4 },
-                    getCodelineIndent() { return 1; },
-                  };
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = { xIndent: 4, maxIndentLevel: 5 };
+                  widget.getCodelineIndent = () => 1;
                   const ui = {
                     item: [{
                       style: {},
@@ -186,7 +253,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     position: { left: 0 },
                   };
                   ui.item.parent = () => ({ position() { return undefined; } });
-                  return sandbox.window.ParsonsWidgetHelpers.getIndentAtDragPosition(widget, ui);
+                  return widget.getIndentAtDragPosition(ui);
                 })()
                 """
             )
@@ -359,32 +426,32 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   sandbox.jQuery = sandbox.$;
                   sandbox.ParsonsGlobalUISettings.allowIndentingInStarterTray = true;
                   const logTags = [];
-                  const widget = {
-                    config: {
-                      starterList: '#starter',
-                      solutionList: '#solution',
-                      canIndent: true,
-                      xIndent: 4,
-                      onSortableUpdate() {},
-                    },
-                    activeSortablePlaceholder: null,
-                    setCodelineInMotion() {},
-                    syncSortablePlaceholder() {},
-                    updateIndent(line, indent, absolute) {
-                      captured.updatedIndent = { line, indent, absolute };
-                    },
-                    storeStudentProgress() {
-                      captured.stored = true;
-                    },
-                    addLogEntry(tag) {
-                      logTags.push(tag);
-                    },
-                    codelineLogEntry() {
-                      return { stub: true };
-                    },
+                  const Widget = sandbox.window.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  const widget = Object.create(Widget.prototype);
+                  widget.config = {
+                    starterList: '#starter',
+                    solutionList: '#solution',
+                    canIndent: true,
+                    xIndent: 4,
+                    maxIndentLevel: 5,
+                    onSortableUpdate() {},
+                  };
+                  widget.activeSortablePlaceholder = null;
+                  widget.setCodelineInMotion = () => {};
+                  widget.syncSortablePlaceholder = () => {};
+                  widget.updateIndent = (line, indent, absolute) => {
+                    captured.updatedIndent = { line, indent, absolute };
+                  };
+                  widget.storeStudentProgress = () => {
+                    captured.stored = true;
+                  };
+                  widget.addLogEntry = (tag) => {
+                    logTags.push(tag);
+                  };
+                  widget.codelineLogEntry = () => {
+                    return { stub: true };
                   };
                   widget.getCodelineIndent = () => 4;
-                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
                   Widget.prototype.setupTraySortables.call(widget);
                   const item = makeItem();
                   captured.starter.start({}, {

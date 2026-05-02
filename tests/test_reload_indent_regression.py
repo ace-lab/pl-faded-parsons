@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-ELEMENT_DIR = Path(__file__).resolve().parents[1]
+ELEMENT_DIR = Path.cwd()
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
 
 if str(ELEMENT_DIR) not in sys.path:
@@ -139,6 +139,7 @@ class TestReloadIndentRegression(unittest.TestCase):
             }
             element_html = (
                 '<pl-faded-parsons answers-name="demo" format="no-code">'
+                "<code-lines>kept()</code-lines>"
                 "</pl-faded-parsons>"
             )
 

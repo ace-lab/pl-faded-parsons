@@ -3,6 +3,8 @@ function buildWidgetConfig(config) {
     {
       xIndent: 4,
       canIndent: true,
+      maxIndentLevel: 5,
+      visualIndent: 0,
       prettyPrint: true,
       onSortableUpdate: (_event, _ui) => {},
       onBlankUpdate: (_event, _input) => {},
@@ -33,21 +35,6 @@ function getKeyMotionData(e) {
     /** arrow direction is `"Right"` or `"Down"` */
     moveForward: e.key === "ArrowRight" || e.key === "ArrowDown",
   };
-}
-
-function clampIndent(indent) {
-  return Math.max(0, Math.min(indent, ParsonsGlobalUISettings.maxIndentLevel));
-}
-
-function getIndentAtDragPosition(widget, ui) {
-  const { item, position } = ui;
-  const codeline = item[0];
-  const tray = getCurrentDragTray(ui);
-  const trayPosition = tray?.position?.() ?? item.parent()?.position?.() ?? {};
-  const pxDelta = position.left - (trayPosition.left ?? 0);
-  const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
-  const levelDelta = Math.floor(charDelta / widget.config.xIndent);
-  return clampIndent(widget.getCodelineIndent(codeline) + levelDelta);
 }
 
 function getCurrentDragTray(ui) {
@@ -169,6 +156,7 @@ class ParsonsWidget {
     widget.activeSortablePlaceholder = $();
 
     widget.validateConfig();
+    widget.applyVisualIndent();
     widget.setupToolbarBindings();
     widget.setupTraySortables();
     widget.setupCoreDomHelpers();
@@ -243,6 +231,13 @@ class ParsonsWidget {
 
   }
 
+  applyVisualIndent() {
+    const visualIndent = Number(this.config.visualIndent ?? 0) || 0;
+    $(this.config.main)
+      .find(".codeline-tray")
+      .css("--pl-faded-parsons-visual-indent", visualIndent);
+  }
+
   enterCodelineCapture() {
     this.codelineCaptureActive = true;
     this.enterBlankOnCodelineFocus = false;
@@ -273,7 +268,7 @@ class ParsonsWidget {
 
   setupTraySortables() {
     const updateIndentAfterDrag = (ui) => {
-      this.updateIndent(ui.item[0], getIndentAtDragPosition(this, ui), true);
+      this.updateIndent(ui.item[0], this.getIndentAtDragPosition(ui), true);
     };
 
     const starterTray = $(this.config.starterList); // may not exist!
@@ -303,7 +298,7 @@ class ParsonsWidget {
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui),
+          this.getIndentAtDragPosition(ui),
         );
       },
       receive: (_, ui) =>
@@ -334,7 +329,7 @@ class ParsonsWidget {
       sort: (_, ui) => {
         this.syncSortablePlaceholder(
           ui.item,
-          getIndentAtDragPosition(this, ui),
+          this.getIndentAtDragPosition(ui),
         );
       },
       stop: (event, ui) => {
@@ -759,6 +754,22 @@ class ParsonsWidget {
 
   /////////////////////////////// GENERAL HELPERS ////////////////////////////
 
+
+  clampIndent(indent) {
+    return Math.max(0, Math.min(indent, this.config.maxIndentLevel));
+  }
+
+  getIndentAtDragPosition(ui) {
+    const { item, position } = ui;
+    const codeline = item[0];
+    const tray = getCurrentDragTray(ui);
+    const trayPosition = tray?.position?.() ?? item.parent()?.position?.() ?? {};
+    const pxDelta = position.left - (trayPosition.left ?? 0);
+    const charDelta = pxDelta / CHAR_WIDTH_IN_PX;
+    const levelDelta = Math.floor(charDelta / this.config.xIndent);
+    return this.clampIndent(this.getCodelineIndent(codeline) + levelDelta);
+  }
+
   syncSortablePlaceholder(codeline, indent) {
     if (indent === undefined) {
       indent = this.getCodelineIndent(codeline);
@@ -877,7 +888,7 @@ class ParsonsWidget {
 
     let oldCodeIndent = this.getCodelineIndent(codeline);
     if (!absolute) newCodeIndent += oldCodeIndent;
-    newCodeIndent = clampIndent(newCodeIndent);
+    newCodeIndent = this.clampIndent(newCodeIndent);
 
     if (oldCodeIndent == newCodeIndent) return oldCodeIndent;
 
@@ -909,7 +920,7 @@ class ParsonsWidget {
       .map((line) => this.getCodelineIndent(line))
       .reduce((x, y) => Math.max(x, y), 0);
     const capped_max_code_indent = Math.min(
-      ParsonsGlobalUISettings.maxIndentLevel,
+      this.config.maxIndentLevel,
       max_code_indent,
     );
     const [backgroundColor, tabStopColor] = [
@@ -1089,8 +1100,6 @@ window.ParsonsWidgetHelpers = {
   buildWidgetConfig,
   buildToolbarHelpContent,
   getKeyMotionData,
-  clampIndent,
-  getIndentAtDragPosition,
   getCurrentDragTray,
   rememberDragStartTray,
   forgetDragStartTray,
@@ -1106,8 +1115,6 @@ window.ParsonsGlobalUISettings ||= /* singleton! */ {
    * in the codeline before it changes indents
    */
   alwaysIndentOnTab: true,
-  /** Maximum logical indent level of codelines in the solution tray */
-  maxIndentLevel: 5,
   /** Toggles the visibility of the aria-describedby and aria-details divs */
   showAriaDescriptor: false,
   /** Toggles the indicator for the next unused tab stop */

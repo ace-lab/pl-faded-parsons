@@ -124,8 +124,10 @@ File: `pl-faded-parsons.py`
   - always rendered
 - `pre_text`
   - optional block before the solution tray
+  - only supported when `format="no-code"`
 - `post_text`
   - optional block after the solution tray
+  - only supported when `format="no-code"`
 
 ### Mustache -> DOM
 
@@ -181,6 +183,10 @@ The invariant is:
 ```text
 len(codeSnippets) == len(blankValues) + 1
 ```
+
+The `code-lines` child may also carry an optional `visual-indent` attribute
+that is threaded through the render config as a nonnegative integer. It
+defaults to `0` and is intended for later tray-level styling.
 
 ### JS config -> DOM selectors
 
@@ -405,6 +411,15 @@ These names must stay aligned:
 - Mustache partial:
   - `{{#code}}`
   - `{{#blank}}`
+
+### Child element rules
+
+- `pre-text` and `post-text`
+  - only allowed when `format="no-code"`
+  - at most one of each
+- `code-lines`
+  - at most one direct child
+  - required when `format="no-code"`
 
 ## Audit Notes And Inconsistencies
 

@@ -35,6 +35,23 @@ def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | 
     return out
 
 
+def get_integer_attrib(
+    element: lxml.html.HtmlElement, name: str, default: int = 0
+) -> int:
+    """Parse an integer HTML attribute using PrairieLearn-style semantics."""
+
+    raw_value = element.get(name)
+    if raw_value is None:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"Attribute `{name}` must be an integer, got `{raw_value}`."
+        ) from exc
+
+
 def get_boolean_attrib(
     element: lxml.html.HtmlElement, name: str, default: bool = False
 ) -> bool:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    test_dir = Path(__file__).resolve().parent
+    test_dir = Path.cwd().resolve() / "tests"
     suite = unittest.defaultTestLoader.discover(
         start_dir=str(test_dir),
         pattern="test*.py",

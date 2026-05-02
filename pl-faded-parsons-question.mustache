@@ -57,11 +57,14 @@
 </div>
 
 <script>
-    $(document).ready(() =>
+    $(document).ready(() => {
         new ParsonsWidget({
             main: '#pl-faded-parsons-{{uuid}}',
             uuid: '{{uuid}}',
             loggingEnabled: {{#logging_enabled}}true{{/logging_enabled}}{{^logging_enabled}}false{{/logging_enabled}},
+
+            maxIndentLevel: {{max_indent_level}},
+            visualIndent: {{visual_indent}},
 
             logStorage: "#pl-faded-parsons-{{uuid}} > input.log",
             storage: "#pl-faded-parsons-{{uuid}} > input.main",
@@ -76,6 +79,6 @@
             starter: '#starter-code-{{uuid}}',
             starterList: '#ol-starter-code-{{uuid}}',
             {{/starter}}
-        })
-    );
+        });
+    });
 </script>

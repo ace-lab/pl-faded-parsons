@@ -9,6 +9,7 @@ code {
 }
 
 .pl-faded-parsons {
+  --pl-faded-parsons-indent-width: 4ch;
   position: relative;
   padding: 10px;
   overflow-x: clip;
@@ -68,12 +69,16 @@ code {
 }
 
 .codeline-tray {
+  --pl-faded-parsons-visual-indent: 0;
   padding: 0 0.5em;
   position: static;
   float: none;
   display: flex;
   flex-direction: column;
   min-height: 100%;
+  margin-left: calc(
+    var(--pl-faded-parsons-visual-indent, 0) * var(--pl-faded-parsons-indent-width)
+  );
 }
 
 .codeline-tray.starter-code-tray {
@@ -157,7 +162,6 @@ code {
 }
 
 .codeline-tray li {
-  --pl-faded-parsons-indent-width: 4ch;
   -moz-border-radius: 10px;
   -webkit-border-radius: 10px;
   border-radius: 10px;

@@ -34,9 +34,15 @@ from typing import Any, TypedDict
 import chevron
 import lxml.html as xml
 
-
 REQUIRED_ATTRIBS = ["answers-name"]
-OPTIONAL_ATTRIBS = ["format", "language", "file-name", "solution-path", "log"]
+OPTIONAL_ATTRIBS = [
+    "format",
+    "language",
+    "file-name",
+    "solution-path",
+    "log",
+    "max-indent-level",
+]
 
 FORMAT_RIGHT = "right"
 FORMAT_BOTTOM = "bottom"
@@ -89,6 +95,8 @@ class ElementConfig(TypedDict):
     markup: str
     pre_text: str
     post_text: str
+    visual_indent: int
+    max_indent_level: int
     size: str
     solution_path: Path
 
@@ -165,17 +173,39 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
             f"{', '.join(sorted(VALID_FORMATS))}"
         )
 
-    pre_text = _get_child_text(element, "pre-text").strip("\n")
-    post_text = _get_child_text(element, "post-text").strip("\n")
-    if format_name == FORMAT_RIGHT and (pre_text or post_text):
+    pre_text_element = _get_unique_child(element, "pre-text")
+    post_text_element = _get_unique_child(element, "post-text")
+    code_lines_element = _get_unique_child(element, "code-lines")
+
+    if format_name != FORMAT_NO_CODE and (pre_text_element is not None or post_text_element is not None):
         raise ValueError(
-            "pre-text and post-text are not supported in right mode. "
-            'Use `format="bottom"` or `format="no-code"` instead.'
+            "pre-text and post-text are only supported in no-code format."
         )
-    if (pre_text or post_text) and not _has_child_tag(element, "code-lines"):
-        raise ValueError(
-            "pre-text and post-text require an explicit <code-lines> child."
-        )
+    if format_name == FORMAT_NO_CODE and code_lines_element is None:
+        raise ValueError("no-code format requires an explicit <code-lines> child.")
+
+    pre_text = (
+        (pre_text_element.text or "").strip("\n") if pre_text_element is not None else ""
+    )
+    post_text = (
+        (post_text_element.text or "").strip("\n") if post_text_element is not None else ""
+    )
+    if format_name == FORMAT_NO_CODE and not (code_lines_element.text or "").strip():
+        raise ValueError("no-code format requires non-empty <code-lines> content.")
+
+    max_indent_level = pl.get_integer_attrib(element, "max-indent-level", 5)
+    if max_indent_level < 0:
+        raise ValueError("Attribute `max-indent-level` must be nonnegative.")
+
+    visual_indent = (
+        pl.get_integer_attrib(code_lines_element, "visual-indent", 0)
+        if code_lines_element is not None
+        else 0
+    )
+    if visual_indent < 0:
+        raise ValueError("Attribute `visual-indent` must be nonnegative.")
+    if format_name != FORMAT_NO_CODE and visual_indent:
+        raise ValueError("visual-indent is only supported in no-code format.")
 
     question_path = Path(data["options"]["question_path"])
     solution_path = question_path / pl.get_string_attrib(
@@ -188,35 +218,36 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "language": pl.get_string_attrib(element, "language", ""),
         "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
         "logging_enabled": pl.get_boolean_attrib(element, "log", False),
-        "markup": _load_markup(element, question_path),
+        "markup": _load_markup(element, question_path, code_lines_element),
         "pre_text": pre_text,
         "post_text": post_text,
+        "visual_indent": visual_indent,
+        "max_indent_level": max_indent_level,
         "size": "narrow" if format_name == FORMAT_RIGHT else "wide",
         "solution_path": solution_path,
     }
 
 
-def _get_child_text(element: xml.HtmlElement, tag: str) -> str:
-    """Return the direct text content for a named child tag."""
+def _get_unique_child(
+    element: xml.HtmlElement, tag: str
+) -> xml.HtmlElement | None:
+    """Return the single direct child with a given tag, if present."""
 
-    for child in element:
-        if child.tag == tag:
-            return child.text or ""
-    return ""
-
-
-def _has_child_tag(element: xml.HtmlElement, tag: str) -> bool:
-    """Return whether the element contains a direct child with the given tag."""
-
-    return any(child.tag == tag for child in element)
+    matching_children = [child for child in element if child.tag == tag]
+    if len(matching_children) > 1:
+        raise ValueError(f"Only one <{tag}> child is allowed.")
+    return matching_children[0] if matching_children else None
 
 
-def _load_markup(element: xml.HtmlElement, question_path: Path) -> str:
+def _load_markup(
+    element: xml.HtmlElement,
+    question_path: Path,
+    code_lines_element: xml.HtmlElement | None,
+) -> str:
     """Load author-provided code lines from the element or fallback file."""
 
-    markup = _get_child_text(element, "code-lines")
-    if markup:
-        return markup
+    if code_lines_element is not None:
+        return code_lines_element.text or ""
 
     code_lines_path = question_path / "serverFilesQuestion" / "code_lines.txt"
     if code_lines_path.exists():
@@ -405,6 +436,7 @@ def _build_question_params(
     return {
         "answers_name": config["answers_name"],
         "language": config["language"],
+        "max_indent_level": config["max_indent_level"],
         "previous_log": json.dumps(state["log"] if config["logging_enabled"] else []),
         "logging_enabled": config["logging_enabled"],
         "uuid": pl.get_uuid(),
@@ -412,6 +444,7 @@ def _build_question_params(
             state["starter"],
             config["language"],
             config["size"],
+            visual_indent=config["visual_indent"],
             allow_empty=config["format"] == FORMAT_NO_CODE,
         ),
         "pre_text": _build_text_block(config["pre_text"], config["language"]),
@@ -419,9 +452,11 @@ def _build_question_params(
             state["solution"],
             config["language"],
             config["size"],
+            visual_indent=config["visual_indent"],
             allow_empty=False,
         ),
         "post_text": _build_text_block(config["post_text"], config["language"]),
+        "visual_indent": config["visual_indent"],
     }
 
 
@@ -430,6 +465,7 @@ def _build_tray_params(
     language: str,
     size: str,
     *,
+    visual_indent: int = 0,
     allow_empty: bool = False,
 ) -> dict[str, Any] | str:
     """Build the tray object expected by the Mustache question template."""
@@ -441,6 +477,7 @@ def _build_tray_params(
         "lines": [_line_to_mustache(line, language) for line in lines],
         "narrow": size == "narrow",
         "wide": size == "wide",
+        "visual_indent": visual_indent,
     }
     return tray
 
@@ -511,11 +548,7 @@ def _require_solution_path(config: ElementConfig) -> str:
 
 
 def _render_template(template_name: str, params: dict[str, Any]) -> str:
-    """Render an element template from this directory.
-
-    Using absolute paths keeps the controller independent from the process
-    working directory, which makes local tests and upstream integration simpler.
-    """
+    """Render an element template from the local element tree."""
 
     template_path = Path(template_name)
     with template_path.open(encoding="utf-8") as template_file:
