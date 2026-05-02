@@ -122,11 +122,14 @@ def render(element_html: str, data: pl.QuestionData) -> str:
     panel = data["panel"]
 
     if panel == "question":
-        params = _build_question_params(config, _load_state(config, data))
+        state, restored = _load_state(config, data)
+        params = _build_question_params(config, state, restored=restored)
     elif panel == "submission":
+        state, _ = _load_state(config, data)
         params = {
-            "code": _compile_code(_load_state(config, data)["solution"]),
+            "code": _compile_code(state["solution"]),
             "has_feedback": bool(data.get("feedback")),
+            "incomplete_blank_message": _find_empty_blank_message(state["solution"]),
         }
     elif panel == "answer":
         params = {"solution_path": _require_solution_path(config)}
@@ -140,7 +143,7 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
     """Compile the student's solution tray into PrairieLearn outputs."""
 
     config = _build_config(element_html, data)
-    state = _load_state(config, data)
+    state, _ = _load_state(config, data)
     empty_blank_message = _find_empty_blank_message(state["solution"])
     if empty_blank_message is not None:
         data["format_errors"][config["answers_name"]] = empty_blank_message
@@ -327,19 +330,24 @@ def _get_inner_html(element: xml.HtmlElement) -> str:
     return "".join(parts)
 
 
-def _load_state(config: ElementConfig, data: pl.QuestionData) -> WidgetState:
+def _load_state(
+    config: ElementConfig, data: pl.QuestionData
+) -> tuple[WidgetState, bool]:
     """Load saved widget state when present, otherwise build the initial trays."""
 
     raw_answers = data["raw_submitted_answers"]
     main_key = f"{config['answers_name']}.main"
 
     if raw_answers.get(main_key):
-        return _parse_saved_state(
-            raw_answers[main_key],
-            raw_answers.get(f"{config['answers_name']}.log", "[]"),
+        return (
+            _parse_saved_state(
+                raw_answers[main_key],
+                raw_answers.get(f"{config['answers_name']}.log", "[]"),
+            ),
+            True,
         )
 
-    return _build_initial_state(config, data)
+    return _build_initial_state(config, data), False
 
 
 def _parse_saved_state(raw_main: str, raw_log: str) -> WidgetState:
@@ -478,7 +486,7 @@ def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
         for blank in line["blankValues"]:
             if not blank.strip():
                 return (
-                    "Empty blanks are not allowed. Fill in every blank before submitting."
+                    "Your answer has incomplete blanks. Fill in every blank before submitting."
                 )
     return None
 
@@ -503,7 +511,7 @@ def _parse_markup_line(line_text: str) -> SavedLine:
 
 
 def _build_question_params(
-    config: ElementConfig, state: WidgetState
+    config: ElementConfig, state: WidgetState, *, restored: bool
 ) -> dict[str, Any]:
     """Translate controller state into the Mustache structure."""
 
@@ -535,6 +543,7 @@ def _build_question_params(
             config["size"],
             visual_indent=config["visual_indent"],
             allow_empty=False,
+            highlight_missing=restored,
         ),
         "post_text": _build_text_block_params(
             config["post_text"],
@@ -553,6 +562,7 @@ def _build_tray_params(
     *,
     visual_indent: int = 0,
     allow_empty: bool = False,
+    highlight_missing: bool = False,
 ) -> dict[str, Any] | str:
     """Build the tray object expected by the Mustache question template."""
 
@@ -560,7 +570,10 @@ def _build_tray_params(
         return ""
 
     tray = {
-        "lines": [_line_to_mustache(line, language) for line in lines],
+        "lines": [
+            _line_to_mustache(line, language, highlight_missing=highlight_missing)
+            for line in lines
+        ],
         "narrow": size == "narrow",
         "wide": size == "wide",
         "visual_indent": visual_indent,
@@ -660,7 +673,9 @@ def _normalize_text_block_line(
     return line[len(prefix):] if prefix else line
 
 
-def _line_to_mustache(line: SavedLine, language: str) -> dict[str, Any]:
+def _line_to_mustache(
+    line: SavedLine, language: str, *, highlight_missing: bool = False
+) -> dict[str, Any]:
     """Convert a saved line into the segment structure used by the template."""
 
     segments = []
@@ -671,10 +686,22 @@ def _line_to_mustache(line: SavedLine, language: str) -> dict[str, Any]:
             segments.append({"code": {"content": part, "language": language}})
         else:
             segments.append(
-                {"blank": {"default": part, "width": max(4, len(part) + 1)}}
+                {
+                    "blank": {
+                        "default": part,
+                        "width": max(4, len(part) + 1),
+                        "missing": highlight_missing and not part.strip(),
+                    }
+                }
             )
 
-    return {"indent": line["indent"], "segments": segments}
+    return {
+        "indent": line["indent"],
+        "segments": segments,
+        "has_missing_blank": any(
+            segment.get("blank", {}).get("missing", False) for segment in segments
+        ),
+    }
 
 
 def _compile_code(lines: list[SavedLine]) -> str:

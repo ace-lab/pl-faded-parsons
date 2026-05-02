@@ -1,6 +1,7 @@
 .fpp-global-defs {
   --focus-border-color: var(--bs-primary, var(--primary, #007bff));
   --motion-border-color: #d0a62a;
+  --invalid-blank-border-color: #c0392b;
   background: var(--code-background);
 }
 
@@ -237,8 +238,23 @@ code {
   border-radius: 5px;
 }
 
+.codeline-tray input.parsons-blank-missing {
+  border-bottom-color: var(--invalid-blank-border-color);
+  outline: 1px solid rgba(192, 57, 43, 0.18);
+  outline-offset: -1px;
+}
+
+.codeline-tray li.codeline-has-missing-blank {
+  /* Keep the row itself neutral so the missing state does not change layout. */
+  border-color: var(--invalid-blank-border-color);
+}
+
 .codeline-tray input.parsons-blank:focus {
   outline-color: var(--focus-border-color);
+}
+
+.codeline-tray input.parsons-blank-missing:focus {
+  outline-color: var(--invalid-blank-border-color);
 }
 
 .fpp-floating-controls {

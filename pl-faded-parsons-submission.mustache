@@ -3,6 +3,13 @@
 {{code}}
 </pl-code>
 
+{{#incomplete_blank_message}}
+<!-- TEST-HOOK:INCOMPLETE-BLANKS: this tag belongs where incomplete-blank feedback is rendered -->
+<div class="alert alert-danger" role="alert">
+  {{incomplete_blank_message}}
+</div>
+{{/incomplete_blank_message}}
+
 {{#has_feedback}}
 <!-- TEST-HOOK:FEEDBACK: this tag belongs where the feedback is rendered -->
 <div>
