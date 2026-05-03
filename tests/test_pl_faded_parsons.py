@@ -579,7 +579,7 @@ end</post-text>
     def test_render_question_makes_widget_root_the_tab_stop(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
-            <code-lines>given() #0given
+            <code-lines>print(!BLANK) #blank 7
 starter()</code-lines>
         </pl-faded-parsons>
         """
@@ -587,6 +587,7 @@ starter()</code-lines>
 
         self.assertIn('id="pl-faded-parsons-uuid-123" role="application" tabindex="0"', rendered)
         self.assertIn('tabindex="-1" aria-grabbed="false"', rendered)
+        self.assertIn('class="parsons-blank" tabindex="-1"', rendered)
         self.assertIn("starter-code-uuid-123", rendered)
         self.assertIn("solution-uuid-123", rendered)
 

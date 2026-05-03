@@ -689,6 +689,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     storeStudentProgress() {
                       sandbox.calls.stored = true;
                     },
+                    setCodelinesTabStops(active) {
+                      sandbox.calls.codelineTabStops = active;
+                    },
+                    setBlankTabStops(active) {
+                      sandbox.calls.blankTabStops = active;
+                    },
                     findBlanksIn() {
                       return {
                         each(fn) {
@@ -715,6 +721,8 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertTrue(result["stored"])
         self.assertEqual(result["sized"], ["x", "yy"])
         self.assertEqual(result["synced"], ["x", "yy"])
+        self.assertFalse(result["codelineTabStops"])
+        self.assertFalse(result["blankTabStops"])
 
     def test_sync_missing_blank_state_toggles_class_and_aria_invalid(self):
         result = run_js(
@@ -839,7 +847,9 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertEqual(result["main"]["aria-labelledby"], "descriptor-id")
         self.assertEqual(result["main"]["aria-details"], "details-id")
         self.assertEqual(result["codeline"]["aria-labelledby"], "descriptor-id")
-        self.assertEqual(result["blank"]["aria-details"], "details-id")
+        self.assertEqual(result["blank"]["aria-label"], "code blank")
+        self.assertNotIn("aria-labelledby", result["blank"])
+        self.assertNotIn("aria-details", result["blank"])
         self.assertEqual(result["descriptor"], {})
         self.assertEqual(result["details"], {})
 
@@ -955,8 +965,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
             )
         )
 
-        self.assertIn("press enter on the widget to focus the lines of code", result["descriptor"])
-        self.assertIn("escape to exit", result["details"])
+        self.assertIn("press enter on the widget to focus the first code-line", result["descriptor"].lower())
+        self.assertIn("code-lines and blanks stay out of the tab order", result["descriptor"].lower())
+        self.assertIn("press escape to return focus to the widget", result["descriptor"].lower())
+        self.assertIn("press escape to return focus to the widget", result["details"].lower())
 
     def test_setup_interactivity_bindings_enters_capture_from_widget_root(self):
         result = run_js(
@@ -992,6 +1004,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                       if (selector === 'li.codeline') return codelineList;
                       if (selector === 'input.parsons-blank') {
                         return {
+                          attr(name, value) {
+                            events.blankTabStop = [name, value];
+                            return this;
+                          },
                           on() { return this; },
                           each() { return this; },
                         };
@@ -1006,6 +1022,14 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   };
                   sandbox.$ = (selector) => {
                     if (selector === '#main') return chainable(main);
+                    if (selector === main) {
+                      return {
+                        focus() {
+                          events.rootFocused = true;
+                          return this;
+                        },
+                      };
+                    }
                     if (selector === firstLine) {
                       return {
                         is() { return false; },
@@ -1065,6 +1089,8 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     focused: events.focusedLine === firstLine,
                     enterBlankAtFocus: events.enterBlankAtFocus,
                     codelineTabStop: events.codelineTabStop,
+                    blankTabStop: events.blankTabStop,
+                    rootFocused: events.rootFocused,
                     prevented: events.prevented,
                   };
                 })()
@@ -1077,6 +1103,8 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertTrue(result["focused"])
         self.assertFalse(result["enterBlankAtFocus"])
         self.assertEqual(result["codelineTabStop"], ["tabindex", "0"])
+        self.assertEqual(result["blankTabStop"], ["tabindex", "0"])
+        self.assertFalse(result.get("rootFocused", False))
         self.assertTrue(result["prevented"])
 
     def test_enter_codeline_capture_announces_mode_change(self):
@@ -1085,6 +1113,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                 """
                 (() => {
                   const live = {
+                    attr(name, value) {
+                      this[name] = value;
+                      return this;
+                    },
                     text(value) {
                       this.value = value;
                       return this;
@@ -1096,6 +1128,9 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     enterBlankOnCodelineFocus: true,
                     setCodelinesTabStops(active) {
                       this.tabStops = active;
+                    },
+                    setBlankTabStops(active) {
+                      this.blankTabStops = active;
                     },
                     getSolutionLines() {
                       return [null];
@@ -1124,25 +1159,82 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertIn("Arrow-key mode on", result["message"])
         self.assertTrue(result["tabStops"])
 
-    def test_escape_from_codeline_announces_tabbing_mode(self):
+    def test_announce_mode_marks_region_busy_while_updating(self):
         result = run_js(
             textwrap.dedent(
                 """
                 (() => {
+                  const events = { attrs: [], texts: [] };
                   const live = {
+                    attr(name, value) {
+                      events.attrs.push([name, value]);
+                      this[name] = value;
+                      return this;
+                    },
                     text(value) {
+                      events.texts.push(value);
                       this.value = value;
                       return this;
                     },
                   };
                   const widget = {
                     config: { ariaDetails: '#details' },
+                  };
+                  sandbox.$ = (selector) => {
+                    if (selector === '#details') return live;
+                    return { text() { return this; } };
+                  };
+                  sandbox.jQuery = sandbox.$;
+                  const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.announceMode = Widget.prototype.announceMode;
+                  Widget.prototype.announceMode.call(widget, 'second');
+                  return { value: live.value, attrs: events.attrs, texts: events.texts };
+                })()
+                """
+            )
+        )
+
+        self.assertEqual(result["value"], "second")
+        self.assertEqual(
+            result["attrs"],
+            [["aria-busy", "true"], ["aria-busy", "false"]],
+        )
+        self.assertEqual(result["texts"], ["", "second"])
+
+    def test_escape_from_codeline_announces_tabbing_mode(self):
+        result = run_js(
+            textwrap.dedent(
+                """
+                (() => {
+                  const live = {
+                    attr(name, value) {
+                      this[name] = value;
+                      return this;
+                    },
+                    text(value) {
+                      this.value = value;
+                      return this;
+                    },
+                  };
+                  const widget = {
+                    config: { ariaDetails: '#details', main: '#main' },
                     setCodelinesTabStops(active) {
                       this.tabStops = active;
+                    },
+                    setBlankTabStops(active) {
+                      this.blankTabStops = active;
                     },
                   };
                   sandbox.$ = (selector) => {
                     if (selector === '#details') return live;
+                    if (selector === '#main') {
+                      return {
+                        focus() {
+                          this.focused = true;
+                          return this;
+                        },
+                      };
+                    }
                     if (selector === '#line') {
                       return {
                         is() { return true; },
@@ -1154,11 +1246,12 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   sandbox.jQuery = sandbox.$;
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
                   widget.announceMode = Widget.prototype.announceMode;
+                  widget.exitCodelineCapture = Widget.prototype.exitCodelineCapture;
                   Widget.prototype.onCodelineKeydown.call(widget, {
                     key: 'Escape',
                     preventDefault() {},
                   }, '#line');
-                  return { message: live.value, tabStops: widget.tabStops };
+                  return { message: live.value, tabStops: widget.tabStops, blankTabStops: widget.blankTabStops };
                 })()
                 """
             )
@@ -1166,6 +1259,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertIn("Tabbing mode on", result["message"])
         self.assertFalse(result["tabStops"])
+        self.assertFalse(result["blankTabStops"])
 
     def test_focus_codeline_enters_first_or_last_blank(self):
         result = run_js(
@@ -1788,12 +1882,13 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                   const calls = [];
                   const codeline = {};
                   const widget = {
-                    config: { starter: '#starter' },
+                    config: { starter: '#starter', main: '#main' },
                     updateIndent(line, delta, absolute) { calls.push(['indent', delta, absolute]); },
                     moveHorizontally(line, motionData) { calls.push(['horizontal', motionData.moveForward]); },
                     moveVertically(line, motionData) { calls.push(['vertical', motionData.moveForward]); },
                     setCodelineInMotion(line, inMotion) { calls.push(['motion', inMotion]); },
                     setCodelinesTabStops(active) { calls.push(['tabstops', active]); },
+                    setBlankTabStops(active) { calls.push(['blanktabstops', active]); },
                     findBlanksIn() {
                       return { first() { calls.push(['blank-first']); return { focus() {} }; } };
                     },
@@ -1802,8 +1897,10 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                     is() { return true; },
                     has() { return { exists() { return true; } }; },
                     blur() { calls.push('blur'); return this; },
+                    focus() { calls.push('root-focus'); return this; },
                   });
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.exitCodelineCapture = Widget.prototype.exitCodelineCapture;
                   Widget.prototype.onCodelineKeydown.call(widget, { key: 'Tab', preventDefault() { calls.push('prevent'); }, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }, codeline);
                   Widget.prototype.onCodelineKeydown.call(widget, { key: 'Enter', preventDefault() { calls.push('enter'); } }, codeline);
                   Widget.prototype.onCodelineKeydown.call(widget, { key: 'Escape', preventDefault() { calls.push('escape'); } }, codeline);
@@ -1815,7 +1912,8 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
 
         self.assertIn(["horizontal", True], result)
         self.assertIn("prevent", result)
-        self.assertIn("blur", result)
+        self.assertIn("root-focus", result)
+        self.assertIn(["blanktabstops", False], result)
 
     def test_codeline_keydown_does_not_overwrite_focus_announcement(self):
         result = run_js(
@@ -1942,15 +2040,20 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
                         eq(idx) { return idx === 0 ? blank : nextBlank; },
                       };
                     },
+                    setCodelinesTabStops(active) { calls.push(['tabstops', active]); },
+                    setBlankTabStops(active) { calls.push(['blanktabstops', active]); },
                   };
                   sandbox.$ = (value) => ({
                     focus() { calls.push('focus'); return this; },
                     is() { return true; },
                   });
                   const Widget = sandbox.ParsonsWidget || sandbox.window.ParsonsWidget;
+                  widget.exitCodelineCapture = Widget.prototype.exitCodelineCapture;
+                  widget.setCodelinesTabStops = widget.setCodelinesTabStops.bind(widget);
+                  widget.setBlankTabStops = widget.setBlankTabStops.bind(widget);
                   Widget.prototype.onBlankKeydown.call(widget, { key: 'Tab', preventDefault() { calls.push('prevent-tab'); }, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }, codeline, blank);
                   Widget.prototype.onBlankKeydown.call(widget, { key: 'Enter', preventDefault() { calls.push('prevent-enter'); } }, codeline, blank);
-                  Widget.prototype.onBlankKeydown.call(widget, { key: 'Escape', stopPropagation() { calls.push('stop'); } }, codeline, blank);
+                  Widget.prototype.onBlankKeydown.call(widget, { key: 'Escape', preventDefault() { calls.push('prevent-escape'); }, stopPropagation() { calls.push('stop'); } }, codeline, blank);
                   Widget.prototype.onBlankKeydown.call(widget, { key: 'ArrowRight', preventDefault() { calls.push('prevent-right'); }, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }, codeline, blank);
                   return calls;
                 })()
@@ -1962,6 +2065,7 @@ class TestPlFadedParsonsJsHelpers(unittest.TestCase):
         self.assertIn(["jump", True], result)
         self.assertIn(["cursor", 0, True], result)
         self.assertIn("focus", result)
+        self.assertIn("prevent-escape", result)
         self.assertIn("stop", result)
 
     def test_setup_interactivity_bindings_wires_logging_and_handlers(self):
