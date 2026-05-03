@@ -7,6 +7,9 @@ import {
   parseStoredMain,
 } from "./support.mjs";
 
+// if you can avoid writing in this file, you probably should
+// these tests are orders of magnitude slower to run than in the python above
+// this exists merely for e2e behavioral testing through mouse/key interactions
 
 test.describe("pl-faded-parsons browser behavior", () => {
   test("boots with the rendered trays and initial storage", async ({ page }) => {
