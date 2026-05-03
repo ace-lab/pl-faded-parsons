@@ -173,37 +173,73 @@ export function parsons(page, uuid = "uuid-123") {
   const controlsSelector = `#widget-controls-${uuid}`;
 
   return {
-    root: page.locator(rootSelector),
+    get root() {
+      return page.locator(rootSelector);
+    },
     trays: {
-      starter: page.locator(`#starter-code-${uuid}`),
-      solution: page.locator(`#solution-${uuid}`),
-      all: page.locator(`${rootSelector} .codeline-tray`),
+      get starter() {
+        return page.locator(`#starter-code-${uuid}`);
+      },
+      get solution() {
+        return page.locator(`#solution-${uuid}`);
+      },
+      get all() {
+        return page.locator(`${rootSelector} .codeline-tray`);
+      },
     },
     codelines: {
-      starter: page.locator(`#ol-starter-code-${uuid} > li.codeline`),
-      solution: page.locator(`#ol-solution-${uuid} > li.codeline`),
-      all: page.locator(`${rootSelector} li.codeline`),
+      get starter() {
+        return page.locator(`#ol-starter-code-${uuid} > li.codeline`);
+      },
+      get solution() {
+        return page.locator(`#ol-solution-${uuid} > li.codeline`);
+      },
+      get all() {
+        return page.locator(`${rootSelector} li.codeline`);
+      },
     },
     inputs: {
-      main: page.locator(`${rootSelector} > input.main`),
-      log: page.locator(`${rootSelector} > input.log`),
+      get main() {
+        return page.locator(`${rootSelector} > input.main`);
+      },
+      get log() {
+        return page.locator(`${rootSelector} > input.log`);
+      },
     },
     blanks: {
-      all: page.locator(`${rootSelector} input.parsons-blank`),
-      missing: page.locator(`${rootSelector} input.parsons-blank-missing`),
+      get all() {
+        return page.locator(`${rootSelector} input.parsons-blank`);
+      },
+      get missing() {
+        return page.locator(`${rootSelector} input.parsons-blank-missing`);
+      },
     },
     controls: {
-      all: page.locator(controlsSelector),
-      copy: page.locator(`${controlsSelector} .widget-copy`),
-      help: page.locator(`${controlsSelector} .widget-help`),
+      get all() {
+        return page.locator(controlsSelector);
+      },
+      get copy() {
+        return page.locator(`${controlsSelector} .widget-copy`);
+      },
+      get help() {
+        return page.locator(`${controlsSelector} .widget-help`);
+      },
     },
     text: {
-      pre: page.locator(`${rootSelector} .pre-text-wrapper`),
-      post: page.locator(`${rootSelector} .post-text-wrapper`),
+      get pre() {
+        return page.locator(`${rootSelector} .pre-text-wrapper`);
+      },
+      get post() {
+        return page.locator(`${rootSelector} .post-text-wrapper`);
+      },
     },
     aria: {
-      descriptor: page.locator(`#pl-faded-parsons-aria-descriptor-${uuid}`),
-      details: page.locator(`#pl-faded-parsons-aria-details-${uuid}`),
+      get descriptor() {
+        return page.locator(`#pl-faded-parsons-aria-descriptor-${uuid}`);
+      },
+      get details() {
+        return page.locator(`#pl-faded-parsons-aria-details-${uuid}`);
+      },
     },
   };
 }
