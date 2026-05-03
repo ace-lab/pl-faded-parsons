@@ -34,7 +34,9 @@ data["raw_submitted_answers"][f"{answers_name}.log"]
 ```
 
 Interaction logging is optional and disabled by default. Set `log="true"` on the
-element to preserve the browser event log in `raw_submitted_answers`.
+element to preserve the browser event log in `raw_submitted_answers`, which can
+then be used for instructor review of the student's edit history during a
+submission.
 
 ## Lifecycle
 
