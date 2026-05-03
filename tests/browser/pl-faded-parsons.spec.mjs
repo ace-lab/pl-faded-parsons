@@ -19,15 +19,15 @@ answer() #1given</code-lines>
     );
 
     const ui = parsons(page);
-    await expect(ui.root()).toHaveClass(/pl-faded-parsons-borderless/);
-    await expect(ui.trays().starter()).toBeVisible();
-    await expect(ui.trays().solution()).toBeVisible();
-    await expect(ui.controls().help()).toHaveCount(1);
-    await expect(ui.controls().help()).toHaveAttribute(
+    await expect(ui.root).toHaveClass(/pl-faded-parsons-borderless/);
+    await expect(ui.trays.starter).toBeVisible();
+    await expect(ui.trays.solution).toBeVisible();
+    await expect(ui.controls.help).toHaveCount(1);
+    await expect(ui.controls.help).toHaveAttribute(
       "aria-label",
       "help text",
     );
-    await expect(ui.codelines().all()).toHaveCount(2);
+    await expect(ui.codelines.all).toHaveCount(2);
 
     const stored = await parseStoredMain(page);
     expect(stored.starter).toHaveLength(1);
@@ -44,7 +44,7 @@ answer() #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
-    const blank = parsons(page).blanks().all();
+    const blank = parsons(page).blanks.all;
     await expect(blank).toHaveAttribute("aria-invalid", "true");
     await blank.click();
     await blank.fill("answer");
@@ -63,7 +63,7 @@ answer() #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
-    const line = parsons(page).codelines().solution().first();
+    const line = parsons(page).codelines.solution.first();
     await line.focus();
     await line.press("Tab");
 
@@ -81,7 +81,7 @@ answer() #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
-    const starterLine = parsons(page).codelines().starter().first();
+    const starterLine = parsons(page).codelines.starter.first();
     await starterLine.focus();
     await starterLine.press("Alt+ArrowRight");
 
@@ -92,9 +92,9 @@ answer() #1given</code-lines>
         { codeSnippets: ["answer()"], indent: 1 },
       ],
     });
-    await expect(parsons(page).codelines().starter()).toHaveCount(0);
-    await expect(parsons(page).codelines().solution()).toHaveCount(2);
-    await expect(parsons(page).codelines().solution().first()).toContainText("helper()");
+    await expect(parsons(page).codelines.starter).toHaveCount(0);
+    await expect(parsons(page).codelines.solution).toHaveCount(2);
+    await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
   });
 
   test("moves a solution line back into the starter tray with Option+ArrowLeft", async ({ page }) => {
@@ -106,11 +106,11 @@ answer() #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
-    const starterLine = parsons(page).codelines().starter().first();
+    const starterLine = parsons(page).codelines.starter.first();
     await starterLine.focus();
     await starterLine.press("Alt+ArrowRight");
 
-    const movedLine = parsons(page).codelines().solution().first();
+    const movedLine = parsons(page).codelines.solution.first();
     await movedLine.focus();
     await movedLine.press("Alt+ArrowLeft");
 
@@ -122,9 +122,9 @@ answer() #1given</code-lines>
         { codeSnippets: ["answer()"], indent: 1 },
       ],
     });
-    await expect(parsons(page).codelines().starter()).toHaveCount(1);
-    await expect(parsons(page).codelines().solution()).toHaveCount(1);
-    await expect(parsons(page).codelines().starter().first()).toContainText("helper()");
+    await expect(parsons(page).codelines.starter).toHaveCount(1);
+    await expect(parsons(page).codelines.solution).toHaveCount(1);
+    await expect(parsons(page).codelines.starter.first()).toContainText("helper()");
   });
 
   test("copies plaintext from the widget when the copy button is enabled", async ({ page }) => {
@@ -136,7 +136,7 @@ answer() #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
-    await parsons(page).controls().copy().click();
+    await parsons(page).controls.copy.click();
 
     await expect.poll(() => page.evaluate(() => window.__clipboardWrites.length)).toBe(1);
     const clipboardWrites = await page.evaluate(() => window.__clipboardWrites);
@@ -156,12 +156,12 @@ answer() #1given</code-lines>
     );
 
     const ui = parsons(page);
-    await expect(ui.trays().starter()).toHaveCount(0);
-    await expect(ui.trays().solution()).toBeVisible();
-    await expect(ui.root()).not.toHaveClass(/pl-faded-parsons-borderless/);
-    await expect(ui.text().pre()).toBeVisible();
-    await expect(ui.text().post()).toBeVisible();
-    await expect(ui.inputs().main()).toHaveCount(1);
+    await expect(ui.trays.starter).toHaveCount(0);
+    await expect(ui.trays.solution).toBeVisible();
+    await expect(ui.root).not.toHaveClass(/pl-faded-parsons-borderless/);
+    await expect(ui.text.pre).toBeVisible();
+    await expect(ui.text.post).toBeVisible();
+    await expect(ui.inputs.main).toHaveCount(1);
 
     const stored = await parseStoredMain(page);
     expect(stored.starter).toEqual([]);
