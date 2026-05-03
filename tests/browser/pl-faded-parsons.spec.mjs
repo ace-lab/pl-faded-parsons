@@ -301,7 +301,7 @@ answer() #1given</code-lines>
     const log = await parseStoredLog(page);
     expect(log).toHaveLength(2);
     expect(log[0].tag).toBe("problemOpened");
-    expect(log[1].tag).toBe("addOutput");
+    expect(log[1].tag).toBe("moveInput");
     expect(log[1].data.indent).toBe(0);
     expect(log[1].data.segments.codeSnippets.join("")).toContain("helper()");
   });
@@ -323,6 +323,6 @@ answer() #1given</code-lines>
     expect(log[0].tag).toBe("problemOpened");
     expect(log[1].tag).toBe("editBlank");
     expect(log[1].data.value).toBe("answer");
-    expect(log[1].data.id).toBe("0.0.0");
+    expect(log[1].data.id).toBe("1.0.0");
   });
 });
