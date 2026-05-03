@@ -55,6 +55,15 @@ when you want to inspect how a student built their answer step by step.
 Logging is disabled by default, so you only get the extra data when you
 explicitly opt in.
 
+## Developers
+
+Unfortunately, getting a real harness into testing with prairielearn is difficult.
+The next best thing we have is playwright e2e testing.
+
+To get started, at the top of the repo run `yarn install` once to install deps.
+
+From then on, just run `python3 ./tests/run_all_tests.py` from the directory root!
+
 ## Work around `pl-faded-parsons`
 
 [Nathaniel Weinman, Armando Fox, and Marti A. Hearst. 2021. Improving Instruction of Programming Patterns with Faded Parsons Problems. In Proceedings of the 2021 CHI Conference on Human Factors in Computing Systems (CHI '21). Association for Computing Machinery, New York, NY, USA, Article 53, 1–4. https://doi.org/10.1145/3411764.3445228](https://dl.acm.org/doi/10.1145/3411764.3445228)
