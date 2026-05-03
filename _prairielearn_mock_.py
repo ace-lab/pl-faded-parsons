@@ -1,4 +1,5 @@
-from typing import Any, Literal, Optional, TypedDict
+from collections.abc import Iterable, Mapping
+from typing import Any, Literal, Optional, TypeAlias, TypedDict
 from uuid import uuid4
 
 import lxml.html
@@ -27,6 +28,89 @@ class QuestionData(TypedDict):
     num_valid_submissions: int
     manual_grading: bool
     answers_names: dict[str, bool]
+
+
+Phase: TypeAlias = Literal["prepare", "render", "parse", "grade", "test"]
+
+_PHASE_MUTABLE_KEYS: dict[Phase, set[str]] = {
+    "prepare": {"correct_answers", "params", "answers_names"},
+    "render": set(),
+    "parse": {"correct_answers", "feedback", "format_errors", "params", "submitted_answers"},
+    "grade": {"correct_answers", "feedback", "format_errors", "params", "partial_scores", "score", "submitted_answers"},
+    "test": {"format_errors", "partial_scores", "raw_submitted_answers", "score"},
+}
+
+
+# Used in tests/browser/render-question
+class _LifecycleData(dict):
+    """Dict wrapper that enforces PrairieLearn-style top-level write permissions."""
+
+    def __init__(self, initial: Mapping[str, object]):
+        super().__init__(initial)
+        self._allowed_writes: set[str] = set()
+
+    def set_allowed_writes(self, keys: Iterable[str]) -> None:
+        self._allowed_writes = set(keys)
+
+    def set_phase(self, phase: Phase):
+        self.set_allowed_writes(_PHASE_MUTABLE_KEYS[phase])
+
+    def _ensure_writable(self, key: str) -> None:
+        if key not in self._allowed_writes:
+            raise TypeError(
+                f"PrairieLearn docs mark `data['{key}']` as immutable in this phase."
+            )
+
+    def __setitem__(self, key, value):
+        self._ensure_writable(key)
+        return super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        self._ensure_writable(key)
+        return super().__delitem__(key)
+
+    def pop(self, key, default=None):
+        self._ensure_writable(key)
+        return super().pop(key, default)
+
+    def popitem(self):
+        raise TypeError("PrairieLearn docs forbid removing keys from `data`.")
+
+    def clear(self):
+        raise TypeError("PrairieLearn docs forbid removing keys from `data`.")
+
+    def update(self, *args, **kwargs):
+        other = dict(*args, **kwargs)
+        for key in other:
+            self._ensure_writable(key)
+        return super().update(other)
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self._ensure_writable(key)
+        return super().setdefault(key, default)
+
+
+# Used in tests/browser/render-question
+def _make_question_data(question_path: str) -> QuestionData:
+    return {
+        "params": {},
+        "correct_answers": {},
+        "submitted_answers": {},
+        "format_errors": {},
+        "partial_scores": {},
+        "score": 0.0,
+        "feedback": {},
+        "variant_seed": "seed",
+        "options": {"question_path": question_path},
+        "raw_submitted_answers": {},
+        "editable": True,
+        "panel": "question",
+        "extensions": {},
+        "num_valid_submissions": 0,
+        "manual_grading": False,
+        "answers_names": {},
+    }
 
 
 def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | None = None) -> str:
