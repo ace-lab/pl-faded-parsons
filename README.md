@@ -25,6 +25,22 @@ From the top-level of your directory run:
 git submodule update --remote ./elements/pl-faded-parsons/
 ```
 
+## Testing Locally
+
+The element now has a browser-backed test harness in `tests/browser/` that runs
+through Playwright. Install the JS dependencies with `yarn install` inside this
+directory, then run the full suite with:
+
+```bash
+python tests/run_all_tests.py
+```
+
+If you only want the browser suite, run:
+
+```bash
+yarn test:browser
+```
+
 ## The RSpec Autograder
 
 If your Parsons problems test students' ability to write unit tests in RSpec,

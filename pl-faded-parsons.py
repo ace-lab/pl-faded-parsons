@@ -57,6 +57,7 @@ BLANK_PATTERN = re.compile(r"#blank [^#]*")
 INDENT = "    "
 MAX_DISTRACTORS = 10
 DEBUG = False
+ELEMENT_DIR = Path(__file__).resolve().parent
 
 
 class ParsingError(Exception):
@@ -730,7 +731,7 @@ def _require_solution_path(config: ElementConfig) -> str:
 def _render_template(template_name: str, params: dict[str, Any]) -> str:
     """Render an element template from the local element tree."""
 
-    template_path = Path(template_name)
+    template_path = ELEMENT_DIR / template_name
     with template_path.open(encoding="utf-8") as template_file:
         return chevron.render(
             template_file,

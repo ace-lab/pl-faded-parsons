@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-ELEMENT_DIR = Path.cwd()
+ELEMENT_DIR = Path(__file__).resolve().parent.parent
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
 
 if str(ELEMENT_DIR) not in sys.path:
