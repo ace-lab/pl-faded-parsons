@@ -97,6 +97,111 @@ answer() #1given</code-lines>
     await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
   });
 
+  test("Tab moves a starter line into the solution tray", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="javascript">
+        <code-lines>helper()
+answer() #1given</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const starterLine = parsons(page).codelines.starter.first();
+    await starterLine.focus();
+    await starterLine.press("Tab");
+
+    await expect.poll(() => parseStoredMain(page)).toMatchObject({
+      starter: [],
+      solution: [
+        { codeSnippets: ["helper()"], indent: 0 },
+        { codeSnippets: ["answer()"], indent: 1 },
+      ],
+    });
+    await expect(parsons(page).codelines.starter).toHaveCount(0);
+    await expect(parsons(page).codelines.solution).toHaveCount(2);
+    await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
+  });
+
+  test("Shift+Tab does not send a solution line back into the starter tray", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="javascript">
+        <code-lines>helper()
+answer() #1given</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const starterLine = parsons(page).codelines.starter.first();
+    await starterLine.focus();
+    await starterLine.press("Tab");
+
+    const movedLine = parsons(page).codelines.solution.first();
+    await movedLine.press("Shift+Tab");
+
+    await expect.poll(() => parseStoredMain(page)).toMatchObject({
+      starter: [],
+      solution: [
+        { codeSnippets: ["helper()"], indent: 0 },
+        { codeSnippets: ["answer()"], indent: 1 },
+      ],
+    });
+    await expect(parsons(page).codelines.starter).toHaveCount(0);
+    await expect(parsons(page).codelines.solution).toHaveCount(2);
+    await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
+  });
+
+  test("Tab caps out at the configured max indent level", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" format="one-tray" language="javascript" max-indent-level="1">
+        <code-lines>answer()</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const line = parsons(page).codelines.solution.first();
+    await line.focus();
+    await line.press("Tab");
+    await line.press("Tab");
+
+    const stored = await parseStoredMain(page);
+    expect(stored.solution[0].indent).toBe(1);
+    await expect(line).toHaveAttribute("style", /--pl-faded-parsons-indent:\s*1/);
+  });
+
+  test("Shift+Tab bottoms out at zero indent", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" format="one-tray" language="javascript">
+        <code-lines>answer()</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const line = parsons(page).codelines.solution.first();
+    await line.focus();
+    await line.press("Shift+Tab");
+
+    const stored = await parseStoredMain(page);
+    expect(stored.solution[0].indent).toBe(0);
+    await expect(line).toHaveAttribute("style", /--pl-faded-parsons-indent:\s*0/);
+  });
+
+  test("Tab stays inside the codeline in one-tray mode", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" format="one-tray" language="javascript">
+        <code-lines>answer()</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const line = parsons(page).codelines.solution.first();
+    await line.focus();
+    await line.press("Tab");
+
+    const stored = await parseStoredMain(page);
+    expect(stored.solution[0].indent).toBe(1);
+    await expect(line).toBeFocused();
+  });
+
   test("moves a solution line back into the starter tray with Option+ArrowLeft", async ({ page }) => {
     await mountQuestion(
       page,
