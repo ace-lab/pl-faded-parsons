@@ -286,4 +286,43 @@ answer() #1given</code-lines>
     expect(log).toHaveLength(1);
     expect(log[0].tag).toBe("problemOpened");
   });
+
+  test("records a log entry when a line moves into the solution tray", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="javascript" log="true">
+        <code-lines>helper()
+answer() #1given</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    await parsons(page).codelines.starter.first().dragTo(parsons(page).trays.solution);
+
+    const log = await parseStoredLog(page);
+    expect(log).toHaveLength(2);
+    expect(log[0].tag).toBe("problemOpened");
+    expect(log[1].tag).toBe("addOutput");
+    expect(log[1].data.indent).toBe(0);
+    expect(log[1].data.segments.codeSnippets.join("")).toContain("helper()");
+  });
+
+  test("records a log entry when a blank is edited", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="python" log="true">
+        <code-lines>value = !BLANK #1given</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const blank = parsons(page).blanks.all.first();
+    await blank.click();
+    await blank.fill("answer");
+
+    const log = await parseStoredLog(page);
+    expect(log).toHaveLength(2);
+    expect(log[0].tag).toBe("problemOpened");
+    expect(log[1].tag).toBe("editBlank");
+    expect(log[1].data.value).toBe("answer");
+    expect(log[1].data.id).toBe("0.0.0");
+  });
 });
