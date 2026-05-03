@@ -68,13 +68,3 @@ When using `one-tray` format, you can wrap the editable code with child elements
 - `<post-text>` for text that appears after the code block
 
 The `<code-lines>` element may also include `visual-indent` to offset the rendered tray visually. That attribute is only supported in `one-tray` mode and only when pre- or post-text is present.
-
-## Jump to Examples
-
-- [basic-python-parsons](questions/basic-python-parsons/question.html)
-- [python-faded-parsons](questions/python-faded-parsons/question.html)
-- [python-faded-parsons-multiples-of-three](questions/python-faded-parsons-multiples-of-three/question.html)
-- [python-faded-parsons-count-long-words](questions/python-faded-parsons-count-long-words/question.html)
-- [python-faded-parsons-first-uppercase](questions/python-faded-parsons-first-uppercase/question.html)
-- [python-no-code-pre-post](questions/python-no-code-pre-post/question.html)
-- [rspec-giftcard](questions/rspec-giftcard/question.html)
