@@ -114,28 +114,6 @@ export function buildBrowserHtml(renderedHtml) {
 
 
 export async function mountQuestion(page, elementHtml, dataOverrides = {}, uuid = "uuid-123") {
-  await page.addInitScript(() => {
-    window.__clipboardWrites = [];
-    window.__alerts = [];
-    try {
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          writeText: async (text) => {
-            window.__clipboardWrites.push(text);
-          },
-        },
-      });
-    } catch {
-      // If the browser locks clipboard access down, the copy-button test can
-      // still inspect the call path through the stored writes array.
-    }
-
-    window.alert = (message) => {
-      window.__alerts.push(message);
-    };
-  });
-
   const renderedHtml = renderQuestion(elementHtml, dataOverrides, uuid);
   await page.setContent(buildBrowserHtml(renderedHtml), {
     waitUntil: "load",
@@ -144,6 +122,33 @@ export async function mountQuestion(page, elementHtml, dataOverrides = {}, uuid 
     const descriptor = document.querySelector(descriptorId);
     return !!descriptor?.textContent?.trim();
   }, `#pl-faded-parsons-aria-descriptor-${uuid}`);
+  await page.evaluate(() => {
+    const clipboard = {
+      writeText: async (text) => {
+        window.__clipboardWrites.push(text);
+      },
+    };
+
+    try {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: clipboard,
+      });
+    } catch {
+      try {
+        Object.defineProperty(Navigator.prototype, "clipboard", {
+          configurable: true,
+          value: clipboard,
+        });
+      } catch {
+        window.__clipboardWrites.push("__clipboard-mock-failed__");
+      }
+    }
+
+    window.alert = (message) => {
+      window.__alerts.push(message);
+    };
+  });
 
   return {
     renderedHtml,
@@ -153,12 +158,112 @@ export async function mountQuestion(page, elementHtml, dataOverrides = {}, uuid 
 
 
 export async function parseStoredMain(page, widgetId = "uuid-123") {
-  const value = await page.locator(`#pl-faded-parsons-${widgetId} > input.main`).inputValue();
+  const value = await parsons(page, widgetId).inputs().main().inputValue();
   return JSON.parse(value);
 }
 
 
 export async function parseStoredLog(page, widgetId = "uuid-123") {
-  const value = await page.locator(`#pl-faded-parsons-${widgetId} > input.log`).inputValue();
+  const value = await parsons(page, widgetId).inputs().log().inputValue();
   return JSON.parse(value);
+}
+
+export function parsons(page, uuid = "uuid-123") {
+  const rootSelector = `#pl-faded-parsons-${uuid}`;
+  const traySelector = (name) => (name === "starter" ? `#starter-code-${uuid}` : `#solution-${uuid}`);
+  const listSelector = (name) => (name === "starter" ? `#ol-starter-code-${uuid}` : `#ol-solution-${uuid}`);
+  const controlsSelector = `#widget-controls-${uuid}`;
+
+  return {
+    root() {
+      return page.locator(rootSelector);
+    },
+    trays() {
+      return {
+        starter() {
+          return page.locator(traySelector("starter"));
+        },
+        solution() {
+          return page.locator(traySelector("solution"));
+        },
+        all() {
+          return page.locator(`${rootSelector} .codeline-tray`);
+        },
+      };
+    },
+    codelines() {
+      return {
+        starter() {
+          return page.locator(`${listSelector("starter")} > li.codeline`);
+        },
+        solution() {
+          return page.locator(`${listSelector("solution")} > li.codeline`);
+        },
+        all() {
+          return page.locator(`${rootSelector} li.codeline`);
+        },
+      };
+    },
+    inputs() {
+      return {
+        main() {
+          return page.locator(`${rootSelector} > input.main`);
+        },
+        log() {
+          return page.locator(`${rootSelector} > input.log`);
+        },
+      };
+    },
+    blanks() {
+      return {
+        all() {
+          return page.locator(`${rootSelector} input.parsons-blank`);
+        },
+        missing() {
+          return page.locator(`${rootSelector} input.parsons-blank-missing`);
+        },
+      };
+    },
+    controls() {
+      return {
+        all() {
+          return page.locator(controlsSelector);
+        },
+        copy() {
+          return page.locator(`${controlsSelector} .widget-copy`);
+        },
+        help() {
+          return page.locator(`${controlsSelector} .widget-help`);
+        },
+      };
+    },
+    text() {
+      return {
+        pre() {
+          return page.locator(`${rootSelector} .pre-text-wrapper`);
+        },
+        post() {
+          return page.locator(`${rootSelector} .post-text-wrapper`);
+        },
+      };
+    },
+    aria() {
+      return {
+        descriptor() {
+          return page.locator(`#pl-faded-parsons-aria-descriptor-${uuid}`);
+        },
+        details() {
+          return page.locator(`#pl-faded-parsons-aria-details-${uuid}`);
+        },
+      };
+    },
+  };
+}
+
+export function tray(page, uuid = "uuid-123") {
+  return parsons(page, uuid).trays();
+}
+
+export function codelines(page, uuid = "uuid-123") {
+  return parsons(page, uuid).codelines();
 }
