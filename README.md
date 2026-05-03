@@ -5,6 +5,8 @@ This repository contains the Berkeley Faded Parson's element and is designed to 
 so to use this in a course, either the course's `elements/` subdirectory will need to contain a **copy** of this repo,
 or the top-level `elements/` directory of the PrairieLearn build itself will need a copy of it.
 
+Check [the pl-style docs for more info on the element's attributes](pl-faded-parsons.md).
+
 ## Adding to Your Projects (for development only)
 
 This command will add the element to your project in the **properly-named** directory for PrairieLearn to use this element.
