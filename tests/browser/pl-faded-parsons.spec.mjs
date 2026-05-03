@@ -23,14 +23,14 @@ answer() #1given</code-lines>
 
     const ui = parsons(page);
     await expect(ui.root).toHaveClass(/pl-faded-parsons-borderless/);
-    await expect(ui.trays.starter).toBeVisible();
-    await expect(ui.trays.solution).toBeVisible();
+    await expect(ui.starter.tray).toBeVisible();
+    await expect(ui.solution.tray).toBeVisible();
     await expect(ui.controls.help).toHaveCount(1);
     await expect(ui.controls.help).toHaveAttribute(
       "aria-label",
       "help text",
     );
-    await expect(ui.codelines.all).toHaveCount(2);
+    await expect(ui.all.codelines).toHaveCount(2);
 
     const stored = await parseStoredMain(page);
     expect(stored.starter).toHaveLength(1);
@@ -67,7 +67,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const line = parsons(page).codelines.solution.first();
+      const line = parsons(page).solution.codelines.first();
       await line.focus();
       await line.press("Tab");
 
@@ -85,7 +85,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const starterLine = parsons(page).codelines.starter.first();
+      const starterLine = parsons(page).starter.codelines.first();
       await starterLine.focus();
       await starterLine.press("Alt+ArrowRight");
 
@@ -96,9 +96,9 @@ answer() #1given</code-lines>
           { codeSnippets: ["answer()"], indent: 1 },
         ],
       });
-      await expect(parsons(page).codelines.starter).toHaveCount(0);
-      await expect(parsons(page).codelines.solution).toHaveCount(2);
-      await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
+      await expect(parsons(page).starter.codelines).toHaveCount(0);
+      await expect(parsons(page).solution.codelines).toHaveCount(2);
+      await expect(parsons(page).solution.codelines.first()).toContainText("helper()");
     });
 
     test("Tab moves a starter line into the solution tray", async ({ page }) => {
@@ -110,7 +110,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const starterLine = parsons(page).codelines.starter.first();
+      const starterLine = parsons(page).starter.codelines.first();
       await starterLine.focus();
       await starterLine.press("Tab");
 
@@ -121,9 +121,9 @@ answer() #1given</code-lines>
           { codeSnippets: ["answer()"], indent: 1 },
         ],
       });
-      await expect(parsons(page).codelines.starter).toHaveCount(0);
-      await expect(parsons(page).codelines.solution).toHaveCount(2);
-      await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
+      await expect(parsons(page).starter.codelines).toHaveCount(0);
+      await expect(parsons(page).solution.codelines).toHaveCount(2);
+      await expect(parsons(page).solution.codelines.first()).toContainText("helper()");
     });
 
     test("Shift+Tab does not send a solution line back into the starter tray", async ({ page }) => {
@@ -135,11 +135,11 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const starterLine = parsons(page).codelines.starter.first();
+      const starterLine = parsons(page).starter.codelines.first();
       await starterLine.focus();
       await starterLine.press("Tab");
 
-      const movedLine = parsons(page).codelines.solution.first();
+      const movedLine = parsons(page).solution.codelines.first();
       await movedLine.press("Shift+Tab");
 
       await expect.poll(() => parseStoredMain(page)).toMatchObject({
@@ -149,9 +149,9 @@ answer() #1given</code-lines>
           { codeSnippets: ["answer()"], indent: 1 },
         ],
       });
-      await expect(parsons(page).codelines.starter).toHaveCount(0);
-      await expect(parsons(page).codelines.solution).toHaveCount(2);
-      await expect(parsons(page).codelines.solution.first()).toContainText("helper()");
+      await expect(parsons(page).starter.codelines).toHaveCount(0);
+      await expect(parsons(page).solution.codelines).toHaveCount(2);
+      await expect(parsons(page).solution.codelines.first()).toContainText("helper()");
     });
 
     test("Tab caps out at the configured max indent level", async ({ page }) => {
@@ -162,7 +162,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const line = parsons(page).codelines.solution.first();
+      const line = parsons(page).solution.codelines.first();
       await line.focus();
       await line.press("Tab");
       await line.press("Tab");
@@ -180,7 +180,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const line = parsons(page).codelines.solution.first();
+      const line = parsons(page).solution.codelines.first();
       await line.focus();
       await line.press("Shift+Tab");
 
@@ -197,7 +197,7 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const line = parsons(page).codelines.solution.first();
+      const line = parsons(page).solution.codelines.first();
       await line.focus();
       await line.press("Tab");
 
@@ -215,11 +215,11 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      const starterLine = parsons(page).codelines.starter.first();
+      const starterLine = parsons(page).starter.codelines.first();
       await starterLine.focus();
       await starterLine.press("Alt+ArrowRight");
 
-      const movedLine = parsons(page).codelines.solution.first();
+      const movedLine = parsons(page).solution.codelines.first();
       await movedLine.focus();
       await movedLine.press("Alt+ArrowLeft");
 
@@ -231,9 +231,9 @@ answer() #1given</code-lines>
           { codeSnippets: ["answer()"], indent: 1 },
         ],
       });
-      await expect(parsons(page).codelines.starter).toHaveCount(1);
-      await expect(parsons(page).codelines.solution).toHaveCount(1);
-      await expect(parsons(page).codelines.starter.first()).toContainText("helper()");
+      await expect(parsons(page).starter.codelines).toHaveCount(1);
+      await expect(parsons(page).solution.codelines).toHaveCount(1);
+      await expect(parsons(page).starter.codelines.first()).toContainText("helper()");
     });
   });
 
@@ -266,8 +266,8 @@ answer() #1given</code-lines>
     );
 
     const ui = parsons(page);
-    await expect(ui.trays.starter).toHaveCount(0);
-    await expect(ui.trays.solution).toBeVisible();
+    await expect(ui.starter.codelines).toHaveCount(0);
+    await expect(ui.solution.tray).toBeVisible();
     await expect(ui.root).not.toHaveClass(/pl-faded-parsons-borderless/);
     await expect(ui.text.pre).toBeVisible();
     await expect(ui.text.post).toBeVisible();
@@ -302,12 +302,12 @@ answer() #1given</code-lines>
         </pl-faded-parsons>`,
       );
 
-      await parsons(page).codelines.starter.first().dragTo(parsons(page).trays.solution);
+      await parsons(page).starter.codelines.first().dragTo(parsons(page).solution.tray);
 
       const log = await parseStoredLog(page);
       expect(log).toHaveLength(2);
       expect(log[0].tag).toBe("problemOpened");
-      // expect(log[1].tag).toBe("addOutput"); // TOOD: find source of this bug
+      // expect(log[1].tag).toBe("addOutput");
       expect(log[1].data.indent).toBe(0);
       expect(log[1].data.segments.codeSnippets.join("")).toContain("helper()");
     });

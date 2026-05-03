@@ -176,25 +176,27 @@ export function parsons(page, uuid = "uuid-123") {
     get root() {
       return page.locator(rootSelector);
     },
-    trays: {
-      get starter() {
+    starter: {
+      get tray() {
         return page.locator(`#starter-code-${uuid}`);
       },
-      get solution() {
-        return page.locator(`#solution-${uuid}`);
-      },
-      get all() {
-        return page.locator(`${rootSelector} .codeline-tray`);
-      },
-    },
-    codelines: {
-      get starter() {
+      get codelines() {
         return page.locator(`#ol-starter-code-${uuid} > li.codeline`);
       },
-      get solution() {
+    },
+    solution: {
+      get tray() {
+        return page.locator(`#solution-${uuid}`);
+      },
+      get codelines() {
         return page.locator(`#ol-solution-${uuid} > li.codeline`);
       },
-      get all() {
+    },
+    all: {
+      get trays() {
+        return page.locator(`${rootSelector} .codeline-tray`);
+      },
+      get codelines() {
         return page.locator(`${rootSelector} li.codeline`);
       },
     },
