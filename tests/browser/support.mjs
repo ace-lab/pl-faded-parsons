@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const browserDir = path.dirname(fileURLToPath(import.meta.url));
 export const elementDir = path.resolve(browserDir, "..", "..");
 const renderScript = path.join(browserDir, "render-question.py");
+const parseScript = path.join(browserDir, "parse-question.py");
 
 
 function readText(filePath) {
@@ -33,14 +34,11 @@ const prettifySource = readText(path.join(elementDir, "prettify.js"));
 const widgetSource = readText(path.join(elementDir, "pl-faded-parsons.js"));
 
 
-export function renderQuestion(elementHtml, dataOverrides = {}, uuid = "uuid-123") {
-  const payload = Buffer.from(
-    JSON.stringify({ elementHtml, dataOverrides, uuid }),
-    "utf8",
-  ).toString("base64");
+function runPythonHelper(scriptPath, payload, failureLabel) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
 
   for (const python of [process.env.PYTHON, "python3", "python"].filter(Boolean)) {
-    const completed = spawnSync(python, [renderScript, payload], {
+    const completed = spawnSync(python, [scriptPath, encodedPayload], {
       encoding: "utf8",
     });
 
@@ -56,7 +54,7 @@ export function renderQuestion(elementHtml, dataOverrides = {}, uuid = "uuid-123
     const stdout = completed.stdout?.trim();
     throw new Error(
       [
-        `Failed to render pl-faded-parsons question HTML with ${python}.`,
+        `${failureLabel} with ${python}.`,
         stderr ? `stderr:\n${stderr}` : null,
         stdout ? `stdout:\n${stdout}` : null,
       ]
@@ -69,6 +67,79 @@ export function renderQuestion(elementHtml, dataOverrides = {}, uuid = "uuid-123
 }
 
 
+/** Render the PrairieLearn question HTML for a given element snapshot. */
+export function renderQuestion(elementHtml, dataOverrides = {}, uuid = "uuid-123") {
+  return runPythonHelper(
+    renderScript,
+    { elementHtml, dataOverrides, uuid },
+    "Failed to render pl-faded-parsons question HTML",
+  );
+}
+
+
+/** Run the PrairieLearn parse lifecycle against authored element HTML. */
+export function parseQuestion(
+  elementHtml,
+  dataOverrides = {},
+  uuid = "uuid-123",
+) {
+  const output = runPythonHelper(
+    parseScript,
+    { elementHtml, dataOverrides, uuid },
+    "Failed to parse pl-faded-parsons question HTML",
+  );
+  return JSON.parse(output);
+}
+
+
+/** Collect live input values from the mounted widget into raw-submission form. */
+export async function collectRawSubmittedAnswers(page, widgetId = "uuid-123") {
+  return parsons(page, widgetId).root.evaluate((root) => {
+    const rawSubmittedAnswers = {};
+    root.querySelectorAll("input[name]").forEach((input) => {
+      rawSubmittedAnswers[input.name] = input.value;
+    });
+    return rawSubmittedAnswers;
+  });
+}
+
+
+/** Clone the mounted widget DOM and preserve current input values in markup. */
+export async function getHydratedQuestionHtml(page, widgetId = "uuid-123") {
+  return parsons(page, widgetId).root.evaluate((root) => {
+    const clone = root.cloneNode(true);
+    const sourceInputs = root.querySelectorAll("input");
+    const clonedInputs = clone.querySelectorAll("input");
+
+    sourceInputs.forEach((input, index) => {
+      const clonedInput = clonedInputs[index];
+      if (clonedInput) {
+        clonedInput.setAttribute("value", input.value);
+      }
+    });
+
+    return clone.outerHTML;
+  });
+}
+
+
+/** Parse the mounted widget using the original author HTML and live inputs. */
+export async function parseQuestionFromPage(
+  page,
+  elementHtml,
+  dataOverrides = {},
+  widgetId = "uuid-123",
+) {
+  const rawSubmittedAnswers = await collectRawSubmittedAnswers(page, widgetId);
+  return parseQuestion(
+    elementHtml,
+    { ...dataOverrides, rawSubmittedAnswers },
+    widgetId,
+  );
+}
+
+
+/** Assemble the standalone HTML shell used to host the browser harness. */
 export function buildBrowserHtml(renderedHtml) {
   return `<!doctype html>
 <html lang="en">
@@ -113,6 +184,9 @@ export function buildBrowserHtml(renderedHtml) {
 }
 
 
+/**
+ * Mount a rendered question into Playwright and install clipboard/alert mocks.
+ */
 export async function mountQuestion(page, elementHtml, dataOverrides = {}, uuid = "uuid-123") {
   const renderedHtml = renderQuestion(elementHtml, dataOverrides, uuid);
   await page.setContent(buildBrowserHtml(renderedHtml), {
@@ -157,17 +231,20 @@ export async function mountQuestion(page, elementHtml, dataOverrides = {}, uuid 
 }
 
 
+/** Read and decode the widget's hidden `.main` submission field. */
 export async function parseStoredMain(page, widgetId = "uuid-123") {
   const value = await parsons(page, widgetId).inputs.main.inputValue();
   return JSON.parse(value);
 }
 
 
+/** Read and decode the widget's hidden `.log` submission field. */
 export async function parseStoredLog(page, widgetId = "uuid-123") {
   const value = await parsons(page, widgetId).inputs.log.inputValue();
   return JSON.parse(value);
 }
 
+/** Build a locator map for the rendered `pl-faded-parsons` widget. */
 export function parsons(page, uuid = "uuid-123") {
   const rootSelector = `#pl-faded-parsons-${uuid}`;
   const controlsSelector = `#widget-controls-${uuid}`;
