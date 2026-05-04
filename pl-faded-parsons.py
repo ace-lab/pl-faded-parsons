@@ -57,8 +57,6 @@ BLANK_PATTERN = re.compile(r"#blank [^#]*")
 INDENT = "    "
 MAX_DISTRACTORS = 10
 DEBUG = False
-ELEMENT_DIR = Path(__file__).resolve().parent
-
 
 class ParsingError(Exception):
     """Raised when saved widget state cannot be reconstructed."""
@@ -440,6 +438,8 @@ def _build_initial_state(
 
     for raw_line in config["markup"].strip().splitlines():
         line_text = raw_line.strip()
+        if not line_text:
+            continue
         line = _parse_markup_line(line_text)
 
         given_match = GIVEN_PATTERN.search(line_text)
@@ -731,7 +731,7 @@ def _require_solution_path(config: ElementConfig) -> str:
 def _render_template(template_name: str, params: dict[str, Any]) -> str:
     """Render an element template from the local element tree."""
 
-    template_path = ELEMENT_DIR / template_name
+    template_path = Path(template_name)
     with template_path.open(encoding="utf-8") as template_file:
         return chevron.render(
             template_file,
