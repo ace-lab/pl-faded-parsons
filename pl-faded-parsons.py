@@ -1,22 +1,3 @@
-"""PrairieLearn controller for the `pl-faded-parsons` element.
-
-The company asked for this controller to center on PrairieLearn's lifecycle
-methods instead of a large object model. This module keeps that contract
-explicit:
-
-- `prepare()` validates element usage.
-- `render()` rebuilds the UI state for the requested panel.
-- `parse()` compiles the student's solution tray into source code.
-
-The browser widget persists raw UI state in two hidden inputs:
-
-- `<answers-name>.main` stores the trays.
-- `<answers-name>.log` stores the event log.
-
-Those JSON payloads are intentionally passed around as plain dictionaries and
-lists so the Python, Mustache, and JavaScript layers all speak the same shape.
-"""
-
 from __future__ import annotations
 
 try:
