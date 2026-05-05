@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from render_core import render_question_html
@@ -28,6 +29,7 @@ def main() -> int:
         sys.stdout.write(rendered)
         return 0
     except Exception:
+        traceback.print_exc()
         return 1
 
 
