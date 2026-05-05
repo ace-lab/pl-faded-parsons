@@ -40,7 +40,7 @@ DISTRACTOR_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}distractor")
 LEGACY_BLANK_SUFFIX_PATTERN = re.compile(
     rf"{LINE_COMMENT_PREFIX}blank\s*(.*?)(?={LINE_COMMENT_PREFIX}|\r?\n|$)"
 )
-MARKUP_BLANK_PATTERN = re.compile(r"__\((.*?)\)__|_{4,5}(?:[^_])|_{3}")
+MARKUP_BLANK_PATTERN = re.compile(r"\b__\((.*?)\)__\b|\b_{3,4}\b")
 INDENT = "    "
 DEBUG = False
 
