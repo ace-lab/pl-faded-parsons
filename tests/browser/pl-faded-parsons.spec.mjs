@@ -43,17 +43,23 @@ answer() #1given</code-lines>
     await mountQuestion(
       page,
       `<pl-faded-parsons answers-name="demo" language="python">
-        <code-lines>value = !BLANK #1given</code-lines>
+        <code-lines>value = !BLANK #blank answer #1given</code-lines>
       </pl-faded-parsons>`,
     );
 
     const blank = parsons(page).blanks.all;
+    const initialStored = await parseStoredMain(page);
+    expect(initialStored.solution[0].blankValues).toEqual([""]);
+    expect(initialStored.solution[0].blankPlaceholders).toEqual(["answer"]);
     await expect(blank).toHaveAttribute("aria-invalid", "true");
+    await expect(blank).toHaveAttribute("placeholder", "answer");
+    await expect(blank).toHaveValue("");
     await blank.click();
     await blank.fill("answer");
 
     const stored = await parseStoredMain(page);
     expect(stored.solution[0].blankValues).toEqual(["answer"]);
+    expect(stored.solution[0].blankPlaceholders).toEqual(["answer"]);
     await expect(blank).not.toHaveAttribute("aria-invalid", "true");
     await expect(blank).not.toHaveClass(/parsons-blank-missing/);
   });

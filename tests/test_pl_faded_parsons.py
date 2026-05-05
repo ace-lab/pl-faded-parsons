@@ -1,6 +1,7 @@
 import base64
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -212,9 +213,10 @@ ignored() #distractor</code-lines>
         )
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["starter"]],
-            ["value = 42", "ignored()", "starter()"],
+            ["value = ", "ignored()", "starter()"],
         )
-        self.assertEqual(state["starter"][0]["blankValues"], ["42"])
+        self.assertEqual(state["starter"][0]["blankValues"], [""])
+        self.assertEqual(state["starter"][0]["blankPlaceholders"], ["42"])
 
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
@@ -394,7 +396,8 @@ ignored() #distractor
         )
 
         self.assertEqual(line["codeSnippets"], ["print(", ", ", ")"])
-        self.assertEqual(line["blankValues"], ["first", ""])
+        self.assertEqual(line["blankValues"], ["", ""])
+        self.assertEqual(line["blankPlaceholders"], ["first", ""])
 
     def test_parse_saved_state_validates_shape(self):
         with self.assertRaisesRegex(
@@ -443,6 +446,7 @@ ignored() #distractor
             "indent": 1,
             "codeSnippets": ["print(", ")"],
             "blankValues": ["value"],
+            "blankPlaceholders": ["hint"],
         }
 
         rendered = pl_faded_parsons._line_to_mustache(line, "python")
@@ -450,7 +454,8 @@ ignored() #distractor
         self.assertEqual(rendered["indent"], 1)
         self.assertEqual(len(rendered["segments"]), 3)
         self.assertEqual(rendered["segments"][0]["code"]["content"], "print(")
-        self.assertEqual(rendered["segments"][1]["blank"]["default"], "value")
+        self.assertEqual(rendered["segments"][1]["blank"]["value"], "value")
+        self.assertEqual(rendered["segments"][1]["blank"]["placeholder"], "hint")
         self.assertEqual(rendered["segments"][1]["blank"]["width"], 6)
         self.assertEqual(rendered["segments"][2]["code"]["content"], ")")
 
@@ -465,6 +470,21 @@ ignored() #distractor
 
         self.assertNotIn("parsons-blank-missing", rendered)
         self.assertNotIn('aria-invalid="true"', rendered)
+        self.assertIn('placeholder=""', rendered)
+        self.assertIn('value=""', rendered)
+
+    def test_render_question_preserves_blank_placeholder_without_setting_a_value(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>print(!BLANK) #blank value</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('placeholder="value"', rendered)
+        self.assertIn('value=""', rendered)
+        self.assertNotIn('value="value"', rendered)
 
     def test_render_question_includes_hidden_fields_and_text_blocks(self):
         html = """
@@ -585,9 +605,18 @@ starter()</code-lines>
         """
         rendered = render_with_uuid(html, self.data)
 
-        self.assertIn('id="pl-faded-parsons-uuid-123" role="application" tabindex="0"', rendered)
-        self.assertIn('tabindex="-1" aria-grabbed="false"', rendered)
-        self.assertIn('class="parsons-blank" tabindex="-1"', rendered)
+        self.assertRegex(
+            rendered,
+            re.compile(r'id="pl-faded-parsons-uuid-123"\s+role="application"\s+tabindex="0"'),
+        )
+        self.assertRegex(
+            rendered,
+            re.compile(r'tabindex="-1"\s+aria-grabbed="false"'),
+        )
+        self.assertRegex(
+            rendered,
+            re.compile(r'class="parsons-blank"\s+tabindex="-1"'),
+        )
         self.assertIn("starter-code-uuid-123", rendered)
         self.assertIn("solution-uuid-123", rendered)
 

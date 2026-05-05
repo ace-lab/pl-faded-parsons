@@ -174,7 +174,7 @@ Each rendered code line is built from:
 - `segments`
   - alternates between:
     - `code.content`, `code.language`
-    - `blank.default`, `blank.width`
+    - `blank.value`, `blank.placeholder`, `blank.width`
 
 This mirrors one saved line in Python:
 
@@ -183,13 +183,15 @@ This mirrors one saved line in Python:
     "indent": int,
     "codeSnippets": list[str],
     "blankValues": list[str],
+    "blankPlaceholders": list[str],
 }
 ```
 
-The invariant is:
+The invariants are:
 
 ```text
 len(codeSnippets) == len(blankValues) + 1
+len(blankValues) == len(blankPlaceholders)
 ```
 
 The `code-lines` child may also carry an optional `visual-indent` attribute

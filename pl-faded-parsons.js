@@ -825,14 +825,17 @@ class ParsonsWidget {
   getCodelineSegments(codeline) {
     let elemClone = $(codeline).clone();
     let blankValues = [];
+    let blankPlaceholders = [];
     this.findBlanksIn(elemClone).each(function (_, inp) {
       blankValues.push(inp.value);
+      blankPlaceholders.push(inp.placeholder || "");
       inp.replaceWith("!BLANK");
     });
     // this schema is used in pl-faded-parsons.py `Line.from_pl_data`
     return {
       codeSnippets: elemClone.text().split("!BLANK"),
       blankValues: blankValues,
+      blankPlaceholders: blankPlaceholders,
     };
   }
 
@@ -846,7 +849,10 @@ class ParsonsWidget {
   }
 
   autoSizeBlank(el) {
-    $(el).width(el.value.length.toString() + "ch");
+    const currentLength = el.value.length;
+    const placeholderLength = (el.placeholder || "").length;
+    const targetLength = Math.max(currentLength, placeholderLength, 4) + 1;
+    $(el).width(targetLength.toString() + "ch");
   }
 
   syncMissingBlankState(el) {
