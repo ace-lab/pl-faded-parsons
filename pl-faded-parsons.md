@@ -68,3 +68,4 @@ When using `one-tray` format, you can wrap the editable code with child elements
 - `<post-text>` for text that appears after the code block
 
 The `<code-lines>` element may also include `visual-indent` to offset the rendered tray visually. That attribute is only supported in `one-tray` mode and only when pre- or post-text is present.
+

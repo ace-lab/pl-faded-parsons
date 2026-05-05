@@ -68,6 +68,7 @@ class SavedLine(TypedDict):
     indent: int
     codeSnippets: list[str]
     blankValues: list[str]
+    blankPlaceholders: list[str]
 
 
 class LogEntry(TypedDict):
@@ -376,6 +377,7 @@ def _parse_line(value: Any) -> SavedLine:
     indent = value.get("indent")
     code_snippets = value.get("codeSnippets")
     blank_values = value.get("blankValues")
+    blank_placeholders = value.get("blankPlaceholders")
 
     if not isinstance(indent, int):
         raise ParsingError("Line `indent` must be an integer.")
@@ -387,15 +389,26 @@ def _parse_line(value: Any) -> SavedLine:
         isinstance(blank, str) for blank in blank_values
     ):
         raise ParsingError("Line `blankValues` must be a list of strings.")
+    if blank_placeholders is None:
+        blank_placeholders = blank_values
+    if not isinstance(blank_placeholders, list) or not all(
+        isinstance(blank, str) for blank in blank_placeholders
+    ):
+        raise ParsingError("Line `blankPlaceholders` must be a list of strings.")
     if len(code_snippets) != len(blank_values) + 1:
         raise ParsingError(
             "Each line must have exactly one more code snippet than blank value."
+        )
+    if len(blank_placeholders) != len(blank_values):
+        raise ParsingError(
+            "Line `blankPlaceholders` must have the same length as `blankValues`."
         )
 
     return {
         "indent": indent,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
+        "blankPlaceholders": blank_placeholders,
     }
 
 
@@ -493,16 +506,18 @@ def _parse_markup_line(line_text: str) -> SavedLine:
     code_portion = line_text.split("#", 1)[0].rstrip()
     code_snippets = code_portion.split("!BLANK")
     blank_values = [""] * (len(code_snippets) - 1)
+    blank_placeholders = [""] * (len(code_snippets) - 1)
 
     for index, raw_blank in enumerate(BLANK_PATTERN.findall(line_text)):
         if index >= len(blank_values):
             break
-        blank_values[index] = raw_blank.replace("#blank", "", 1).strip()
+        blank_placeholders[index] = raw_blank.replace("#blank", "", 1).strip()
 
     return {
         "indent": 0,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
+        "blankPlaceholders": blank_placeholders,
     }
 
 
@@ -678,8 +693,15 @@ def _line_to_mustache(
         if index % 2 == 0:
             segments.append({"code": {"content": part, "language": language}})
         else:
+            placeholder = line["blankPlaceholders"][index // 2]
             segments.append(
-                {"blank": {"default": part, "width": max(4, len(part) + 1)}}
+                {
+                    "blank": {
+                        "value": part,
+                        "placeholder": placeholder,
+                        "width": max(4, len(part), len(placeholder)) + 1,
+                    }
+                }
             )
 
     return {"indent": line["indent"], "segments": segments}

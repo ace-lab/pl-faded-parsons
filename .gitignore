@@ -128,9 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# testing artifacts
 node_modules
 test-results
-
-# MacOS
-.DS_Store
