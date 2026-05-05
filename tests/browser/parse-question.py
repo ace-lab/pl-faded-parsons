@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import importlib.util
 import json
 import sys
 import traceback
@@ -12,18 +11,14 @@ from unittest.mock import patch
 
 import lxml.html as xml
 
+from render_core import load_controller_module
+
 
 ELEMENT_DIR = Path(__file__).resolve().parents[2]
-MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
-
 if str(ELEMENT_DIR) not in sys.path:
     sys.path.insert(0, str(ELEMENT_DIR))
 
-SPEC = importlib.util.spec_from_file_location("pl_faded_parsons", MODULE_PATH)
-assert SPEC is not None
-pl_faded_parsons = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(pl_faded_parsons)
+pl_faded_parsons = load_controller_module()
 
 
 def _extract_raw_submitted_answers(element_html: str) -> dict[str, str]:

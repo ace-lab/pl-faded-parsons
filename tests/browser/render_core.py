@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-import importlib.util
 import sys
+from types import ModuleType
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,15 +10,24 @@ from unittest.mock import patch
 BROWSER_DIR = Path(__file__).resolve().parent
 ELEMENT_DIR = BROWSER_DIR.parent.parent
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
+BANNED_IMPORT_GLOBALS = {"__file__", "__spec__", "__loader__", "__package__", "__cached__"}
 
 if str(ELEMENT_DIR) not in sys.path:
     sys.path.insert(0, str(ELEMENT_DIR))
 
-SPEC = importlib.util.spec_from_file_location("pl_faded_parsons", MODULE_PATH)
-assert SPEC is not None
-pl_faded_parsons = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
-SPEC.loader.exec_module(pl_faded_parsons)
+
+def load_controller_module() -> ModuleType:
+    """Execute the controller without PrairieLearn import metadata globals."""
+
+    module = ModuleType("pl_faded_parsons")
+    for key in BANNED_IMPORT_GLOBALS:
+        module.__dict__.pop(key, None)
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    exec(compile(source, str(MODULE_PATH), "exec"), module.__dict__)
+    return module
+
+
+pl_faded_parsons = load_controller_module()
 
 
 def render_question_html(
