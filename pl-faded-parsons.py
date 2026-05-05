@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-try:
-    import prairielearn as pl
-except ModuleNotFoundError:
-    import _prairielearn_mock_ as pl
-
+import prairielearn as pl # type: ignore
 import base64
 import json
 import random
@@ -32,11 +28,16 @@ FORMAT_ONE_TRAY = "one-tray"
 FORMAT_NO_CODE = "no-code"
 VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
 
-GIVEN_PATTERN = re.compile(r"#(\d+)given")
-DISTRACTOR_PATTERN = re.compile(r"#distractor")
-BLANK_PATTERN = re.compile(r"#blank [^#]*")
+LINE_COMMENT_PREFIX = r"(?:#|//)"
+COMMENT_START_PATTERN = re.compile(LINE_COMMENT_PREFIX)
+PIN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}pin\b(?:\((\d+)\))?")
+LEGACY_GIVEN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}(\d+)given\b")
+DISTRACTOR_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}distractor")
+LEGACY_BLANK_SUFFIX_PATTERN = re.compile(
+    rf"{LINE_COMMENT_PREFIX}blank\s*(.*?)(?={LINE_COMMENT_PREFIX}|\r?\n|$)"
+)
+MARKUP_BLANK_PATTERN = re.compile(r"\b__\((.*?)\)__\b|\b_{3,4}\b")
 INDENT = "    "
-MAX_DISTRACTORS = 10
 DEBUG = False
 
 class ParsingError(Exception):
@@ -47,6 +48,7 @@ class SavedLine(TypedDict):
     """Serialized representation of one code line in the widget trays."""
 
     indent: int
+    pinned: bool
     codeSnippets: list[str]
     blankValues: list[str]
     blankPlaceholders: list[str]
@@ -304,7 +306,7 @@ def _get_inner_html(element: xml.HtmlElement) -> str:
         parts.append(element.text)
 
     for child in element:
-        parts.append(xml.tostring(child, encoding="unicode", method="html"))
+        parts.append(str(xml.tostring(child, encoding="unicode", method="html")))
         if child.tail:
             parts.append(child.tail)
 
@@ -356,12 +358,15 @@ def _parse_line(value: Any) -> SavedLine:
         raise ParsingError("Expected each saved line to be a JSON object.")
 
     indent = value.get("indent")
+    pinned = value.get("pinned", False)
     code_snippets = value.get("codeSnippets")
     blank_values = value.get("blankValues")
     blank_placeholders = value.get("blankPlaceholders")
 
     if not isinstance(indent, int):
         raise ParsingError("Line `indent` must be an integer.")
+    if not isinstance(pinned, bool):
+        raise ParsingError("Line `pinned` must be a boolean.")
     if not isinstance(code_snippets, list) or not all(
         isinstance(snippet, str) for snippet in code_snippets
     ):
@@ -387,6 +392,7 @@ def _parse_line(value: Any) -> SavedLine:
 
     return {
         "indent": indent,
+        "pinned": pinned,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
         "blankPlaceholders": blank_placeholders,
@@ -427,7 +433,7 @@ def _build_initial_state(
     """Build the initial starter and solution trays from author markup."""
 
     starter_lines: list[SavedLine] = []
-    given_lines: list[SavedLine] = []
+    solution_lines: list[SavedLine] = []
     distractor_lines: list[SavedLine] = []
 
     for raw_line in config["markup"].strip().splitlines():
@@ -436,10 +442,11 @@ def _build_initial_state(
             continue
         line = _parse_markup_line(line_text)
 
-        given_match = GIVEN_PATTERN.search(line_text)
-        if given_match:
-            line["indent"] = int(given_match.group(1))
-            given_lines.append(line)
+        match = PIN_PATTERN.search(line_text) or LEGACY_GIVEN_PATTERN.search(line_text)
+        if match:
+            line["indent"] = int(match.group(1) or 0)
+            line["pinned"] = True
+            solution_lines.append(line)
         elif DISTRACTOR_PATTERN.search(line_text):
             distractor_lines.append(line)
         else:
@@ -451,19 +458,19 @@ def _build_initial_state(
     # Seed from the variant so repeated renders keep the same initial tray order.
     rng = random.Random(f"{data['variant_seed']}:{config['answers_name']}")
     starter_lines.extend(
-        rng.sample(distractor_lines, k=min(len(distractor_lines), MAX_DISTRACTORS))
+        rng.sample(distractor_lines, k=len(distractor_lines))
     )
     rng.shuffle(starter_lines)
 
     if config["format"] == FORMAT_ONE_TRAY:
         return {
-            "solution": given_lines + starter_lines,
+            "solution": solution_lines + starter_lines,
             "starter": [],
             "log": [],
         }
 
     return {
-        "solution": given_lines,
+        "solution": solution_lines,
         "starter": starter_lines,
         "log": [],
     }
@@ -484,18 +491,43 @@ def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
 def _parse_markup_line(line_text: str) -> SavedLine:
     """Convert one author-authored markup line into the saved line schema."""
 
-    code_portion = line_text.split("#", 1)[0].rstrip()
-    code_snippets = code_portion.split("!BLANK")
-    blank_values = [""] * (len(code_snippets) - 1)
-    blank_placeholders = [""] * (len(code_snippets) - 1)
+    comment_match = COMMENT_START_PATTERN.search(line_text)
+    code_portion = (
+        line_text[:comment_match.start()].rstrip()
+        if comment_match
+        else line_text.rstrip()
+    )
+    code_snippets: list[str] = []
+    blank_values: list[str] = []
+    blank_placeholders: list[str] = []
 
-    for index, raw_blank in enumerate(BLANK_PATTERN.findall(line_text)):
-        if index >= len(blank_values):
-            break
-        blank_placeholders[index] = raw_blank.replace("#blank", "", 1).strip()
+    last_end = 0
+    for match in MARKUP_BLANK_PATTERN.finditer(code_portion):
+        start, end = match.span()
+        code_snippets.append(code_portion[last_end:start])
+        blank_values.append("")
+        blank_placeholders.append(match.group(1) or "")
+        last_end = end
+
+    code_snippets.append(code_portion[last_end:])
+
+    for index, raw_blank in enumerate(LEGACY_BLANK_SUFFIX_PATTERN.findall(line_text)):
+        if index >= len(blank_placeholders):
+            raise ParsingError(
+                f"Too many blank placeholders specified, \n"
+                f"only {len(blank_placeholders)} blanks exist"
+            )
+        text = raw_blank.strip()
+        if blank_placeholders[index] and text:
+            raise ParsingError(
+                f"Placeholder text for blank {index} set twice: \n"
+                f"{blank_placeholders[index]} and {text}"
+            )
+        blank_placeholders[index] = text
 
     return {
         "indent": 0,
+        "pinned": False,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
         "blankPlaceholders": blank_placeholders,
@@ -509,6 +541,7 @@ def _build_question_params(
 
     return {
         "answers_name": config["answers_name"],
+        "bottom_layout": config["format"] == FORMAT_BOTTOM,
         "language": config["language"],
         "max_indent_level": config["max_indent_level"],
         "borderless": not config["pre_text"] and not config["post_text"],
@@ -529,7 +562,7 @@ def _build_question_params(
             config["pre_text_indent"],
             placement="pre",
         ),
-        "given": _build_tray_params(
+        "pin": _build_tray_params(
             state["solution"],
             config["language"],
             config["size"],
@@ -685,7 +718,11 @@ def _line_to_mustache(
                 }
             )
 
-    return {"indent": line["indent"], "segments": segments}
+    return {
+        "indent": line["indent"],
+        "pinned": line.get("pinned", False),
+        "segments": segments,
+    }
 
 
 def _compile_code(lines: list[SavedLine]) -> str:

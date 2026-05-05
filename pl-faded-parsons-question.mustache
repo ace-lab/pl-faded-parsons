@@ -6,7 +6,15 @@
 
 {{! if not vertical (horizontal), keep half size boxes }}
 {{! if vertical (or one-tray), full size boxes }}
-<div id="pl-faded-parsons-{{uuid}}" role="application" tabindex="0" aria-labelledby="pl-faded-parsons-aria-descriptor-{{uuid}}" aria-details="pl-faded-parsons-aria-details-{{uuid}}" class="col fpp-global-defs pl-faded-parsons soft-border{{#borderless}} pl-faded-parsons-borderless{{/borderless}}" language="{{language}}">
+<div
+    id="pl-faded-parsons-{{uuid}}"
+    role="application"
+    tabindex="0"
+    aria-labelledby="pl-faded-parsons-aria-descriptor-{{uuid}}"
+    aria-details="pl-faded-parsons-aria-details-{{uuid}}"
+    class="col fpp-global-defs pl-faded-parsons soft-border{{#borderless}} pl-faded-parsons-borderless{{/borderless}}{{#bottom_layout}} pl-faded-parsons-bottom-layout{{/bottom_layout}}"
+    language="{{language}}"
+>
     {{! form field to be filled with order to save the current submission }}
     <input class="main" name="{{answers_name}}.main" type="hidden" value=""/>
     <input class="log" name="{{answers_name}}.log" type="hidden" value="{{previous_log}}" />
@@ -30,7 +38,7 @@
             <pre class="prettyprint pre-text" language="{{language}}">{{{text}}}</pre>
         </div>
         {{/pre_text}}
-        {{#given}}
+        {{#pin}}
         <div
             id="solution-{{uuid}}"
             class="solution-code-tray codeline-tray soft-border col-sm-{{#narrow}}6 fpp-tray-flex{{/narrow}}{{#wide}}12{{/wide}} {{^wide}}px-1{{/wide}}"
@@ -57,7 +65,7 @@
                 </a>
             </div>
         </div>
-        {{/given}}
+        {{/pin}}
         {{#post_text}}
         <div class="post-text-wrapper">
             <pre class="prettyprint post-text" language="{{language}}">{{{text}}}</pre>
@@ -72,6 +80,9 @@
         new ParsonsWidget({
             main: '#pl-faded-parsons-{{uuid}}',
             uuid: '{{uuid}}',
+            {{#bottom_layout}}
+            layout: "bottom",
+            {{/bottom_layout}}
             {{#logging_enabled}}
             loggingEnabled: true,
             {{/logging_enabled}}

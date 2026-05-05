@@ -11,13 +11,13 @@ The syntax for this is below:
 
 ```html title="question.html"
 <pl-faded-parsons answers-name="fpp" language="python">
-  def fibonacci(n: int): #0given
-    if n <= 2: #1given
-      return 1 #2given
+  def fibonacci(n: int): #pin
+    if n <= 2: #pin(1)
+      return 1 #pin(2)
     n_less_2 = fibonacci(n - 2)
     n_less_1 = fibonacci(n - 1)
     n_less_0 = fibonacci(n) #distractor
-    return n_less_1 + n_less_2 #1given
+    return n_less_1 + n_less_2 #pin(1)
 </pl-faded-parsons>
 ```
 
@@ -38,10 +38,11 @@ The syntax for this is below:
 
 The element authoring model is built around simple markers inside the question markup:
 
-- `#0given`, `#1given`, ... -- starts a line into the solution tray and sets its starting indent level.
+- `#pin`, `#pin(X)`, ... -- locks a line into the solution tray and sets its starting indent level X (0 if not given).
 - `#distractor` marks a line that is **not** part of the solution.
-- `!BLANK` marks a blank that the student must fill in.
-- `#blank <default text>` sets the default text shown in that blank when the problem is loaded.
+- In C-like authoring contexts, the same markers may also be written with `//` instead of `#`, for example `//pin` and `//distractor`.
+- `___` marks a blank that the student must fill in.
+- `__(placeholder text)__` marks a blank and sets the default text shown in that blank when the problem is loaded.
 
 The `format` attribute controls the tray layout:
 
@@ -68,4 +69,3 @@ When using `one-tray` format, you can wrap the editable code with child elements
 - `<post-text>` for text that appears after the code block
 
 The `<code-lines>` element may also include `visual-indent` to offset the rendered tray visually. That attribute is only supported in `one-tray` mode and only when pre- or post-text is present.
-
