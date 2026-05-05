@@ -40,6 +40,26 @@ answer() #pin</code-lines>
     expect(stored.solution[0].indent).toBe(0);
   });
 
+  test("bottom layout places the unused label in the lower-left corner", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" format="bottom" language="javascript">
+        <code-lines>helper()
+answer() #pin(1)</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    await expect(parsons(page).root).toHaveClass(/pl-faded-parsons-bottom-layout/);
+    const unusedLabel = parsons(page).starter.tray.locator(".fpp-tray-corner-label-starter");
+    const [labelBox, trayBox] = await Promise.all([
+      unusedLabel.boundingBox(),
+      parsons(page).starter.tray.boundingBox(),
+    ]);
+    expect(labelBox).not.toBeNull();
+    expect(trayBox).not.toBeNull();
+    expect(labelBox.x).toBeLessThan(trayBox.x + trayBox.width / 2);
+  });
+
   test("updates the hidden submission state when a blank changes", async ({ page }) => {
     await mountQuestion(
       page,
@@ -241,6 +261,94 @@ answer() #pin(1)</code-lines>
       await expect(parsons(page).starter.codelines).toHaveCount(1);
       await expect(parsons(page).solution.codelines).toHaveCount(1);
       await expect(parsons(page).starter.codelines.first()).toContainText("helper()");
+    });
+
+    test("bottom layout uses ArrowDown and ArrowUp to cross trays at tray edges", async ({ page }) => {
+      await mountQuestion(
+        page,
+        `<pl-faded-parsons answers-name="demo" format="bottom" language="javascript">
+          <code-lines>helper()
+answer() #pin(1)</code-lines>
+        </pl-faded-parsons>`,
+      );
+
+      const starterLine = parsons(page).starter.codelines.first();
+      await starterLine.focus();
+      await starterLine.press("ArrowDown");
+      await expect(parsons(page).solution.codelines.first()).toBeFocused();
+
+      const solutionLine = parsons(page).solution.codelines.first();
+      await solutionLine.press("ArrowUp");
+      await expect(parsons(page).starter.codelines.first()).toBeFocused();
+    });
+
+    test("bottom layout uses Option+ArrowDown and Option+ArrowUp to move lines across trays at tray edges", async ({ page }) => {
+      await mountQuestion(
+        page,
+        `<pl-faded-parsons answers-name="demo" format="bottom" language="javascript">
+          <code-lines>helper()
+answer() #pin(1)</code-lines>
+        </pl-faded-parsons>`,
+      );
+
+      const starterLine = parsons(page).starter.codelines.first();
+      await starterLine.focus();
+      await starterLine.press("Alt+ArrowDown");
+
+      await expect.poll(() => parseStoredMain(page)).toMatchObject({
+        starter: [],
+        solution: [
+          { codeSnippets: ["helper()"], indent: 0 },
+          { codeSnippets: ["answer()"], indent: 1 },
+        ],
+      });
+
+      const movedLine = parsons(page).solution.codelines.first();
+      await movedLine.focus();
+      await movedLine.press("Alt+ArrowUp");
+
+      await expect.poll(() => parseStoredMain(page)).toMatchObject({
+        starter: [
+          { codeSnippets: ["helper()"], indent: 0 },
+        ],
+        solution: [
+          { codeSnippets: ["answer()"], indent: 1 },
+        ],
+      });
+    });
+
+    test("bottom layout ignores left and right tray navigation keys", async ({ page }) => {
+      await mountQuestion(
+        page,
+        `<pl-faded-parsons answers-name="demo" format="bottom" language="javascript">
+          <code-lines>helper()
+answer() #pin(1)</code-lines>
+        </pl-faded-parsons>`,
+      );
+
+      const starterLine = parsons(page).starter.codelines.first();
+      await starterLine.focus();
+      await starterLine.press("ArrowRight");
+      await expect(starterLine).toBeFocused();
+      await expect.poll(() => parseStoredMain(page)).toMatchObject({
+        starter: [
+          { codeSnippets: ["helper()"], indent: 0 },
+        ],
+        solution: [
+          { codeSnippets: ["answer()"], indent: 1 },
+        ],
+      });
+
+      await starterLine.press("Alt+ArrowRight");
+      await expect(starterLine).toBeFocused();
+      await expect.poll(() => parseStoredMain(page)).toMatchObject({
+        starter: [
+          { codeSnippets: ["helper()"], indent: 0 },
+        ],
+        solution: [
+          { codeSnippets: ["answer()"], indent: 1 },
+        ],
+      });
     });
   });
 

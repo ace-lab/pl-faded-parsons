@@ -118,6 +118,11 @@ code {
   font-style: italic;
 }
 
+.pl-faded-parsons.pl-faded-parsons-bottom-layout .fpp-tray-corner-label-starter {
+  left: 0.45em;
+  right: auto;
+}
+
 .pl-faded-parsons .fpp-tray-corner-label-solution {
   left: 0.45em;
   color: var(--pln-txt-color, rgba(0, 0, 0, 0.8));

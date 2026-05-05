@@ -536,6 +536,7 @@ def _build_question_params(
 
     return {
         "answers_name": config["answers_name"],
+        "bottom_layout": config["format"] == FORMAT_BOTTOM,
         "language": config["language"],
         "max_indent_level": config["max_indent_level"],
         "borderless": not config["pre_text"] and not config["post_text"],

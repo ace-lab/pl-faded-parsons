@@ -6,6 +6,7 @@ function buildWidgetConfig(config) {
       maxIndentLevel: 5,
       visualIndent: 0,
       prettyPrint: true,
+      layout: "right",
       loggingEnabled: false,
       onSortableUpdate: (_event, _ui) => {},
       onBlankUpdate: (_event, _input) => {},
@@ -268,6 +269,10 @@ class ParsonsWidget {
           }
         },
       });
+  }
+
+  isBottomLayout() {
+    return this.config.layout === "bottom";
   }
 
   applyVisualIndent() {
@@ -604,7 +609,10 @@ class ParsonsWidget {
     return { found: target.exists(), target };
   }
 
-  moveHorizontally(codeline, { moveForward, moveCodeline }) {
+  moveHorizontally(
+    codeline,
+    { moveForward, moveCodeline, useEdgeTargets = false },
+  ) {
     if (moveCodeline && this.isPinnedCodeline(codeline)) return;
 
     const codeboxes = $(this.config.main).find(".codeline-tray");
@@ -617,7 +625,13 @@ class ParsonsWidget {
     if (k < 0 || m <= k) return;
     const newTray = codeboxes.eq(k).find(".codeline-list");
 
-    const { found, target } = this.findHorizontalTarget(codeline, newTray);
+    const targetLines = newTray
+      .find("li.codeline")
+      .filter((_, line) => !this.isSortablePlaceholder(line));
+    const target = useEdgeTargets
+      ? (moveForward ? targetLines.first() : targetLines.last())
+      : this.findHorizontalTarget(codeline, newTray).target;
+    const found = target.exists();
 
     if (!moveCodeline) {
       this.focusCodeline(target, moveForward);
@@ -627,7 +641,11 @@ class ParsonsWidget {
     const selection = $(document.activeElement).or(codeline);
 
     if (found) {
-      $(codeline).insertBefore(target);
+      if (useEdgeTargets && !moveForward) {
+        $(codeline).insertAfter(target);
+      } else {
+        $(codeline).insertBefore(target);
+      }
     } else {
       $(newTray).append(codeline);
     }
@@ -677,7 +695,16 @@ class ParsonsWidget {
     const parent = $(codeline).parent();
     const nextChild = moveForward ? $(codeline).next() : $(codeline).prev();
 
-    if (!nextChild.exists()) return;
+    if (!nextChild.exists()) {
+      if (this.isBottomLayout()) {
+        this.moveHorizontally(codeline, {
+          moveForward,
+          moveCodeline,
+          useEdgeTargets: true,
+        });
+      }
+      return;
+    }
 
     if (!moveCodeline) {
       const children = parent.children();
@@ -740,6 +767,7 @@ class ParsonsWidget {
       case "ArrowLeft":
       case "ArrowRight":
         e.preventDefault();
+        if (this.isBottomLayout()) return true;
         if (pinned && motionData.moveCodeline) return true;
         this.moveHorizontally(codeline, motionData);
         return true;
@@ -785,6 +813,10 @@ class ParsonsWidget {
         return;
       case "ArrowRight":
       case "ArrowLeft":
+        if (this.isBottomLayout() && motionData.moveCodeline) {
+          e.preventDefault();
+          return;
+        }
         if (pinned && motionData.moveCodeline) {
           e.preventDefault();
           return;
