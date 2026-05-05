@@ -267,6 +267,27 @@ ignored() #distractor</code-lines>
             ["line()"],
         )
 
+    def test_build_initial_state_accepts_c_style_comment_markers(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="javascript">
+            <code-lines>kept() //pin(1)
+starter()
+ignored() //distractor</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["    kept()"],
+        )
+        self.assertCountEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            ["starter()", "ignored()"],
+        )
+
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
 

@@ -40,6 +40,7 @@ The element authoring model is built around simple markers inside the question m
 
 - `#pin`, `#pin(1)`, ... -- locks a line into the solution tray and sets its starting indent level (0 if not given).
 - `#distractor` marks a line that is **not** part of the solution.
+- In C-like authoring contexts, the same markers may also be written with `//` instead of `#`, for example `//pin` and `//distractor`.
 - `___` marks a blank that the student must fill in.
 - `__(placeholder text)__` marks a blank and sets the default text shown in that blank when the problem is loaded.
 

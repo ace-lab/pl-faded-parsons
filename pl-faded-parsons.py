@@ -32,10 +32,14 @@ FORMAT_ONE_TRAY = "one-tray"
 FORMAT_NO_CODE = "no-code"
 VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
 
-PIN_PATTERN = re.compile(r"#pin\b(?:\((\d+)\))?")
-LEGACY_GIVEN_PATTERN = re.compile(r"#(\d+)given\b")
-DISTRACTOR_PATTERN = re.compile(r"#distractor")
-LEGACY_BLANK_SUFFIX_PATTERN = re.compile(r"#blank [^#]*")
+LINE_COMMENT_PREFIX = r"(?:#|//)"
+COMMENT_START_PATTERN = re.compile(LINE_COMMENT_PREFIX)
+PIN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}pin\b(?:\((\d+)\))?")
+LEGACY_GIVEN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}(\d+)given\b")
+DISTRACTOR_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}distractor")
+LEGACY_BLANK_SUFFIX_PATTERN = re.compile(
+    rf"{LINE_COMMENT_PREFIX}blank\s*(.*?)(?={LINE_COMMENT_PREFIX}|\r?\n|$)"
+)
 MARKUP_BLANK_PATTERN = re.compile(r"__\((.*?)\)__|_{4,5}(?:[^_])|_{3}")
 INDENT = "    "
 DEBUG = False
@@ -491,7 +495,12 @@ def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
 def _parse_markup_line(line_text: str) -> SavedLine:
     """Convert one author-authored markup line into the saved line schema."""
 
-    code_portion = line_text.split("#", 1)[0].rstrip()
+    comment_match = COMMENT_START_PATTERN.search(line_text)
+    code_portion = (
+        line_text[:comment_match.start()].rstrip()
+        if comment_match
+        else line_text.rstrip()
+    )
     code_snippets: list[str] = []
     blank_values: list[str] = []
     blank_placeholders: list[str] = []
@@ -512,7 +521,7 @@ def _parse_markup_line(line_text: str) -> SavedLine:
                 f"Too many blank placeholders specified, \n"
                 f"only {len(blank_placeholders)} blanks exist"
             )
-        text = raw_blank.replace("#blank", "", 1).strip()
+        text = raw_blank.strip()
         if blank_placeholders[index] and text:
             raise ParsingError(
                 f"Placeholder text for blank {index} set twice: \n"
