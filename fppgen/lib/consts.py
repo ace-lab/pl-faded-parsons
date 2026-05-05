@@ -78,7 +78,7 @@ MAIN_PATTERN: Final[Pattern] = compile('|'.join((
 )))
 
 SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
-    r'^#(blank[^#]*|\d+given)'
+    r'^#(blank[^#]*|pin\b(?:\(\d+\))?|(?:\d+)?given\b)'
 )
 
 DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?([^?\n]*)\?')
@@ -101,7 +101,7 @@ PROGRAM_DESCRIPTION: Final[str] = Bcolors.f(Bcolors.OK_GREEN, ' A tool for gener
      - Blanks cannot span more than a single line
      - The text within the question marks fills the blank in the answer
      - `?`s in any kind of string-literal or comment are ignored
- - Comments are removed from the prompt unless the comment matches the form `#{n}given` or `#blank`
+ - Comments are removed from the prompt unless the comment matches the form `#pin`, `#pin(n)`, `#given`, `#<n>given`, or `#blank`
      - These special forms are the only comments removed from the answer
  - Regions are begun and ended by `## {region name} ##`
      - A maximum of one region may be open at a time

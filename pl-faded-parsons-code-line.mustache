@@ -1,10 +1,10 @@
 <li
-  class="ui-sortable codeline"
+  class="ui-sortable codeline{{#pinned}} pinned{{/pinned}}"
   role="listitem"
   style="--pl-faded-parsons-indent: {{indent}};"
   tabindex="-1"
   aria-grabbed="false"
-  aria-dropeffect="move"
+  aria-dropeffect="{{#pinned}}none{{/pinned}}{{^pinned}}move{{/pinned}}"
 >{{! use comments to add newlines or else the actual emitted code contains newlines...
   }}{{#segments}}{{!
     }}{{#code}}{{!

@@ -164,7 +164,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
     def test_build_config_uses_inner_html_when_code_lines_are_omitted(self):
         html = """
         <pl-faded-parsons answers-name="demo">
-            given() #1given
+            given() #pin(1)
             starter()
         </pl-faded-parsons>
         """
@@ -172,7 +172,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
         config = pl_faded_parsons._build_config(html, self.data)
         state = pl_faded_parsons._build_initial_state(config, self.data)
 
-        self.assertIn("given() #1given", config["markup"])
+        self.assertIn("given() #pin(1)", config["markup"])
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
             ["    given()"],
@@ -196,7 +196,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
     def test_build_initial_state_parses_givens_blanks_and_distractors(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
-            <code-lines>given() #1given
+            <code-lines>given() #pin(1)
 starter()
 value = !BLANK #blank 42
 ignored() #distractor</code-lines>
@@ -218,6 +218,55 @@ ignored() #distractor</code-lines>
         self.assertEqual(state["starter"][0]["blankValues"], [""])
         self.assertEqual(state["starter"][0]["blankPlaceholders"], ["42"])
 
+    def test_build_initial_state_accepts_legacy_given_marker(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>legacy() #0given</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["legacy()"],
+        )
+        self.assertTrue(state["solution"][0]["pinned"])
+
+    def test_build_initial_state_accepts_pin_without_suffix_as_zero_indent(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>top() #pin</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["top()"],
+        )
+        self.assertEqual(state["solution"][0]["indent"], 0)
+        self.assertTrue(state["solution"][0]["pinned"])
+
+    def test_build_initial_state_ignores_pinned_comment_text(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>line() #pinned</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertEqual(state["solution"], [])
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            ["line()"],
+        )
+
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
 
@@ -227,6 +276,26 @@ ignored() #distractor</code-lines>
         self.assertEqual(state["solution"], [])
         self.assertEqual(state["starter"], [])
         self.assertEqual(state["log"], [])
+
+    def test_parse_saved_state_preserves_pinned_flags(self):
+        raw_main = json.dumps(
+            {
+                "solution": [
+                    {
+                        "indent": 0,
+                        "pinned": True,
+                        "codeSnippets": ["pinned()"],
+                        "blankValues": [],
+                    }
+                ],
+                "starter": [],
+            }
+        )
+
+        state = pl_faded_parsons._parse_saved_state(raw_main, "[]")
+
+        self.assertTrue(state["solution"][0]["pinned"])
+        self.assertEqual(state["solution"][0]["codeSnippets"], ["pinned()"])
 
     def test_build_initial_state_moves_all_lines_into_solution_in_one_tray_mode(self):
         html = """
@@ -719,7 +788,7 @@ starter()</code-lines>
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">
             <code-lines>print(!BLANK) #blank 7
-return 3 #1given</code-lines>
+return 3 #pin(1)</code-lines>
         </pl-faded-parsons>
         """
 
@@ -785,7 +854,7 @@ return 3 #1given</code-lines>
     def test_one_tray_format_moves_starter_lines_into_solution(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="one-tray">
-            <code-lines>given() #0given
+            <code-lines>given() #pin
 starter()</code-lines>
         </pl-faded-parsons>
         """

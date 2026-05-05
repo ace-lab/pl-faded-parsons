@@ -17,7 +17,7 @@ test.describe("pl-faded-parsons browser behavior", () => {
       page,
       `<pl-faded-parsons answers-name="demo" language="javascript">
         <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin</code-lines>
       </pl-faded-parsons>`,
     );
 
@@ -37,13 +37,14 @@ answer() #1given</code-lines>
     expect(stored.solution).toHaveLength(1);
     expect(stored.starter[0].codeSnippets.join("")).toContain("helper()");
     expect(stored.solution[0].codeSnippets.join("")).toContain("answer()");
+    expect(stored.solution[0].indent).toBe(0);
   });
 
   test("updates the hidden submission state when a blank changes", async ({ page }) => {
     await mountQuestion(
       page,
       `<pl-faded-parsons answers-name="demo" language="python">
-        <code-lines>value = !BLANK #blank answer #1given</code-lines>
+        <code-lines>value = !BLANK #blank answer #pin(1)</code-lines>
       </pl-faded-parsons>`,
     );
 
@@ -87,7 +88,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="javascript">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -112,7 +113,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="javascript">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -137,7 +138,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="javascript">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -217,7 +218,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="javascript">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -248,7 +249,7 @@ answer() #1given</code-lines>
       page,
       `<pl-faded-parsons answers-name="demo" language="javascript" enable-copy-code="true">
         <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
       </pl-faded-parsons>`,
     );
 
@@ -266,7 +267,7 @@ answer() #1given</code-lines>
       `<pl-faded-parsons answers-name="demo" format="one-tray" language="python">
         <pre-text>before()</pre-text>
         <code-lines visual-indent="2">kept()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         <post-text>after()</post-text>
       </pl-faded-parsons>`,
     );
@@ -290,7 +291,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="python" log="true">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -304,7 +305,7 @@ answer() #1given</code-lines>
         page,
         `<pl-faded-parsons answers-name="demo" language="javascript" log="true">
           <code-lines>helper()
-answer() #1given</code-lines>
+answer() #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 
@@ -322,7 +323,7 @@ answer() #1given</code-lines>
       await mountQuestion(
         page,
         `<pl-faded-parsons answers-name="demo" language="python" log="true">
-          <code-lines>value = !BLANK #1given</code-lines>
+          <code-lines>value = !BLANK #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 

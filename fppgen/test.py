@@ -375,19 +375,19 @@ class TestParseFPP(TestCase):
             prompt_code = lines('for _ in range?(1, 10):', '\ta? += "?"', 'return a.is_odd?')
         )
 
-    def test_given_special_comment(self):
+    def test_pin_special_comment(self):
         """ Special comments appear in the prompt_code, but not the answer_code.
-            The special comment that indicates a line as given in the prompt are
-            /#<indentation level>given/
+            The special comment that indicates a line as pinned in the prompt is
+            /#pin or #pin(<indentation level>)/
         """
-        txt = lines('def foo(x): #0given', '\tx *= x', '\treturn x #1given', '')
+        txt = lines('def foo(x): #pin', '\tx *= x', '\treturn x #pin(1)', '')
         self.assertParsesTo(
             txt,
             answer_code = lines('def foo(x):', '\tx *= x', '\treturn x'),
             prompt_code = txt.strip()
         )
 
-        txt = lines('def foo(x): #10000given', '\tx *= x', '\treturn x #000given', '')
+        txt = lines('def foo(x): #pin(10000)', '\tx *= x', '\treturn x #pin(000)', '')
         self.assertParsesTo(
             txt,
             answer_code = lines('def foo(x):', '\tx *= x', '\treturn x'),
@@ -396,7 +396,7 @@ class TestParseFPP(TestCase):
 
         with self.subTest('poorly formatted special comments become regular comments'):
             # poorly formatted
-            txt = lines('def foo(x): #-10000given', '\tx *= x', '\treturn x #given', '')
+            txt = lines('def foo(x): #pinning', '\tx *= x', '\treturn x #pinned', '')
             self.assertParsesTo(
                 txt,
                 answer_code = txt.strip(),
@@ -432,9 +432,9 @@ class TestParseFPP(TestCase):
     def test_many_comments(self):
         """ Interspersing special and regular comments does not effect behavior """
         txt = lines(
-            'def func(x: ?str?): #0given #blank _type_',
+            'def func(x: ?str?): #pin #blank _type_',
             '\tx.modify(42) # 42 is always magic ',  # << !! trailing space is cut
-            '\treturn ?x.finish()? #1given #blank x._ # huzzah!'
+            '\treturn ?x.finish()? #pin(1) #blank x._ # huzzah!'
         )
         self.assertParsesTo(
             txt,
@@ -444,9 +444,9 @@ class TestParseFPP(TestCase):
                 '\treturn ?x.finish()? # huzzah!'
             )),
             prompt_code=sub_blank(lines(
-                'def func(x: ?str?): #0given #blank _type_',
+                'def func(x: ?str?): #pin #blank _type_',
                 '\tx.modify(42)',
-                '\treturn ?x.finish()? #1given #blank x._'
+                '\treturn ?x.finish()? #pin(1) #blank x._'
             ))
         )
 
@@ -605,16 +605,16 @@ class TestParseFPP(TestCase):
         )
 
         raw = lines(
-            'def poly(coeffs, x): #0given',
+            'def poly(coeffs, x): #pin',
             '    # Keep track of the total as we iterate through each term.',
             '    # Each term is of the form coeff*(x**power).',
-            '    total = ?0? #blank test #1given # total starts at 0',
+            '    total = ?0? #blank test #pin(1) # total starts at 0',
             '    ',
             '    # Extract the power and coefficient for each term.',
             '    for ?power, coeff? in enumerate(coeffs):',
             '        # Add the value of the term to the total.',
-            '        ?total? = total + coeff * (x ** power) #2given',
-            '    return total #1given',
+            '        ?total? = total + coeff * (x ** power) #pin(2)',
+            '    return total #pin(1)',
         )
 
         ans = lines(
@@ -630,11 +630,11 @@ class TestParseFPP(TestCase):
             '    return total',
         )
         ppt = lines(
-            'def poly(coeffs, x): #0given',
-            '    total = !BLANK #blank test #1given',
+            'def poly(coeffs, x): #pin',
+            '    total = !BLANK #blank test #pin(1)',
             '    for !BLANK in enumerate(coeffs):',
-            '        !BLANK = total + coeff * (x ** power) #2given',
-            '    return total #1given',
+            '        !BLANK = total + coeff * (x ** power) #pin(2)',
+            '    return total #pin(1)',
         )
 
         test = lines(

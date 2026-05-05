@@ -32,11 +32,11 @@ FORMAT_ONE_TRAY = "one-tray"
 FORMAT_NO_CODE = "no-code"
 VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
 
-GIVEN_PATTERN = re.compile(r"#(\d+)given")
+PIN_PATTERN = re.compile(r"#pin\b(?:\((\d+)\))?")
+LEGACY_GIVEN_PATTERN = re.compile(r"#(\d+)given\b")
 DISTRACTOR_PATTERN = re.compile(r"#distractor")
 BLANK_PATTERN = re.compile(r"#blank [^#]*")
 INDENT = "    "
-MAX_DISTRACTORS = 10
 DEBUG = False
 
 class ParsingError(Exception):
@@ -47,6 +47,7 @@ class SavedLine(TypedDict):
     """Serialized representation of one code line in the widget trays."""
 
     indent: int
+    pinned: bool
     codeSnippets: list[str]
     blankValues: list[str]
     blankPlaceholders: list[str]
@@ -356,12 +357,15 @@ def _parse_line(value: Any) -> SavedLine:
         raise ParsingError("Expected each saved line to be a JSON object.")
 
     indent = value.get("indent")
+    pinned = value.get("pinned", False)
     code_snippets = value.get("codeSnippets")
     blank_values = value.get("blankValues")
     blank_placeholders = value.get("blankPlaceholders")
 
     if not isinstance(indent, int):
         raise ParsingError("Line `indent` must be an integer.")
+    if not isinstance(pinned, bool):
+        raise ParsingError("Line `pinned` must be a boolean.")
     if not isinstance(code_snippets, list) or not all(
         isinstance(snippet, str) for snippet in code_snippets
     ):
@@ -387,6 +391,7 @@ def _parse_line(value: Any) -> SavedLine:
 
     return {
         "indent": indent,
+        "pinned": pinned,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
         "blankPlaceholders": blank_placeholders,
@@ -427,7 +432,7 @@ def _build_initial_state(
     """Build the initial starter and solution trays from author markup."""
 
     starter_lines: list[SavedLine] = []
-    given_lines: list[SavedLine] = []
+    solution_lines: list[SavedLine] = []
     distractor_lines: list[SavedLine] = []
 
     for raw_line in config["markup"].strip().splitlines():
@@ -436,10 +441,11 @@ def _build_initial_state(
             continue
         line = _parse_markup_line(line_text)
 
-        given_match = GIVEN_PATTERN.search(line_text)
-        if given_match:
-            line["indent"] = int(given_match.group(1))
-            given_lines.append(line)
+        match = PIN_PATTERN.search(line_text) or LEGACY_GIVEN_PATTERN.search(line_text)
+        if match:
+            line["indent"] = int(match.group(1) or 0)
+            line["pinned"] = True
+            solution_lines.append(line)
         elif DISTRACTOR_PATTERN.search(line_text):
             distractor_lines.append(line)
         else:
@@ -451,19 +457,19 @@ def _build_initial_state(
     # Seed from the variant so repeated renders keep the same initial tray order.
     rng = random.Random(f"{data['variant_seed']}:{config['answers_name']}")
     starter_lines.extend(
-        rng.sample(distractor_lines, k=min(len(distractor_lines), MAX_DISTRACTORS))
+        rng.sample(distractor_lines, k=len(distractor_lines))
     )
     rng.shuffle(starter_lines)
 
     if config["format"] == FORMAT_ONE_TRAY:
         return {
-            "solution": given_lines + starter_lines,
+            "solution": solution_lines + starter_lines,
             "starter": [],
             "log": [],
         }
 
     return {
-        "solution": given_lines,
+        "solution": solution_lines,
         "starter": starter_lines,
         "log": [],
     }
@@ -496,6 +502,7 @@ def _parse_markup_line(line_text: str) -> SavedLine:
 
     return {
         "indent": 0,
+        "pinned": False,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
         "blankPlaceholders": blank_placeholders,
@@ -529,7 +536,7 @@ def _build_question_params(
             config["pre_text_indent"],
             placement="pre",
         ),
-        "given": _build_tray_params(
+        "pin": _build_tray_params(
             state["solution"],
             config["language"],
             config["size"],
@@ -685,7 +692,11 @@ def _line_to_mustache(
                 }
             )
 
-    return {"indent": line["indent"], "segments": segments}
+    return {
+        "indent": line["indent"],
+        "pinned": line.get("pinned", False),
+        "segments": segments,
+    }
 
 
 def _compile_code(lines: list[SavedLine]) -> str:

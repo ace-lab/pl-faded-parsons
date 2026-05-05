@@ -181,6 +181,7 @@ This mirrors one saved line in Python:
 ```python
 {
     "indent": int,
+    "pinned": bool,
     "codeSnippets": list[str],
     "blankValues": list[str],
     "blankPlaceholders": list[str],
@@ -244,6 +245,7 @@ File: `pl-faded-parsons.js`
   "starter": [
     {
       "indent": 0,
+      "pinned": false,
       "codeSnippets": ["..."],
       "blankValues": ["..."]
     }
@@ -251,6 +253,7 @@ File: `pl-faded-parsons.js`
   "solution": [
     {
       "indent": 1,
+      "pinned": true,
       "codeSnippets": ["..."],
       "blankValues": ["..."]
     }
@@ -309,8 +312,8 @@ Python reconstructs the raw submission into:
 
 ```python
 {
-    "solution": [{"indent": ..., "codeSnippets": [...], "blankValues": [...]}, ...],
-    "starter": [{"indent": ..., "codeSnippets": [...], "blankValues": [...]}, ...],
+    "solution": [{"indent": ..., "pinned": True, "codeSnippets": [...], "blankValues": [...]}, ...],
+    "starter": [{"indent": ..., "pinned": False, "codeSnippets": [...], "blankValues": [...]}, ...],
     "log": [{"timestamp": "...", "tag": "...", "data": {...}}, ...],
 }
 ```

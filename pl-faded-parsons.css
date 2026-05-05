@@ -157,11 +157,41 @@ code {
   overflow: visible;
 }
 
+.codeline-tray li.pinned,
+.codeline-tray li.pinned:hover,
+.codeline-tray li.pinned:focus,
+.codeline-tray li.pinned:focus-within {
+  cursor: not-allowed;
+}
+
+.codeline-tray li.pinned {
+  background: linear-gradient(
+    90deg,
+    rgba(192, 192, 192, 0.18),
+    rgba(255, 255, 255, 0.04)
+  );
+  border-color: rgba(120, 120, 120, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  opacity: 0.94;
+  user-select: none;
+}
+
+.codeline-tray li.pinned:hover {
+  border-color: rgba(120, 120, 120, 0.9);
+  overflow: hidden;
+}
+
 .codeline-tray li:focus,
 .codeline-tray li:focus-within {
   outline: 2px solid var(--focus-border-color);
   border-color: var(--focus-border-color);
   border-radius: 15px;
+}
+
+.codeline-tray li.pinned:focus,
+.codeline-tray li.pinned:focus-within {
+  outline-color: rgba(120, 120, 120, 0.8);
+  border-color: rgba(120, 120, 120, 0.9);
 }
 
 .codeline-tray .ui-sortable-placeholder,

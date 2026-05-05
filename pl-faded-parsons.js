@@ -38,6 +38,10 @@ function getKeyMotionData(e) {
   };
 }
 
+function isPinnedCodeline(codeline) {
+  return $(codeline).hasClass("pinned");
+}
+
 function getCurrentDragTray(ui) {
   return ui?.placeholder?.parent?.() ?? ui?.item?.parent?.();
 }
@@ -331,6 +335,7 @@ class ParsonsWidget {
       placeholder: "codeline-sortable-placeholder",
       forcePlaceholderSize: true,
       tolerance: "pointer",
+      cancel: ".pinned",
     };
 
     starterTray.sortable({
@@ -401,6 +406,7 @@ class ParsonsWidget {
     const findBlanksIn = (codeline) => $(codeline).find("input.parsons-blank");
 
     this.findBlanksIn = findBlanksIn;
+    this.isPinnedCodeline = isPinnedCodeline;
     this.setCodelinesTabStops = (tabbable) =>
       $(this.config.main)
         .find("li.codeline")
@@ -413,10 +419,14 @@ class ParsonsWidget {
     /** Manages the codeline's drag state */
     this.setCodelineInMotion = (codeline, inMotion) =>
       $(codeline)
-        .attr("aria-grabbed", inMotion)
-        .toggleClass("codeline-in-motion", inMotion);
+        .attr("aria-grabbed", this.isPinnedCodeline(codeline) ? "false" : inMotion)
+        .toggleClass(
+          "codeline-in-motion",
+          inMotion && !this.isPinnedCodeline(codeline),
+        );
 
     this.getCodelineInMotion = (codeline) =>
+      !this.isPinnedCodeline(codeline) &&
       $(codeline).hasClass("codeline-in-motion");
     this.isSortablePlaceholder = (codeline) =>
       $(codeline).hasClass("ui-sortable-placeholder") ||
@@ -595,6 +605,8 @@ class ParsonsWidget {
   }
 
   moveHorizontally(codeline, { moveForward, moveCodeline }) {
+    if (moveCodeline && this.isPinnedCodeline(codeline)) return;
+
     const codeboxes = $(this.config.main).find(".codeline-tray");
     const m = codeboxes.length;
     if (m < 2) return;
@@ -660,6 +672,8 @@ class ParsonsWidget {
   }
 
   moveVertically(codeline, { moveForward, moveToEnd, moveCodeline }) {
+    if (moveCodeline && this.isPinnedCodeline(codeline)) return;
+
     const parent = $(codeline).parent();
     const nextChild = moveForward ? $(codeline).next() : $(codeline).prev();
 
@@ -691,13 +705,15 @@ class ParsonsWidget {
 
   onCodelineKeydown(e, codeline) {
     const motionData = getKeyMotionData(e);
-    this.setCodelineInMotion?.(codeline, motionData.moveCodeline);
+    const pinned = this.isPinnedCodeline(codeline);
+    this.setCodelineInMotion?.(codeline, motionData.moveCodeline && !pinned);
 
     if (!$(codeline).is(":focus")) return false;
 
     switch (e.key) {
       case "Tab":
         e.preventDefault();
+        if (pinned) return true;
         if (
           motionData.jumpForward &&
           $(this.config.starter).has(codeline).exists()
@@ -724,11 +740,13 @@ class ParsonsWidget {
       case "ArrowLeft":
       case "ArrowRight":
         e.preventDefault();
+        if (pinned && motionData.moveCodeline) return true;
         this.moveHorizontally(codeline, motionData);
         return true;
       case "ArrowUp":
       case "ArrowDown":
         e.preventDefault();
+        if (pinned && motionData.moveCodeline) return true;
         this.moveVertically(codeline, motionData);
         return true;
     }
@@ -740,11 +758,13 @@ class ParsonsWidget {
     const blanks = this.findBlanksIn(codeline);
     const blankIdx = blanks.index(blank);
     const motionData = getKeyMotionData(e);
+    const pinned = this.isPinnedCodeline(codeline);
 
     switch (e.key) {
       case "Tab": {
         const delta = motionData.jumpForward ? +1 : -1;
         e.preventDefault();
+        if (pinned) return;
         this.updateIndent(codeline, delta, false);
         return;
       }
@@ -765,6 +785,10 @@ class ParsonsWidget {
         return;
       case "ArrowRight":
       case "ArrowLeft":
+        if (pinned && motionData.moveCodeline) {
+          e.preventDefault();
+          return;
+        }
         if (motionData.moveCodeline) {
           e.preventDefault();
           this.moveHorizontally(codeline, motionData);
@@ -922,6 +946,7 @@ class ParsonsWidget {
    */
   updateIndent(codeline, newCodeIndent, absolute = true) {
     if (!this.config.canIndent) return;
+    if (this.isPinnedCodeline(codeline)) return this.getCodelineIndent(codeline);
 
     let oldCodeIndent = this.getCodelineIndent(codeline);
     if (!absolute) newCodeIndent += oldCodeIndent;
@@ -957,6 +982,7 @@ class ParsonsWidget {
     const pythonSummary = (line) => ({
       indent: this.getCodelineIndent(line),
       ...this.getCodelineSegments(line),
+      pinned: this.isPinnedCodeline(line),
     });
 
     storage.val(
@@ -998,7 +1024,10 @@ class ParsonsWidget {
     const tray =
       1 + trays.toArray().findIndex((t) => $(t).has(codeline).exists());
     const trayText =
-      trays > 1 ? `; All in tray ${tray} of ${trays.length}.` : ".";
+      trays.length > 1 ? `; All in tray ${tray} of ${trays.length}.` : ".";
+    const lockText = this.isPinnedCodeline(codeline)
+      ? " pinned."
+      : "";
     let indentLevel = this.getCodelineIndent(codeline);
     const visualDedentParents = $(codeline)
       .prevAll()
@@ -1015,6 +1044,7 @@ class ParsonsWidget {
         .map((cl) => this.codelineAriaDescription(cl))
         .join("; Under ") +
       trayText +
+      lockText +
       " Press escape to return to the widget."
     );
   }
@@ -1026,6 +1056,7 @@ class ParsonsWidget {
       return `${motionText} line ${lineNumber}`;
     };
     const indentDescription = (codeline) => {
+      if (this.isPinnedCodeline(codeline)) return "pinned, ";
       const inStarterTray = $(this.config.starterList).has(codeline).exists();
       const prefix = inStarterTray ? "unused, " : "";
       const tabs = this.getCodelineIndent(codeline);
