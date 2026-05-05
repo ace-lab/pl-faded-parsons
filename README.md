@@ -41,6 +41,13 @@ If you only want the browser suite, run:
 yarn test:browser
 ```
 
+To scan a question directory for `pl-faded-parsons` blocks and render each one
+with the current Python implementation, run:
+
+```bash
+python tests/check_python_compatibility.py ../../questions
+```
+
 ## The RSpec Autograder
 
 If your Parsons problems test students' ability to write unit tests in RSpec,
