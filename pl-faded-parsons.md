@@ -38,7 +38,7 @@ The syntax for this is below:
 
 The element authoring model is built around simple markers inside the question markup:
 
-- `#pin`, `#pin(1)`, ... -- locks a line into the solution tray and sets its starting indent level (0 if not given).
+- `#pin`, `#pin(X)`, ... -- locks a line into the solution tray and sets its starting indent level X (0 if not given).
 - `#distractor` marks a line that is **not** part of the solution.
 - In C-like authoring contexts, the same markers may also be written with `//` instead of `#`, for example `//pin` and `//distractor`.
 - `___` marks a blank that the student must fill in.
