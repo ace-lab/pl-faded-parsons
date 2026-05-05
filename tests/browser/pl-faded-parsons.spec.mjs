@@ -44,7 +44,7 @@ answer() #pin</code-lines>
     await mountQuestion(
       page,
       `<pl-faded-parsons answers-name="demo" language="python">
-        <code-lines>value = !BLANK #blank answer #pin(1)</code-lines>
+        <code-lines>value = __(answer)__ #pin(1)</code-lines>
       </pl-faded-parsons>`,
     );
 
@@ -323,7 +323,7 @@ answer() #pin(1)</code-lines>
       await mountQuestion(
         page,
         `<pl-faded-parsons answers-name="demo" language="python" log="true">
-          <code-lines>value = !BLANK #pin(1)</code-lines>
+          <code-lines>value = ___ #pin(1)</code-lines>
         </pl-faded-parsons>`,
       );
 

@@ -82,7 +82,7 @@ SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
 )
 
 DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?([^?\n]*)\?')
-BLANK_SUBSTITUTE: Final[str] = '!BLANK'
+BLANK_SUBSTITUTE: Final[str] = '___'
 
 REGION_IMPORT_PATTERN: Final[Pattern] = compile(
     r'^\s*import\s*(.+?)\s+as\s+(.+?)\s*$'

@@ -6,7 +6,7 @@ import { mountQuestion, parsons, parseQuestionFromPage } from "./support.mjs";
 test.describe("pl-faded-parsons parse harness", () => {
   test("parses the manipulated widget DOM into submitted code", async ({ page }) => {
     const elementHtml = `<pl-faded-parsons answers-name="demo" file-name="student.py" language="python">
-        <code-lines>result = !BLANK #blank value #pin(1)</code-lines>
+        <code-lines>result = __(value)__ #pin(1)</code-lines>
       </pl-faded-parsons>`;
 
     await mountQuestion(
@@ -25,7 +25,7 @@ test.describe("pl-faded-parsons parse harness", () => {
 
   test("returns a format error when a blank is left empty", async ({ page }) => {
     const elementHtml = `<pl-faded-parsons answers-name="demo" file-name="student.py" language="python">
-        <code-lines>result = !BLANK #pin(1)</code-lines>
+        <code-lines>result = ___ #pin(1)</code-lines>
       </pl-faded-parsons>`;
 
     await mountQuestion(

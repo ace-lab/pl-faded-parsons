@@ -38,10 +38,10 @@ The syntax for this is below:
 
 The element authoring model is built around simple markers inside the question markup:
 
-- `#pin`, `#pin(1)`, ... -- locks a line into the solution tray and sets its starting indent level.
+- `#pin`, `#pin(1)`, ... -- locks a line into the solution tray and sets its starting indent level (0 if not given).
 - `#distractor` marks a line that is **not** part of the solution.
-- `!BLANK` marks a blank that the student must fill in.
-- `#blank <default text>` sets the default text shown in that blank when the problem is loaded.
+- `___` marks a blank that the student must fill in.
+- `__(placeholder text)__` marks a blank and sets the default text shown in that blank when the problem is loaded.
 
 The `format` attribute controls the tray layout:
 

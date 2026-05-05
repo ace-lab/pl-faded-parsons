@@ -198,7 +198,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
             <code-lines>given() #pin(1)
 starter()
-value = !BLANK #blank 42
+value = __(42)__
 ignored() #distractor</code-lines>
         </pl-faded-parsons>
         """
@@ -302,7 +302,7 @@ ignored() #distractor</code-lines>
         <pl-faded-parsons answers-name="demo" format="one-tray">
             <code-lines>kept()
 starter()
-value = !BLANK #blank
+value = ___
 </code-lines>
         </pl-faded-parsons>
         """
@@ -461,7 +461,7 @@ ignored() #distractor
 
     def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
         line = pl_faded_parsons._parse_markup_line(
-            "print(!BLANK, !BLANK) #blank first #blank"
+            "print(___, ___) #blank first #blank"
         )
 
         self.assertEqual(line["codeSnippets"], ["print(", ", ", ")"])
@@ -531,7 +531,7 @@ ignored() #distractor
     def test_render_question_does_not_mark_missing_blank_inputs_on_first_load(self):
         html = """
         <pl-faded-parsons answers-name="demo" language="python">
-            <code-lines>print(!BLANK) #blank</code-lines>
+            <code-lines>print(___) #blank</code-lines>
         </pl-faded-parsons>
         """
 
@@ -545,7 +545,7 @@ ignored() #distractor
     def test_render_question_preserves_blank_placeholder_without_setting_a_value(self):
         html = """
         <pl-faded-parsons answers-name="demo" language="python">
-            <code-lines>print(!BLANK) #blank value</code-lines>
+            <code-lines>print(___) #blank value</code-lines>
         </pl-faded-parsons>
         """
 
@@ -668,7 +668,7 @@ end</post-text>
     def test_render_question_makes_widget_root_the_tab_stop(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="bottom" language="python">
-            <code-lines>print(!BLANK) #blank 7
+            <code-lines>print(___) #blank 7
 starter()</code-lines>
         </pl-faded-parsons>
         """
@@ -787,7 +787,7 @@ starter()</code-lines>
     def test_parse_writes_submission_file_using_answers_name_only(self):
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">
-            <code-lines>print(!BLANK) #blank 7
+            <code-lines>print(___) #blank 7
 return 3 #pin(1)</code-lines>
         </pl-faded-parsons>
         """
@@ -822,7 +822,7 @@ return 3 #pin(1)</code-lines>
     def test_parse_reports_empty_blanks_as_format_errors(self):
         html = """
         <pl-faded-parsons answers-name="demo" file-name="student.py">
-            <code-lines>print(!BLANK) #blank</code-lines>
+            <code-lines>print(___) #blank</code-lines>
         </pl-faded-parsons>
         """
 

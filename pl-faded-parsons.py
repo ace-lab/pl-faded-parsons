@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 try:
-    import prairielearn as pl
+    import prairielearn as pl # type: ignore
 except ModuleNotFoundError:
     import _prairielearn_mock_ as pl
 
@@ -35,7 +35,8 @@ VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
 PIN_PATTERN = re.compile(r"#pin\b(?:\((\d+)\))?")
 LEGACY_GIVEN_PATTERN = re.compile(r"#(\d+)given\b")
 DISTRACTOR_PATTERN = re.compile(r"#distractor")
-BLANK_PATTERN = re.compile(r"#blank [^#]*")
+LEGACY_BLANK_SUFFIX_PATTERN = re.compile(r"#blank [^#]*")
+MARKUP_BLANK_PATTERN = re.compile(r"__\((.*?)\)__|_{4,5}(?:[^_])|_{3}")
 INDENT = "    "
 DEBUG = False
 
@@ -305,7 +306,7 @@ def _get_inner_html(element: xml.HtmlElement) -> str:
         parts.append(element.text)
 
     for child in element:
-        parts.append(xml.tostring(child, encoding="unicode", method="html"))
+        parts.append(str(xml.tostring(child, encoding="unicode", method="html")))
         if child.tail:
             parts.append(child.tail)
 
@@ -491,14 +492,33 @@ def _parse_markup_line(line_text: str) -> SavedLine:
     """Convert one author-authored markup line into the saved line schema."""
 
     code_portion = line_text.split("#", 1)[0].rstrip()
-    code_snippets = code_portion.split("!BLANK")
-    blank_values = [""] * (len(code_snippets) - 1)
-    blank_placeholders = [""] * (len(code_snippets) - 1)
+    code_snippets: list[str] = []
+    blank_values: list[str] = []
+    blank_placeholders: list[str] = []
 
-    for index, raw_blank in enumerate(BLANK_PATTERN.findall(line_text)):
-        if index >= len(blank_values):
-            break
-        blank_placeholders[index] = raw_blank.replace("#blank", "", 1).strip()
+    last_end = 0
+    for match in MARKUP_BLANK_PATTERN.finditer(code_portion):
+        start, end = match.span()
+        code_snippets.append(code_portion[last_end:start])
+        blank_values.append("")
+        blank_placeholders.append(match.group(1) or "")
+        last_end = end
+
+    code_snippets.append(code_portion[last_end:])
+
+    for index, raw_blank in enumerate(LEGACY_BLANK_SUFFIX_PATTERN.findall(line_text)):
+        if index >= len(blank_placeholders):
+            raise ParsingError(
+                f"Too many blank placeholders specified, \n"
+                f"only {len(blank_placeholders)} blanks exist"
+            )
+        text = raw_blank.replace("#blank", "", 1).strip()
+        if blank_placeholders[index] and text:
+            raise ParsingError(
+                f"Placeholder text for blank {index} set twice: \n"
+                f"{blank_placeholders[index]} and {text}"
+            )
+        blank_placeholders[index] = text
 
     return {
         "indent": 0,

@@ -631,9 +631,9 @@ class TestParseFPP(TestCase):
         )
         ppt = lines(
             'def poly(coeffs, x): #pin',
-            '    total = !BLANK #blank test #pin(1)',
-            '    for !BLANK in enumerate(coeffs):',
-            '        !BLANK = total + coeff * (x ** power) #pin(2)',
+            '    total = ___ #blank test #pin(1)',
+            '    for ___ in enumerate(coeffs):',
+            '        ___ = total + coeff * (x ** power) #pin(2)',
             '    return total #pin(1)',
         )
 
