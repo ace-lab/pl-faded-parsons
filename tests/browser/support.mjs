@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const browserDir = path.dirname(fileURLToPath(import.meta.url));
 export const elementDir = path.resolve(browserDir, "..", "..");
+const elementInfo = JSON.parse(readText(path.join(elementDir, "info.json")));
+const browserDependencyNames = [
+  "jquery",
+  ...(elementInfo.dependencies?.nodeModulesScripts ?? []),
+  ...(elementInfo.dependencies?.elementScripts ?? []),
+];
 const renderScript = path.join(browserDir, "render-question.py");
 const parseScript = path.join(browserDir, "parse-question.py");
 
@@ -27,11 +33,32 @@ function loadAssetText(modulePath) {
 }
 
 
-const jquerySource = loadAssetText("jquery/dist/jquery.min.js");
-const jqueryUiSource = loadAssetText("jquery-ui-dist/jquery-ui.min.js");
-const touchPunchSource = loadAssetText("jquery-ui-touch-punch/jquery.ui.touch-punch.min.js");
-const prettifySource = readText(path.join(elementDir, "prettify.js"));
-const widgetSource = readText(path.join(elementDir, "pl-faded-parsons.js"));
+function loadDependencySource(depName) {
+  try {
+    if (depName === "jquery") {
+      return loadAssetText("jquery/dist/jquery.min.js");
+    }
+
+    if (elementInfo.dependencies?.nodeModulesScripts?.includes(depName)) {
+      return loadAssetText(depName);
+    }
+
+    if (elementInfo.dependencies?.elementScripts?.includes(depName)) {
+      return readText(path.join(elementDir, depName));
+    }
+  } catch (error) {
+    throw new Error(
+      `Failed to load browser dependency "${depName}": ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  throw new Error(`Browser dependency "${depName}" is not declared in info.json`);
+}
+
+
+const browserDependencySources = Object.fromEntries(
+  browserDependencyNames.map((depName) => [depName, loadDependencySource(depName)]),
+);
 
 
 function runPythonHelper(scriptPath, payload, failureLabel) {
@@ -149,11 +176,7 @@ export function buildBrowserHtml(renderedHtml) {
       window.__clipboardWrites = [];
       window.__alerts = [];
     </script>
-    ${inlineScript(jquerySource)}
-    ${inlineScript(jqueryUiSource)}
-    ${inlineScript(touchPunchSource)}
-    ${inlineScript(prettifySource)}
-    ${inlineScript(widgetSource)}
+    ${browserDependencyNames.map((depName) => inlineScript(browserDependencySources[depName])).join("\n    ")}
     ${inlineScript(`
       (() => {
         const original = window.ParsonsWidget;
