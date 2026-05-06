@@ -2,26 +2,7 @@
 
 Build a Parsons-style programming question where students reorder code, fix indentation, and fill in blanks. The element compiles the finished solution into plain source code, so it works with standard PrairieLearn autograders.
 
-## Sample element
-
-Below is a zommed in photo of someone solving a basic fibonacci problem using the element.
-![Screenshot of the pl-faded-parsons element](images/faded-parsons.png)
-
-The syntax for this is below:
-
-```html title="question.html"
-<pl-faded-parsons answers-name="fpp" language="python">
-  def fibonacci(n: int): #pin
-    if n <= 2: #pin(1)
-      return 1 #pin(2)
-    n_less_2 = fibonacci(n - 2)
-    n_less_1 = fibonacci(n - 1)
-    n_less_0 = fibonacci(n) #distractor
-    return n_less_1 + n_less_2 #pin(1)
-</pl-faded-parsons>
-```
-
-## Customizations
+## Element Attributes
 
 | Attribute | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -34,15 +15,33 @@ The syntax for this is below:
 | `max-indent-level` | integer | 5 | Maximum indent level allowed in the solution tray. Must be nonnegative. |
 | `solution-path` | string | `./solution` or `tests/ans.py`\* | Path to the reference solution used for the answer panel. Relative to the question directory. \*Only checks for `ans.py` if the language is python. |
 
-## Details
+## Inner Markup
 
-The element authoring model is built around simple markers inside the question markup:
+The element authoring model is built around simple markers inside the question markup. The syntax is listed below:
 
 - `#pin`, `#pin(X)`, ... -- locks a line into the solution tray and sets its starting indent level X (0 if not given).
 - `#distractor` marks a line that is **not** part of the solution.
 - In C-like authoring contexts, the same markers may also be written with `//` instead of `#`, for example `//pin` and `//distractor`.
 - `___` marks a blank that the student must fill in.
 - `__(placeholder text)__` marks a blank and sets the default text shown in that blank when the problem is loaded.
+
+### Example
+
+This example pins the basics of the early return pattern in place (the def, the base-case if, the base-case return, and the recursive return). It adds a few blanks to make solving less mechanical, and inculdes a hint to the student via placeholder text on the base-case return blank. As a final challenge, it includes a red-herring "distractor" line that student *should not* include in their final submission.
+
+```html title="question.html"
+<pl-faded-parsons answers-name="fpp" language="python">
+  def fibonacci(n: int): #pin
+    if n <= 2: #pin(1)
+      return __(base case value)__ #pin(2)
+    n_less_2 = fibonacci(n - 2)
+    n_less_1 = fibonacci(n - 1)
+    n_less_0 = fibonacci(n) #distractor
+    return n_less_1 + ___ #pin(1)
+</pl-faded-parsons>
+```
+
+## Details
 
 The `format` attribute controls the tray layout:
 
