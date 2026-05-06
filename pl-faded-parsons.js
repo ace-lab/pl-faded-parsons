@@ -340,7 +340,7 @@ class ParsonsWidget {
       placeholder: "codeline-sortable-placeholder",
       forcePlaceholderSize: true,
       tolerance: "pointer",
-      cancel: ".pinned",
+      cancel: ".pinned, input.parsons-blank",
     };
 
     starterTray.sortable({

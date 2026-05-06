@@ -85,6 +85,44 @@ answer() #pin(1)</code-lines>
     await expect(blank).not.toHaveClass(/parsons-blank-missing/);
   });
 
+  test("lets a user type directly into a blank after clicking it", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="python">
+        <code-lines>value = __(answer)__ #pin(1)</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const blank = parsons(page).blanks.all.first();
+    await blank.click();
+    await expect(blank).toBeFocused();
+
+    await page.keyboard.type("answer");
+
+    await expect(blank).toHaveValue("answer");
+    const stored = await parseStoredMain(page);
+    expect(stored.solution[0].blankValues).toEqual(["answer"]);
+  });
+
+  test("lets a user type into a starter-tray blank after clicking it", async ({ page }) => {
+    await mountQuestion(
+      page,
+      `<pl-faded-parsons answers-name="demo" language="python">
+        <code-lines>value = __(answer)__</code-lines>
+      </pl-faded-parsons>`,
+    );
+
+    const blank = parsons(page).blanks.all.first();
+    await blank.click();
+    await expect(blank).toBeFocused();
+
+    await page.keyboard.type("answer");
+
+    await expect(blank).toHaveValue("answer");
+    const stored = await parseStoredMain(page);
+    expect(stored.starter[0].blankValues).toEqual(["answer"]);
+  });
+
   test.describe("Tab motions", () => {
     test("reindents a focused line with the keyboard and stores the new indent", async ({ page }) => {
       await mountQuestion(
