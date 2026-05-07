@@ -187,6 +187,168 @@ class TestPlFadedParsonsController(unittest.TestCase):
             ["starter()"],
         )
 
+    def test_build_config_sanitizes_code_lines_inner_html(self):
+        html = """
+        <pl-faded-parsons answers-name="demo">
+            <code-lines>
+                <span>if a &amp; b &lt; c &gt; d</span>
+            </code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertIn("<span>if a & b < c > d</span>", config["markup"])
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            ["<span>if a & b < c > d</span>"],
+        )
+
+    def test_build_config_preserves_literal_angle_brackets_in_code_lines(self):
+        html = """
+        <pl-faded-parsons answers-name="song" language="python">
+          <code-lines>
+              def __str__(self):
+                return f"<Song> {super().desc()}"
+          </code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertIn('return f"<Song> {super().desc()}"', config["markup"])
+        self.assertCountEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            [
+                "def __str__(self):",
+                'return f"<Song> {super().desc()}"',
+            ],
+        )
+
+    def test_build_config_strips_parser_inserted_closing_tag_from_code_lines(self):
+        html = """
+        <pl-faded-parsons answers-name="song" language="python">
+          <code-lines>def __str__(self):
+            return f"<Song> {super().desc()}"</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertNotIn("</song>", config["markup"].lower())
+        self.assertIn("<Song>", config["markup"])
+
+    def test_build_config_preserves_nested_xml_markup_in_code_lines(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="xml">
+          <code-lines>
+              <root>
+                <child attr="1">text</child>
+              </root>
+          </code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+
+        self.assertIn("<root>", config["markup"])
+        self.assertIn('<child attr="1">text</child>', config["markup"])
+        self.assertCountEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["starter"]],
+            ["<root>", '<child attr="1">text</child>', "</root>"],
+        )
+
+    def test_build_config_accepts_bytes_input_for_code_lines(self):
+        html = (
+            b'<pl-faded-parsons answers-name="demo">'
+            b"<code-lines>print(&lt;Song&gt;)</code-lines>"
+            b"</pl-faded-parsons>"
+        )
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertIn("print(<Song>)", config["markup"])
+
+    def test_render_question_preserves_song_case_in_complex_python_example(self):
+        html = """
+        <pl-faded-parsons answers-name="song" language="python">
+          <code-lines>
+            @dataclass(frozen=True)
+            class Song(___):
+              title: str
+              __(song length)__: float
+              def __str__(self):
+                return f"<Song> {super().desc()}"
+          </code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("&lt;Song&gt;", rendered)
+        self.assertNotIn("&lt;song&gt;", rendered)
+
+    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="xml">
+            <code-lines><song attr="__(name)__">x</song></code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('&lt;song attr=&quot;', rendered)
+        self.assertIn('&quot;&gt;x&lt;/song&gt;', rendered)
+        self.assertNotIn('<song attr=', rendered)
+        self.assertNotIn('</song>', rendered)
+
+    def test_render_question_escapes_xml_code_lines_with_blank_attributes(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="xml">
+            <code-lines><song attr="___">x</song></code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('&lt;song attr=&quot;', rendered)
+        self.assertIn('&quot;&gt;x&lt;/song&gt;', rendered)
+        self.assertNotIn('<song attr=', rendered)
+        self.assertNotIn('</song>', rendered)
+
+    def test_render_question_escapes_xml_code_lines_with_blank_attributes_names(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="xml">
+            <code-lines><song ___="attr">x</song></code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('&lt;song', rendered)
+        self.assertIn('&quot;attr&quot;&gt;x&lt;/song&gt;', rendered)
+        self.assertNotIn('<song', rendered)
+        self.assertNotIn('="attr"', rendered)
+        self.assertNotIn('</song>', rendered)
+
+    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes_names(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="xml">
+            <code-lines><song __(name)__="attr">x</song></code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn('&lt;song', rendered)
+        self.assertIn('&quot;attr&quot;&gt;x&lt;/song&gt;', rendered)
+        self.assertNotIn('<song', rendered)
+        self.assertNotIn('="attr"', rendered)
+        self.assertNotIn('</song>', rendered)
+
     def test_build_config_rejects_duplicate_child_tags(self):
         html = """
         <pl-faded-parsons answers-name="demo" format="one-tray">
@@ -607,6 +769,38 @@ end</post-text>
         self.assertIn("visualIndent: 0,", rendered)
         self.assertIn('class="pre-text-wrapper"', rendered)
         self.assertIn('class="post-text-wrapper"', rendered)
+
+    def test_render_question_preserves_literal_xml_in_pre_text(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="xml">
+            <pre-text>
+                <root attr="1">hello</root>
+            </pre-text>
+            <code-lines>given()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("&lt;root attr=&quot;1&quot;&gt;hello&lt;/root&gt;", rendered)
+        self.assertNotIn("<root attr=\"1\">", rendered)
+        self.assertNotIn("</root>", rendered)
+
+    def test_render_question_preserves_literal_xml_in_post_text(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="xml">
+            <code-lines>given()</code-lines>
+            <post-text>
+                <root attr="1">goodbye</root>
+            </post-text>
+        </pl-faded-parsons>
+        """
+
+        rendered = render_with_uuid(html, self.data)
+
+        self.assertIn("&lt;root attr=&quot;1&quot;&gt;goodbye&lt;/root&gt;", rendered)
+        self.assertNotIn("<root attr=\"1\">", rendered)
+        self.assertNotIn("</root>", rendered)
 
     def test_render_question_omits_copy_button_by_default(self):
         html = """

@@ -42,6 +42,22 @@ test.describe("pl-faded-parsons parse harness", () => {
     expect(parsed.format_errors).toEqual({});
   });
 
+  test("preserves literal Song text in the rendered code block", async ({ page }) => {
+    const elementHtml = `<pl-faded-parsons answers-name="song" language="python">
+        <code-lines>
+              return f"<Song> {super().desc()}"
+        </code-lines>
+    </pl-faded-parsons>`;
+
+    await mountQuestion(page, elementHtml);
+
+    expect(parsons(page).all.codelines).toHaveCount(1);
+    const songLine = parsons(page).all.codelines.first();
+    await expect(songLine).toContainText("<Song>", { ignoreCase: false});
+    await expect(songLine).not.toContainText("<song>", { ignoreCase: false});
+    await expect(songLine).not.toContainText("</song>", { ignoreCase: false});
+  });
+
   test("returns a format error when a blank is left empty", async ({ page }) => {
     const elementHtml = `<pl-faded-parsons answers-name="demo" file-name="student.py" language="python">
         <code-lines>result = ___ #pin(1)</code-lines>
