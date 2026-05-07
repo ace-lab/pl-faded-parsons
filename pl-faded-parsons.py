@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import prairielearn as pl # type: ignore
 import base64
+import html as html_lib
 import json
 import random
 import re
@@ -202,12 +203,20 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     ):
         raise ValueError("one-tray format requires non-empty <code-lines> content.")
 
+    pre_text_source = _extract_raw_child_html(element_html, "pre-text")
+    if pre_text_source is None:
+        pre_text_source = pre_text_element.text if pre_text_element is not None else ""
     pre_text, pre_text_indent = _build_text_block(
-        pre_text_element.text if pre_text_element is not None else "",
+        pre_text_source,
         placement="pre",
     )
+    post_text_source = _extract_raw_child_html(element_html, "post-text")
+    if post_text_source is None:
+        post_text_source = (
+            post_text_element.text if post_text_element is not None else ""
+        )
     post_text, post_text_indent = _build_text_block(
-        post_text_element.text if post_text_element is not None else "",
+        post_text_source,
         placement="post",
     )
 
@@ -249,6 +258,7 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
             element, "enable-copy-code", False
         ),
         "markup": _load_markup(
+            element_html,
             element,
             question_path,
             code_lines_element,
@@ -277,6 +287,7 @@ def _get_unique_child(
 
 
 def _load_markup(
+    element_html: str,
     element: xml.HtmlElement,
     question_path: Path,
     code_lines_element: xml.HtmlElement | None,
@@ -286,6 +297,9 @@ def _load_markup(
     """Load author-provided code lines from the element or fallback file."""
 
     if code_lines_element is not None:
+        raw_code_lines = _extract_raw_child_html(element_html, "code-lines")
+        if raw_code_lines is not None:
+            return html_lib.unescape(raw_code_lines)
         return code_lines_element.text or ""
 
     code_lines_path = question_path / "serverFilesQuestion" / "code_lines.txt"
@@ -296,6 +310,22 @@ def _load_markup(
         return _get_inner_html(element)
 
     return element.text or ""
+
+
+def _extract_raw_child_html(element_html: str, tag: str) -> str | None:
+    """Extract a child element's raw inner HTML from the source markup."""
+
+    if isinstance(element_html, bytes):
+        element_html = element_html.decode("utf-8")
+
+    match = re.search(
+        rf"<{tag}\b[^>]*>(.*?)</{tag}>",
+        element_html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return match.group(1)
 
 
 def _get_inner_html(element: xml.HtmlElement) -> str:
@@ -611,6 +641,7 @@ def _build_text_block(
     if not text:
         return "", 0.0
 
+    text = html_lib.unescape(text)
     expanded = text.expandtabs(4)
     lines = _trim_outer_blank_lines(expanded.splitlines())
     if not lines:
@@ -627,7 +658,7 @@ def _build_text_block(
         normalized = normalized.rstrip("\n") + "\n"
     else:
         normalized = "\n" + normalized.lstrip("\n")
-    return normalized, indent_spaces / 4
+    return html_lib.escape(normalized), indent_spaces / 4
 
 
 def _build_text_block_params(
