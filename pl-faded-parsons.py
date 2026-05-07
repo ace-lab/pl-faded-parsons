@@ -24,6 +24,7 @@ OPTIONAL_ATTRIBS = [
     "solution-path",
     "log",
     "max-indent-level",
+    "max-distractors",
     "enable-copy-code",
 ]
 
@@ -91,6 +92,7 @@ class ElementConfig(TypedDict):
     post_text_indent: float
     visual_indent: int
     max_indent_level: int
+    max_distractors: int | None
     size: str
     solution_path: Path
 
@@ -228,6 +230,10 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     if max_indent_level < 0:
         raise ValueError("Attribute `max-indent-level` must be nonnegative.")
 
+    max_distractors = pl.get_integer_attrib(element, "max-distractors")
+    if max_distractors is not None and max_distractors <= 0:
+        raise ValueError("Attribute `max-distractors` must be a positive number.")
+
     visual_indent = (
         pl.get_integer_attrib(code_lines_element, "visual-indent", 0)
         if code_lines_element is not None
@@ -274,6 +280,7 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         "post_text_indent": post_text_indent,
         "visual_indent": visual_indent,
         "max_indent_level": max_indent_level,
+        "max_distractors": max_distractors,
         "size": "narrow" if format_name == FORMAT_RIGHT else "wide",
         "solution_path": solution_path,
     }
@@ -491,9 +498,11 @@ def _build_initial_state(
 
     # Seed from the variant so repeated renders keep the same initial tray order.
     rng = random.Random(f"{data['variant_seed']}:{config['answers_name']}")
-    starter_lines.extend(
-        rng.sample(distractor_lines, k=len(distractor_lines))
-    )
+    distractor_count = len(distractor_lines)
+    if config["max_distractors"] is not None:
+        distractor_count = min(distractor_count, config["max_distractors"])
+    included_distractors = rng.sample(distractor_lines, k=distractor_count)
+    starter_lines.extend(included_distractors)
     rng.shuffle(starter_lines)
 
     if config["format"] == FORMAT_ONE_TRAY:

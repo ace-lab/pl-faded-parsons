@@ -1,5 +1,5 @@
 from collections.abc import Iterable, Mapping
-from typing import Any, Literal, Optional, TypeAlias, TypedDict
+from typing import Any, Literal, Optional, TypeAlias, TypeVar, TypedDict
 from uuid import uuid4
 
 import lxml.html
@@ -118,13 +118,14 @@ def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | 
     if out is None: raise ValueError()
     return out
 
+_T = TypeVar('_T')
 
 def get_integer_attrib(
-    element: lxml.html.HtmlElement, name: str, default: int = 0
-) -> int:
+    element: lxml.html.HtmlElement, name: str, default: _T = None
+) -> _T | int:
     """Parse an integer HTML attribute using PrairieLearn-style semantics."""
 
-    raw_value = element.get(name)
+    raw_value: str | None = element.get(name)
     if raw_value is None:
         return default
 

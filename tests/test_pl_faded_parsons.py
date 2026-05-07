@@ -455,6 +455,31 @@ ignored() //distractor</code-lines>
             ["starter()", "ignored()"],
         )
 
+    def test_build_initial_state_caps_distractors_by_max_distractors(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-distractors="1">
+            <code-lines>
+starter()
+ignored_a() #distractor
+ignored_b() #distractor
+ignored_c() #distractor
+            </code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config, self.data)
+        compiled_starter = [
+            pl_faded_parsons._compile_line(line) for line in state["starter"]
+        ]
+
+        self.assertEqual(len(compiled_starter), 2)
+        self.assertIn("starter()", compiled_starter)
+        self.assertEqual(
+            sum(line.startswith("ignored_") for line in compiled_starter),
+            1,
+        )
+
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
 
@@ -544,6 +569,19 @@ ignored() #distractor
         config = pl_faded_parsons._build_config(html, self.data)
 
         self.assertEqual(config["max_indent_level"], 7)
+
+    def test_build_config_rejects_nonpositive_max_distractors(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-distractors="0">
+            <code-lines>kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "max-distractors.*positive",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
 
     def test_build_config_rejects_visual_indent_outside_one_tray_format(self):
         html = """
