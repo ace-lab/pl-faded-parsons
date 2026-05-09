@@ -27,7 +27,6 @@ OPTIONAL_ATTRIBS = [
     "max-indent-level",
     "max-distractors",
     "max-optional-fades",
-    "max-fades",
     "enable-copy-code",
 ]
 
@@ -48,9 +47,9 @@ LEGACY_BLANK_SUFFIX_PATTERN = re.compile(
 )
 MARKUP_BLANK_PATTERN = re.compile(
     r"(?P<optional>"
-    r"__\[(?P<optional_text_only>.*?)\]__|"
-    r"__\[(?P<optional_text>.*?)\]\((?P<optional_placeholder>.*?)\)__|"
-    r"__\((?P<optional_placeholder_rev>.*?)\)\[(?P<optional_text_rev>.*?)\]__"
+    r"__\[(?P<solution_only>.*?)\]__|"
+    r"__\[(?P<solution>.*?)\]\((?P<placeholder>.*?)\)__|"
+    r"__\((?P<placeholder_rev>.*?)\)\[(?P<solution_rev>.*?)\]__"
     r")|"
     r"(?P<blank>\b__\((?P<blank_placeholder>.*?)\)__\b|\b_{3,4}\b)"
 )
@@ -91,6 +90,7 @@ class WidgetState(TypedDict):
 class MarkupToken:
     """One token parsed from author-authored code-line markup."""
 
+    position: tuple[int, int]
     kind: Literal["text", "blank", "optional"]
     value: str = ""
     placeholder: str = ""
@@ -238,7 +238,7 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     if (
         format_name == FORMAT_ONE_TRAY
         and code_lines_element is not None
-        and not (code_lines_element.text or "").strip()
+        and not _get_inner_html(code_lines_element).strip()
     ):
         raise ValueError("one-tray format requires non-empty <code-lines> content.")
 
@@ -644,16 +644,11 @@ def _sample_optional_fades(
         for token in line_info.tokens
         if token.kind == "optional"
     ]
-    if not optional_tokens:
-        return set()
 
-    optional_fade_count = len(optional_tokens)
-    fade_count = (
-        min(optional_fade_count, max_optional_fades)
-        if max_optional_fades is not None
-        else optional_fade_count
-    )
-    return set(random.sample(optional_tokens, k=fade_count))
+    if max_optional_fades is None or len(optional_tokens) <= max_optional_fades:
+        return set(optional_tokens)
+
+    return set(random.sample(optional_tokens, k=max_optional_fades))
 
 
 def _build_saved_line(
@@ -699,12 +694,12 @@ def _parse_author_markup(config: ElementConfig) -> list[MarkupLineInfo]:
 
     return [
         line
-        for raw_text in config.markup.splitlines()
-        if (line := _parse_author_markup_line(raw_text))
+        for line_no, raw_text in enumerate(config.markup.splitlines(), start=1)
+        if (line := _parse_author_markup_line(raw_text, line_no))
     ]
 
 
-def _parse_author_markup_line(raw_text: str) -> MarkupLineInfo | None:
+def _parse_author_markup_line(raw_text: str, line_no: int) -> MarkupLineInfo | None:
     """Parse author markup into a reusable IR."""
 
     line_text = raw_text.strip()
@@ -729,42 +724,47 @@ def _parse_author_markup_line(raw_text: str) -> MarkupLineInfo | None:
     )
 
     tokens: list[MarkupToken] = []
-    last_end = 0
 
+    def pos():
+        return line_no, len(tokens)
+
+    last_end = 0
     for match in MARKUP_BLANK_PATTERN.finditer(code_portion):
         start, end = match.span()
         if start > last_end:
-            tokens.append(MarkupToken("text", value=code_portion[last_end:start]))
-
-        if match.group("optional") is not None:
-            optional_text = match.group("optional_text_only")
-            optional_placeholder = None
-            if optional_text is None:
-                optional_text = match.group("optional_text")
-                optional_placeholder = match.group("optional_placeholder")
-            if optional_text is None:
-                optional_text = match.group("optional_text_rev")
-                optional_placeholder = match.group("optional_placeholder_rev")
-            optional_text = (optional_text or "").strip()
-            placeholder = (optional_placeholder or "").strip()
-            if not optional_text:
-                raise SyntaxError("Optional fade solution_text must not be empty.")
             tokens.append(
-                MarkupToken(
-                    "optional",
-                    value=optional_text,
-                    placeholder=placeholder,
-                )
+                MarkupToken(pos(), "text", value=code_portion[last_end:start])
             )
-        else:
-            placeholder = match.group("blank_placeholder")
-            placeholder = (placeholder or "").strip()
-            tokens.append(MarkupToken("blank", placeholder=placeholder))
-
         last_end = end
 
+        if match.group("optional") is None:
+            placeholder = match.group("blank_placeholder")
+            placeholder = (placeholder or "").strip()
+            tokens.append(MarkupToken(pos(), "blank", placeholder=placeholder))
+            continue
+
+        groupdict = {
+            key: value for key, value in match.groupdict().items() if value is not None
+        }
+        match groupdict:
+            case {"solution_only": solution}:
+                placeholder = None
+            case {"solution": solution, "placeholder": placeholder} | \
+                 {"solution_rev": solution, "placeholder_rev": placeholder}:
+                pass
+            case _:
+                raise SyntaxError("Invalid optional fade markup.")
+
+        solution, placeholder = (solution or "").strip(), (placeholder or "").strip()
+        if not solution:
+            raise SyntaxError("Optional fade solution_text must not be empty.")
+
+        tokens.append(
+            MarkupToken(pos(), "optional", value=solution, placeholder=placeholder)
+        )
+
     if last_end < len(code_portion):
-        tokens.append(MarkupToken("text", value=code_portion[last_end:]))
+        tokens.append(MarkupToken(pos(), "text", value=code_portion[last_end:]))
 
     role, indent, pinned = "starter", None, False
     if comment_text := comment_match and comment_match.group(0):
@@ -772,10 +772,8 @@ def _parse_author_markup_line(raw_text: str) -> MarkupLineInfo | None:
             role, indent, pinned = "solution", int(pin_match.group(1) or 0), True
         elif LEGACY_GIVEN_PATTERN.search(comment_text):
             role, pinned = "solution", True
-        else:
-            role = (
-                "distractor" if DISTRACTOR_PATTERN.search(comment_text) else "starter"
-            )
+        elif DISTRACTOR_PATTERN.search(comment_text):
+            role = "distractor"
 
         _apply_legacy_blank_placeholders(comment_text, tokens)
 

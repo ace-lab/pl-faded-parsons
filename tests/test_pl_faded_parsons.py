@@ -275,6 +275,29 @@ class TestPlFadedParsonsController(unittest.TestCase):
             ["<root>", '<child attr="1">text</child>', "</root>"],
         )
 
+    def test_build_config_allows_nested_xml_markup_in_one_tray_code_lines(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" format="one-tray" language="xml">
+          <code-lines>
+              <root>
+                <child attr="1">text</child>
+              </root>
+          </code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
+
+        self.assertEqual(config.format, "one-tray")
+        self.assertIn("<root>", config.markup)
+        self.assertIn('<child attr="1">text</child>', config.markup)
+        self.assertEqual(state["starter"], [])
+        self.assertCountEqual(
+            [pl_faded_parsons._compile_line(line) for line in state["solution"]],
+            ["<root>", '<child attr="1">text</child>', "</root>"],
+        )
+
     def test_build_config_accepts_bytes_input_for_code_lines(self):
         html = (
             b'<pl-faded-parsons answers-name="demo">'
@@ -539,6 +562,25 @@ ignored_c() #distractor
         )
         self.assertEqual(len(state_a["solution"][0]["blankValues"]), 2)
         self.assertEqual(len(state_b["solution"][0]["blankValues"]), 2)
+
+    def test_build_initial_state_respects_max_optional_fades_with_duplicate_tokens(self):
+        html = """
+        <pl-faded-parsons
+            answers-name="demo"
+            max-optional-fades="1"
+            language="python"
+        >
+            <code-lines>value = __[bonus]__ + __[bonus]__ #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+
+        data = make_question_data(self.tmp_path, variant_seed=0)
+        config = pl_faded_parsons._build_config(html, data)
+        state = pl_faded_parsons._build_initial_state(config)
+
+        self.assertEqual(len(state["solution"]), 1)
+        self.assertEqual(len(state["solution"][0]["blankValues"]), 1)
+        self.assertEqual(len(state["solution"][0]["blankPlaceholders"]), 1)
 
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
@@ -869,7 +911,7 @@ ignored() #distractor
 
     def test_optional_fade_placeholders_are_removed_when_the_fade_is_text(self):
         line_info = pl_faded_parsons._parse_author_markup_line(
-            "total = __[bonus]__ #pin(1)"
+            "total = __[bonus]__ #pin(1)", 0
         )
         line = {
             "indent": line_info.indent,
@@ -885,7 +927,7 @@ ignored() #distractor
 
     def test_optional_fade_placeholder_requires_data(self):
         with self.assertRaisesRegex(SyntaxError, "Optional fade solution_text must not be empty"):
-            pl_faded_parsons._parse_author_markup_line("print(__[](hint)__)")
+            pl_faded_parsons._parse_author_markup_line("print(__[](hint)__)", 0)
 
     def test_parse_saved_state_validates_shape(self):
         with self.assertRaisesRegex(
