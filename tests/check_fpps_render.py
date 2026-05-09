@@ -1,8 +1,22 @@
 #!/usr/bin/env python3
+"""Check that `pl-faded-parsons` elements render correctly.
+
+Use this file in one of two ways:
+
+1. Run it as a script and pass the root directory that contains question HTML
+   files. The script finds every file with a ``<pl-faded-parsons>`` element and
+   runs this test module against them.
+2. Run it with `pytest` to execute the render checks directly.
+
+Example:
+
+    python check_fpps_render.py path/to/questions
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -13,7 +27,6 @@ import lxml.html as xml
 import lxml.etree as etree
 
 from browser.render_core import render_question_html
-
 
 ELEMENT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_QUESTION_ROOT = ELEMENT_DIR.parent.parent / "questions"
@@ -62,7 +75,12 @@ def _extract_element_html(source: str) -> list[str]:
     ]
 
 
-def _render_element(element_html: str, question_dir: Path) -> str:
+def _render_element(
+    element_html: str,
+    question_dir: Path,
+    *,
+    panel: str = "question",
+) -> str:
     try:
         rendered = render_question_html(
             element_html,
@@ -70,6 +88,7 @@ def _render_element(element_html: str, question_dir: Path) -> str:
                 "options": {"question_path": str(question_dir)},
             },
             question_dir=question_dir,
+            panel=panel,
         )
     except Exception as exc:
         raise RuntimeError(
@@ -86,14 +105,20 @@ def _render_element(element_html: str, question_dir: Path) -> str:
     return rendered
 
 
+def _should_render_submission_panel(question_dir: Path) -> bool:
+    info_path = question_dir / "info.json"
+    if not info_path.exists():
+        return True
+
+    info = json.loads(info_path.read_text(encoding="utf-8"))
+    return info.get("showCorrectAnswer") is not False
+
+
 def _question_root() -> Path:
     return Path(os.environ.get(QUESTION_ROOT_ENV, DEFAULT_QUESTION_ROOT)).resolve()
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
-    if "question_file" not in metafunc.fixturenames:
-        return
-
     root = _question_root()
     question_files = _find_question_files(root)
     if not question_files:
@@ -101,23 +126,47 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             f"No question files containing <pl-faded-parsons> were found under {root}."
         )
 
-    metafunc.parametrize(
-        "question_file",
-        question_files,
-        ids=[str(path.relative_to(root)) for path in question_files],
-    )
+    if "question_file" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "question_file",
+            question_files,
+            ids=[str(path.relative_to(root)) for path in question_files],
+        )
+
+    elif "submission_file" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "question_file",
+            [
+                question_file
+                for question_file in question_files
+                if _should_render_submission_panel(question_file.parent)
+            ],
+            ids=[str(path.relative_to(root)) for path in question_files],
+        )
 
 
 def test_question_file_renders(question_file: Path) -> None:
     source = question_file.read_text(encoding="utf-8")
     elements = _extract_element_html(source)
     if not elements:
-        pytest.fail(
-            f"{question_file} did not contain any <pl-faded-parsons> elements."
-        )
+        pytest.fail(f"{question_file} did not contain any <pl-faded-parsons> elements.")
 
     for element_html in elements:
-        _render_element(element_html, question_file.parent)
+        assert _render_element(element_html, question_file.parent)
+
+
+def test_submission_file_renders(question_file: Path) -> None:
+    source = question_file.read_text(encoding="utf-8")
+    elements = _extract_element_html(source)
+    if not elements:
+        pytest.fail(f"{question_file} did not contain any <pl-faded-parsons> elements.")
+
+    for element_html in elements:
+        assert 'pl-code' in _render_element(
+            element_html,
+            question_file.parent,
+            panel="submission",
+        )
 
 
 def _run_pytest(root: Path) -> int:
@@ -132,8 +181,8 @@ def _run_pytest(root: Path) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Render every pl-faded-parsons element found under a directory using "
-            "the current Python implementation."
+            "Render every pl-faded-parsons element found in an html file "
+            "under a directory using the current pl-faded-parsons implementation."
         )
     )
     parser.add_argument("directory", type=Path, help="root directory to scan")

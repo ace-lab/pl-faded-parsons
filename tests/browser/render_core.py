@@ -42,6 +42,7 @@ def render_question_html(
     data_overrides: dict[str, object] | None = None,
     uuid: str = "uuid-123",
     question_dir: Path | None = None,
+    panel: str = "question",
 ) -> str:
     """Render a pl-faded-parsons element using the current Python controller."""
 
@@ -49,6 +50,7 @@ def render_question_html(
         str(question_dir or ELEMENT_DIR)
     )
     data.update(data_overrides or {})
+    data["panel"] = panel
     random.seed(data["variant_seed"])
     lifecycle_data = pl_faded_parsons.pl._LifecycleData(data)
 
