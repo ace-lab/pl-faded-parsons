@@ -12,8 +12,13 @@
     tabindex="0"
     aria-labelledby="pl-faded-parsons-aria-descriptor-{{uuid}}"
     aria-details="pl-faded-parsons-aria-details-{{uuid}}"
-    class="col fpp-global-defs pl-faded-parsons soft-border{{#borderless}} pl-faded-parsons-borderless{{/borderless}}{{#bottom_layout}} pl-faded-parsons-bottom-layout{{/bottom_layout}}"
     language="{{language}}"
+    class="
+        col fpp-global-defs pl-faded-parsons soft-border
+        {{#borderless}}pl-faded-parsons-borderless{{/borderless}}
+        {{#bottom_layout}}pl-faded-parsons-bottom-layout{{/bottom_layout}}
+        {{^starter}}{{^pre_text}}{{^post_text}}pl-faded-parsons-solution-only{{/post_text}}{{/pre_text}}{{/starter}}
+    "
 >
     {{! form field to be filled with order to save the current submission }}
     <input class="main" name="{{answers_name}}.main" type="hidden" value=""/>
