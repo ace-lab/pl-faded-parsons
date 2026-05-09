@@ -11,9 +11,21 @@ code {
 
 .pl-faded-parsons {
   --pl-faded-parsons-indent-width: 4ch;
+  max-width: 80ch;
+  margin: 0 auto;
   position: relative;
+  box-sizing: border-box;
   padding: 10px;
   overflow-x: clip;
+}
+
+.pl-faded-parsons.pl-faded-parsons-solution-only {
+  max-width: 50ch;
+}
+
+.pl-faded-parsons.pl-faded-parsons-borderless {
+  border: 0;
+  padding: 0;
 }
 
 .pl-faded-parsons-layout-row {
@@ -67,11 +79,6 @@ code {
 .soft-border {
   border: 2px solid grey;
   border-radius: 5px;
-}
-
-.pl-faded-parsons.pl-faded-parsons-borderless {
-  border: 0;
-  padding: 0;
 }
 
 .pl-faded-parsons.pl-faded-parsons-borderless .codeline-tray {

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-import prairielearn as pl # type: ignore
+try:
+    import prairielearn as pl  # type: ignore
+except ModuleNotFoundError:
+    import _prairielearn_mock_ as pl
+
 import base64
 import html as html_lib
 import json
@@ -596,12 +600,11 @@ def _build_answer_params(
             "correct_answer": correct_answer,
         }
 
-    solution_path = config.solution_path or (config.question_path / ".solution")
+    solution_path = config.solution_path or (config.question_path / "solution")
     raise FileNotFoundError(
         f"Correct answer not found at `{solution_path}`!\nEither:\n"
-        f"  - Provide an answer at {solution_path}\n"
+        f"  - Provide a solution file at {solution_path}\n"
         f"  - Make all blanks optional with __[answer]__ syntax\n"
-        f'  - Set the language to "python" and provide a tests/ans.py file\n'
         f'  - Set "showCorrectAnswer" to false in `./info.json`'
     )
 
@@ -612,19 +615,13 @@ def _resolve_solution_path(config: ElementConfig) -> Path | None:
     if config.solution_path is not None and config.solution_path.exists():
         return config.solution_path
 
-    if config.language in ("py", "ipynb", "python"):
-        ans_path = config.question_path / "tests" / "ans.py"
-        if ans_path.exists():
-            return ans_path
-
-    solution_path = config.question_path / ".solution"
+    solution_path = config.question_path / "solution"
     if solution_path.exists():
         return solution_path
 
-    if config.language in ("py", "ipynb", "python") and not solution_path.exists():
-        ans_path = config.question_path / "tests" / "ans.py"
-        if ans_path.exists():
-            return ans_path
+    hidden_solution_path = config.question_path / ".solution"
+    if hidden_solution_path.exists():
+        return hidden_solution_path
 
     return None
 
