@@ -14,7 +14,7 @@ Build a Parsons-style programming question where students reorder code, fix inde
 | `log` | boolean | false | Preserve the browser interaction log for instructor review of edit actions during a submission. |
 | `max-indent-level` | integer | 5 | Maximum indent level allowed in the solution tray. Must be nonnegative. |
 | `max-optional-fades` | integer | unset | Maximum number of optional fades shown in the problem. The element always shows all required fades, then shows up to this many optional fades. |
-| `solution-path` | string | `./solution` or `tests/ans.py`\* | Path to the reference solution that `parse()` can use to populate `correct_answers`. Relative to the question directory. If the file is missing but the answer is fully inferable from optional-only markup, `parse()` can still populate `correct_answers` from the markup. \*Only checks for `ans.py` if the language is python. |
+| `solution-path` | string | `./solution` | Path to the reference solution that `parse()` can use to populate `correct_answers`. Relative to the question directory. If the file is missing but the answer is fully inferable from optional-only markup, `parse()` can still populate `correct_answers` from the markup. |
 
 ### Details
 

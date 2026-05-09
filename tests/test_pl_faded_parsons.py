@@ -1615,15 +1615,37 @@ class TestReloadIndentRegression(unittest.TestCase):
 
         self.assertEqual(data["correct_answers"]["demo"], "    print(value)")
 
-    def test_parse_reads_correct_answer_from_solution_file(self):
+    def test_prepare_reads_correct_answer_from_solution_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
             data = make_question_data(tmp_path)
-            html = '<pl-faded-parsons answers-name="demo" language="python">\n\texpected_solution()\n</pl-faded-parsons>'
+            (tmp_path / "solution").write_text(
+                "expected_solution()\n", encoding="utf-8"
+            )
+            html = '<pl-faded-parsons answers-name="demo" language="python">___</pl-faded-parsons>'
 
-            pl_faded_parsons.parse(html, data)
+            pl_faded_parsons.prepare(html, data)
 
         self.assertEqual(data["correct_answers"]["demo"], "expected_solution()")
+
+    def test_prepare_reads_correct_answer_from_custom_solution_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            (tmp_path / "tests").mkdir()
+            (tmp_path / "tests" / "clamp.solution").write_text(
+                "def clamp(value):\n    return value\n", encoding="utf-8"
+            )
+            html = (
+                '<pl-faded-parsons answers-name="demo" language="python" '
+                'solution-path="tests/clamp.solution">___</pl-faded-parsons>'
+            )
+
+            pl_faded_parsons.prepare(html, data)
+
+        self.assertEqual(
+            data["correct_answers"]["demo"], "def clamp(value):\n    return value"
+        )
 
 if __name__ == "__main__":
     unittest.main()
