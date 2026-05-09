@@ -5,6 +5,7 @@ import {
   mountQuestion,
   parseStoredLog,
   parseStoredMain,
+  renderQuestion,
 } from "./support.mjs";
 
 // if you can avoid writing in this file, you probably should
@@ -83,6 +84,56 @@ answer() #pin(1)</code-lines>
     expect(stored.solution[0].blankPlaceholders).toEqual(["answer"]);
     await expect(blank).not.toHaveAttribute("aria-invalid", "true");
     await expect(blank).not.toHaveClass(/parsons-blank-missing/);
+  });
+
+  test("renders optional fades as blanks for one variant", async ({ page }) => {
+    const elementHtml = `<pl-faded-parsons answers-name="demo" language="python">
+        <code-lines>print(__[answer]__)</code-lines>
+      </pl-faded-parsons>`;
+
+    await mountQuestion(page, elementHtml, {
+      variant_seed: 0,
+    });
+
+    const blank = parsons(page).blanks.all.first();
+    await expect(blank).toBeVisible();
+    await expect(blank).toHaveAttribute("placeholder", "");
+    await expect(parsons(page).all.codelines.first()).toContainText("print(");
+    await expect(parsons(page).all.codelines.first()).toContainText(")");
+
+  });
+
+  test("renders optional fade placeholders in blank inputs", async ({ page }) => {
+    const elementHtml = `<pl-faded-parsons answers-name="demo" language="python">
+        <code-lines>print(__[answer](hint)__)</code-lines>
+      </pl-faded-parsons>`;
+
+    await mountQuestion(page, elementHtml);
+
+    const blank = parsons(page).blanks.all.first();
+    await expect(blank).toHaveAttribute("placeholder", "hint");
+  });
+
+  test("caps optional fades when max-optional-fades is set", () => {
+    const elementHtml = `<pl-faded-parsons answers-name="demo" max-optional-fades="1" language="python">
+        <code-lines>value = __[bonus]__ + __[extra]__ + ___ #pin(1)</code-lines>
+      </pl-faded-parsons>`;
+
+    const renderedA = renderQuestion(elementHtml, {
+      variant_seed: 0,
+    });
+    const repeatRenderedA = renderQuestion(elementHtml, {
+      variant_seed: 0,
+    });
+    const renderedB = renderQuestion(elementHtml, {
+      variant_seed: 1,
+    });
+
+    expect(renderedA).toEqual(repeatRenderedA);
+    expect(renderedA).not.toEqual(renderedB);
+    expect(renderedB.includes("bonus") !== renderedB.includes("extra")).toBe(true);
+    expect(renderedA.match(/class=\"parsons-blank\"/g)).toHaveLength(2);
+    expect(renderedB.match(/class=\"parsons-blank\"/g)).toHaveLength(2);
   });
 
   test("lets a user type directly into a blank after clicking it", async ({ page }) => {

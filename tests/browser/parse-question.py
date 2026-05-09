@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import random
 import sys
 import traceback
 from pathlib import Path
@@ -44,6 +45,7 @@ def main() -> int:
         data_overrides = dict(payload.get("dataOverrides", {}))
         raw_submitted_answers = data_overrides.pop("rawSubmittedAnswers", None)
         data.update(data_overrides)
+        random.seed(data["variant_seed"])
         data["panel"] = "parse"
         data["raw_submitted_answers"] = (
             raw_submitted_answers

@@ -19,7 +19,7 @@ class QuestionData(TypedDict):
     partial_scores: dict[str, PartialScore]
     score: float
     feedback: dict[str, Any]
-    variant_seed: str
+    variant_seed: int
     options: dict[str, Any]
     raw_submitted_answers: dict[str, Any]
     editable: bool
@@ -101,7 +101,7 @@ def _make_question_data(question_path: str) -> QuestionData:
         "partial_scores": {},
         "score": 0.0,
         "feedback": {},
-        "variant_seed": "seed",
+        "variant_seed": 0,
         "options": {"question_path": question_path},
         "raw_submitted_answers": {},
         "editable": True,
@@ -112,10 +112,11 @@ def _make_question_data(question_path: str) -> QuestionData:
         "answers_names": {},
     }
 
-
-def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | None = None) -> str:
+_MISSING = object()
+def get_string_attrib(element: lxml.html.HtmlElement, name: str, default: str | None | object = _MISSING) -> str:
     out = element.get(name, default)
-    if out is None: raise ValueError()
+    if out is _MISSING:
+        raise ValueError()
     return out
 
 _T = TypeVar('_T')

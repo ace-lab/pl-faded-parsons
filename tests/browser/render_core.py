@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import random
 import sys
 from types import ModuleType
 from pathlib import Path
@@ -22,8 +23,13 @@ def load_controller_module() -> ModuleType:
     module = ModuleType("pl_faded_parsons")
     for key in BANNED_IMPORT_GLOBALS:
         module.__dict__.pop(key, None)
+    sys.modules[module.__name__] = module
     source = MODULE_PATH.read_text(encoding="utf-8")
-    exec(compile(source, str(MODULE_PATH), "exec"), module.__dict__)
+    try:
+        exec(compile(source, str(MODULE_PATH), "exec"), module.__dict__)
+    except Exception:
+        sys.modules.pop(module.__name__, None)
+        raise
     return module
 
 
@@ -43,6 +49,7 @@ def render_question_html(
         str(question_dir or ELEMENT_DIR)
     )
     data.update(data_overrides or {})
+    random.seed(data["variant_seed"])
     lifecycle_data = pl_faded_parsons.pl._LifecycleData(data)
 
     old_cwd = Path.cwd()

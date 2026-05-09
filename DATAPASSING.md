@@ -351,6 +351,7 @@ File: `pl-faded-parsons.py`
 
 - `data["submitted_answers"][answers_name] = student_code`
 - `pl.add_submitted_file(data, out_filename, base64(student_code))`
+- `data["correct_answers"][answers_name] = correct_solution` when the correct answer can be read from `solution-path` or inferred from optional-only markup
 
 These are the modern outputs other graders/elements should rely on.
 
@@ -384,11 +385,12 @@ File: `pl-faded-parsons-answer.mustache`
 
 Uses:
 
-- `solution_path`
+- `language`
+- `correct_answer`
 
 Expected intent:
 
-- display the reference solution file
+- display the canonical answer that `parse()` populated in `data["correct_answers"][answers_name]`
 
 ## Name Linkage Summary
 

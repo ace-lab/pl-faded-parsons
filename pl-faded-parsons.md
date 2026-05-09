@@ -13,7 +13,8 @@ Build a Parsons-style programming question where students reorder code, fix inde
 | `language` | string | - | Language tag used for syntax highlighting and some controller defaults. |
 | `log` | boolean | false | Preserve the browser interaction log for instructor review of edit actions during a submission. |
 | `max-indent-level` | integer | 5 | Maximum indent level allowed in the solution tray. Must be nonnegative. |
-| `solution-path` | string | `./solution` or `tests/ans.py`\* | Path to the reference solution used for the answer panel. Relative to the question directory. \*Only checks for `ans.py` if the language is python. |
+| `max-optional-fades` | integer | unset | Maximum number of optional fades shown in the problem. The element always shows all required fades, then shows up to this many optional fades. |
+| `solution-path` | string | `./solution` or `tests/ans.py`\* | Path to the reference solution that `parse()` can use to populate `correct_answers`. Relative to the question directory. If the file is missing but the answer is fully inferable from optional-only markup, `parse()` can still populate `correct_answers` from the markup. \*Only checks for `ans.py` if the language is python. |
 
 ## Inner Markup
 
@@ -24,6 +25,11 @@ The element authoring model is built around simple markers inside the question m
 - In C-like authoring contexts, the same markers may also be written with `//` instead of `#`, for example `//pin` and `//distractor`.
 - `___` marks a blank that the student must fill in.
 - `__(placeholder text)__` marks a blank and sets the default text shown in that blank when the problem is loaded.
+- `__[solution_text]__` marks an optional fade. For each variant, the fade is either rendered as a standard blank or omitted entirely and shown as plain code text `solution_text`.
+- `__[solution_text](placeholder text)__` marks an optional fade with a placeholder. When the fade is shown as a blank, the placeholder text is used as the blank's default hint. When the fade is omitted, the visible code is just `solution_text`.
+- `__(placeholder text)[solution_text]__` is the same optional-fade form with the two parts reversed.
+- For the placeholder forms, `solution_text` must not be empty.
+- If `max-optional-fades` is set, the problem will show at most that many optional fades. Required fades always show, and optional fades are selected randomly from the optional markup tokens that fit within the cap.
 
 ### Example
 
@@ -41,6 +47,16 @@ This example pins the basics of the early return pattern in place (the def, the 
 </pl-faded-parsons>
 ```
 
+Optional fades can be used when you want the same authoring line to sometimes stay visible as code and sometimes turn into a student blank.
+
+```html title="question.html"
+<pl-faded-parsons answers-name="fpp" language="python">
+  total = __[count]__ + ___ #pin
+</pl-faded-parsons>
+```
+
+In one variant, the line renders as `total = [blank] + [blank]`. In another, it renders as `total = count + [blank]`.
+
 ## Details
 
 The `format` attribute controls the tray layout:
@@ -53,7 +69,7 @@ If `log="true"` is set, the widget stores the interaction log in `data["raw_subm
 
 ### Grading
 
-The submitted answer is compiled into plain source code and stored in `data["submitted_answers'][<answers-name>]`, which means the element can be graded with ordinary code autograders.
+The submitted answer is compiled into plain source code and stored in `data["submitted_answers"][<answers-name>]`, which means the element can be graded with ordinary code autograders.
 The repository contains minimal examples of use with python and ruby.
 We suggest using the examples as starting templates for your questions.
 

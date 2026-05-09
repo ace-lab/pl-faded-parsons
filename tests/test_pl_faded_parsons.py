@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 ELEMENT_DIR = Path(__file__).resolve().parent.parent
 BROWSER_DIR = ELEMENT_DIR / "tests" / "browser"
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
@@ -22,14 +21,21 @@ SPEC = importlib.util.spec_from_file_location("pl_faded_parsons", MODULE_PATH)
 assert SPEC is not None
 pl_faded_parsons = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
+sys.modules[SPEC.name] = pl_faded_parsons
 SPEC.loader.exec_module(pl_faded_parsons)
 
 from render_core import BANNED_IMPORT_GLOBALS, load_controller_module
 
 
-def make_question_data(tmp_path: Path, *, panel: str = "question") -> dict:
+def make_question_data(
+    tmp_path: Path,
+    *,
+    panel: str = "question",
+    variant_seed: int = 0,
+) -> dict:
     solution_path = tmp_path / "solution"
     solution_path.write_text("expected_solution()\n", encoding="utf-8")
+    seed_variant(variant_seed)
     return {
         "params": {},
         "correct_answers": {},
@@ -38,7 +44,7 @@ def make_question_data(tmp_path: Path, *, panel: str = "question") -> dict:
         "partial_scores": {},
         "score": 0.0,
         "feedback": {},
-        "variant_seed": "seed",
+        "variant_seed": variant_seed,
         "options": {"question_path": str(tmp_path)},
         "raw_submitted_answers": {},
         "editable": True,
@@ -53,6 +59,10 @@ def make_question_data(tmp_path: Path, *, panel: str = "question") -> dict:
 def render_with_uuid(element_html: str, data: dict, uuid: str = "uuid-123") -> str:
     with patch.object(pl_faded_parsons.pl, "get_uuid", return_value=uuid):
         return pl_faded_parsons.render(element_html, data)
+
+
+def seed_variant(variant_seed: int) -> None:
+    pl_faded_parsons.random.seed(variant_seed)
 
 
 class TestPlFadedParsonsController(unittest.TestCase):
@@ -146,19 +156,23 @@ class TestPlFadedParsonsController(unittest.TestCase):
         ):
             pl_faded_parsons._build_config(html, self.data)
 
-    def test_build_config_allows_one_tray_without_code_lines_when_text_blocks_absent(self):
+    def test_build_config_allows_one_tray_without_code_lines_when_text_blocks_absent(
+        self,
+    ):
         html = '<pl-faded-parsons answers-name="demo" format="one-tray"></pl-faded-parsons>'
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertEqual(config["format"], "one-tray")
-        self.assertEqual(config["markup"], "")
+        self.assertEqual(config.format, "one-tray")
+        self.assertEqual(config.markup, "")
         self.assertEqual(state["solution"], [])
         self.assertEqual(state["starter"], [])
 
     def test_build_config_rejects_legacy_no_code_alias(self):
-        html = '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+        html = (
+            '<pl-faded-parsons answers-name="demo" format="no-code"></pl-faded-parsons>'
+        )
 
         with self.assertRaisesRegex(
             ValueError,
@@ -175,9 +189,9 @@ class TestPlFadedParsonsController(unittest.TestCase):
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertIn("given() #pin(1)", config["markup"])
+        self.assertIn("given() #pin(1)", config.markup)
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
             ["    given()"],
@@ -197,9 +211,9 @@ class TestPlFadedParsonsController(unittest.TestCase):
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertIn("<span>if a & b < c > d</span>", config["markup"])
+        self.assertIn("<span>if a & b < c > d</span>", config.markup)
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["starter"]],
             ["<span>if a & b < c > d</span>"],
@@ -216,9 +230,9 @@ class TestPlFadedParsonsController(unittest.TestCase):
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertIn('return f"<Song> {super().desc()}"', config["markup"])
+        self.assertIn('return f"<Song> {super().desc()}"', config.markup)
         self.assertCountEqual(
             [pl_faded_parsons._compile_line(line) for line in state["starter"]],
             [
@@ -237,8 +251,8 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         config = pl_faded_parsons._build_config(html, self.data)
 
-        self.assertNotIn("</song>", config["markup"].lower())
-        self.assertIn("<Song>", config["markup"])
+        self.assertNotIn("</song>", config.markup.lower())
+        self.assertIn("<Song>", config.markup)
 
     def test_build_config_preserves_nested_xml_markup_in_code_lines(self):
         html = """
@@ -252,10 +266,10 @@ class TestPlFadedParsonsController(unittest.TestCase):
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertIn("<root>", config["markup"])
-        self.assertIn('<child attr="1">text</child>', config["markup"])
+        self.assertIn("<root>", config.markup)
+        self.assertIn('<child attr="1">text</child>', config.markup)
         self.assertCountEqual(
             [pl_faded_parsons._compile_line(line) for line in state["starter"]],
             ["<root>", '<child attr="1">text</child>', "</root>"],
@@ -270,7 +284,7 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         config = pl_faded_parsons._build_config(html, self.data)
 
-        self.assertIn("print(<Song>)", config["markup"])
+        self.assertIn("print(<Song>)", config.markup)
 
     def test_render_question_preserves_song_case_in_complex_python_example(self):
         html = """
@@ -291,7 +305,9 @@ class TestPlFadedParsonsController(unittest.TestCase):
         self.assertIn("&lt;Song&gt;", rendered)
         self.assertNotIn("&lt;song&gt;", rendered)
 
-    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes(self):
+    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes(
+        self,
+    ):
         html = """
         <pl-faded-parsons answers-name="demo" language="xml">
             <code-lines><song attr="__(name)__">x</song></code-lines>
@@ -300,10 +316,10 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         rendered = render_with_uuid(html, self.data)
 
-        self.assertIn('&lt;song attr=&quot;', rendered)
-        self.assertIn('&quot;&gt;x&lt;/song&gt;', rendered)
-        self.assertNotIn('<song attr=', rendered)
-        self.assertNotIn('</song>', rendered)
+        self.assertIn("&lt;song attr=&quot;", rendered)
+        self.assertIn("&quot;&gt;x&lt;/song&gt;", rendered)
+        self.assertNotIn("<song attr=", rendered)
+        self.assertNotIn("</song>", rendered)
 
     def test_render_question_escapes_xml_code_lines_with_blank_attributes(self):
         html = """
@@ -314,10 +330,10 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         rendered = render_with_uuid(html, self.data)
 
-        self.assertIn('&lt;song attr=&quot;', rendered)
-        self.assertIn('&quot;&gt;x&lt;/song&gt;', rendered)
-        self.assertNotIn('<song attr=', rendered)
-        self.assertNotIn('</song>', rendered)
+        self.assertIn("&lt;song attr=&quot;", rendered)
+        self.assertIn("&quot;&gt;x&lt;/song&gt;", rendered)
+        self.assertNotIn("<song attr=", rendered)
+        self.assertNotIn("</song>", rendered)
 
     def test_render_question_escapes_xml_code_lines_with_blank_attributes_names(self):
         html = """
@@ -328,13 +344,15 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         rendered = render_with_uuid(html, self.data)
 
-        self.assertIn('&lt;song', rendered)
-        self.assertIn('&quot;attr&quot;&gt;x&lt;/song&gt;', rendered)
-        self.assertNotIn('<song', rendered)
+        self.assertIn("&lt;song", rendered)
+        self.assertIn("&quot;attr&quot;&gt;x&lt;/song&gt;", rendered)
+        self.assertNotIn("<song", rendered)
         self.assertNotIn('="attr"', rendered)
-        self.assertNotIn('</song>', rendered)
+        self.assertNotIn("</song>", rendered)
 
-    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes_names(self):
+    def test_render_question_escapes_xml_code_lines_with_placeholder_blank_attributes_names(
+        self,
+    ):
         html = """
         <pl-faded-parsons answers-name="demo" language="xml">
             <code-lines><song __(name)__="attr">x</song></code-lines>
@@ -343,11 +361,11 @@ class TestPlFadedParsonsController(unittest.TestCase):
 
         rendered = render_with_uuid(html, self.data)
 
-        self.assertIn('&lt;song', rendered)
-        self.assertIn('&quot;attr&quot;&gt;x&lt;/song&gt;', rendered)
-        self.assertNotIn('<song', rendered)
+        self.assertIn("&lt;song", rendered)
+        self.assertIn("&quot;attr&quot;&gt;x&lt;/song&gt;", rendered)
+        self.assertNotIn("<song", rendered)
         self.assertNotIn('="attr"', rendered)
-        self.assertNotIn('</song>', rendered)
+        self.assertNotIn("</song>", rendered)
 
     def test_build_config_rejects_duplicate_child_tags(self):
         html = """
@@ -357,7 +375,9 @@ class TestPlFadedParsonsController(unittest.TestCase):
         </pl-faded-parsons>
         """
 
-        with self.assertRaisesRegex(ValueError, "Only one <code-lines> child is allowed"):
+        with self.assertRaisesRegex(
+            ValueError, "Only one <code-lines> child is allowed"
+        ):
             pl_faded_parsons._build_config(html, self.data)
 
     def test_build_initial_state_parses_givens_blanks_and_distractors(self):
@@ -371,19 +391,20 @@ ignored() #distractor</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
-        self.assertEqual(config["size"], "wide")
+        self.assertEqual(config.size, "wide")
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
             ["    given()"],
         )
-        self.assertEqual(
+        self.assertCountEqual(
             [pl_faded_parsons._compile_line(line) for line in state["starter"]],
-            ["value = ", "ignored()", "starter()"],
+            ["starter()", "value = ", "ignored()"],
         )
-        self.assertEqual(state["starter"][0]["blankValues"], [""])
-        self.assertEqual(state["starter"][0]["blankPlaceholders"], ["42"])
+        blank_line = next(line for line in state["starter"] if line["blankValues"])
+        self.assertEqual(blank_line["blankValues"], [""])
+        self.assertEqual(blank_line["blankPlaceholders"], ["42"])
 
     def test_build_initial_state_accepts_legacy_given_marker(self):
         html = """
@@ -393,7 +414,7 @@ ignored() #distractor</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -409,7 +430,7 @@ ignored() #distractor</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -426,7 +447,7 @@ ignored() #distractor</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(state["solution"], [])
         self.assertEqual(
@@ -444,7 +465,7 @@ ignored() //distractor</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -468,7 +489,7 @@ ignored_c() #distractor
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
         compiled_starter = [
             pl_faded_parsons._compile_line(line) for line in state["starter"]
         ]
@@ -480,11 +501,50 @@ ignored_c() #distractor
             1,
         )
 
+    def test_build_initial_state_caps_optional_fades_by_max_optional_fades(self):
+        html = """
+        <pl-faded-parsons
+            answers-name="demo"
+            max-optional-fades="1"
+            language="python"
+        >
+            <code-lines>value = __[bonus]__ + __[extra]__ + ___ #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+
+        data_a = make_question_data(self.tmp_path, variant_seed=0)
+        config_a = pl_faded_parsons._build_config(html, data_a)
+        seed_variant(data_a["variant_seed"])
+        state_a = pl_faded_parsons._build_initial_state(config_a)
+
+        repeat_data_a = make_question_data(self.tmp_path, variant_seed=0)
+        repeat_config_a = pl_faded_parsons._build_config(html, repeat_data_a)
+        seed_variant(repeat_data_a["variant_seed"])
+        repeat_state_a = pl_faded_parsons._build_initial_state(repeat_config_a)
+
+        data_b = make_question_data(self.tmp_path, variant_seed=1)
+        config_b = pl_faded_parsons._build_config(html, data_b)
+        seed_variant(data_b["variant_seed"])
+        state_b = pl_faded_parsons._build_initial_state(config_b)
+
+        self.assertEqual(state_a, repeat_state_a)
+        compiled_a = [pl_faded_parsons._compile_line(line) for line in state_a["solution"]]
+        compiled_b = [pl_faded_parsons._compile_line(line) for line in state_b["solution"]]
+        self.assertNotEqual(compiled_a, compiled_b)
+        self.assertTrue(
+            ("bonus" in compiled_a[0]) ^ ("extra" in compiled_a[0])
+        )
+        self.assertTrue(
+            ("bonus" in compiled_b[0]) ^ ("extra" in compiled_b[0])
+        )
+        self.assertEqual(len(state_a["solution"][0]["blankValues"]), 2)
+        self.assertEqual(len(state_b["solution"][0]["blankValues"]), 2)
+
     def test_build_initial_state_handles_empty_markup(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(state["solution"], [])
         self.assertEqual(state["starter"], [])
@@ -521,7 +581,7 @@ value = ___
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertCountEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -544,7 +604,7 @@ ignored() #distractor
             ValueError,
             "one-tray format does not allow distractor lines",
         ):
-            pl_faded_parsons._build_initial_state(config, self.data)
+            pl_faded_parsons._build_initial_state(config)
 
     def test_build_config_reads_visual_indent_from_code_lines(self):
         html = """
@@ -557,7 +617,7 @@ ignored() #distractor
 
         config = pl_faded_parsons._build_config(html, self.data)
 
-        self.assertEqual(config["visual_indent"], 2)
+        self.assertEqual(config.visual_indent, 2)
 
     def test_build_config_reads_max_indent_level_from_element(self):
         html = """
@@ -568,7 +628,29 @@ ignored() #distractor
 
         config = pl_faded_parsons._build_config(html, self.data)
 
-        self.assertEqual(config["max_indent_level"], 7)
+        self.assertEqual(config.max_indent_level, 7)
+
+    def test_build_config_reads_max_optional_fades_from_element(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-optional-fades="3">
+            <code-lines>kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertEqual(config.max_optional_fades, 3)
+
+    def test_build_config_reads_max_fades_as_a_compatibility_alias(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-optional-fades="3">
+            <code-lines>kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        config = pl_faded_parsons._build_config(html, self.data)
+
+        self.assertEqual(config.max_optional_fades, 3)
 
     def test_build_config_rejects_nonpositive_max_distractors(self):
         html = """
@@ -580,6 +662,19 @@ ignored() #distractor
         with self.assertRaisesRegex(
             ValueError,
             "max-distractors.*positive",
+        ):
+            pl_faded_parsons._build_config(html, self.data)
+
+    def test_build_config_rejects_negative_max_optional_fades(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" max-optional-fades="-1">
+            <code-lines>kept()</code-lines>
+        </pl-faded-parsons>
+        """
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "max-optional-fades.*positive",
         ):
             pl_faded_parsons._build_config(html, self.data)
 
@@ -685,14 +780,112 @@ ignored() #distractor
         self.assertEqual(text, "before()\n    helper()\n")
         self.assertEqual(indent, 0.0)
 
-    def test_parse_markup_line_supports_multiple_blanks_and_empty_defaults(self):
-        line = pl_faded_parsons._parse_markup_line(
-            "print(___, ___) #blank first #blank"
-        )
+    def test_build_initial_state_supports_multiple_blanks_and_empty_defaults(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>print(___, ___) #blank first #blank</code-lines>
+        </pl-faded-parsons>
+        """
+        data = make_question_data(self.tmp_path, variant_seed=0)
+        config = pl_faded_parsons._build_config(html, data)
+        state = pl_faded_parsons._build_initial_state(config)
 
+        line = state["starter"][0]
         self.assertEqual(line["codeSnippets"], ["print(", ", ", ")"])
         self.assertEqual(line["blankValues"], ["", ""])
         self.assertEqual(line["blankPlaceholders"], ["first", ""])
+
+    def test_build_initial_state_resolves_optional_fade_to_blank_when_selected(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>print(__[answer]__) #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+        data = make_question_data(self.tmp_path, variant_seed=0)
+        config = pl_faded_parsons._build_config(html, data)
+        state_first = pl_faded_parsons._build_initial_state(config)
+
+        repeat_data = make_question_data(self.tmp_path, variant_seed=0)
+        repeat_config = pl_faded_parsons._build_config(html, repeat_data)
+        state_second = pl_faded_parsons._build_initial_state(repeat_config)
+
+        self.assertEqual(state_first, state_second)
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state_first["solution"]],
+            ["    print()"],
+        )
+        self.assertEqual(state_first["solution"][0]["blankValues"], [""])
+        self.assertEqual(state_first["solution"][0]["blankPlaceholders"], [""])
+
+    def test_build_initial_state_resolves_optional_fade_to_text_when_omitted(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>print(__[answer]__) #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+        data = make_question_data(self.tmp_path, variant_seed=1)
+        config = pl_faded_parsons._build_config(html, data)
+        state_first = pl_faded_parsons._build_initial_state(config)
+
+        repeat_data = make_question_data(self.tmp_path, variant_seed=1)
+        repeat_config = pl_faded_parsons._build_config(html, repeat_data)
+        state_second = pl_faded_parsons._build_initial_state(repeat_config)
+
+        self.assertEqual(state_first, state_second)
+        self.assertEqual(
+            [pl_faded_parsons._compile_line(line) for line in state_first["solution"]],
+            ["    print()"],
+        )
+        self.assertEqual(state_first["solution"][0]["codeSnippets"], ["print(", ")"])
+        self.assertEqual(state_first["solution"][0]["blankValues"], [""])
+
+    def test_build_initial_state_preserves_standard_blanks_with_optional_fades(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>total = __[bonus]__ + ___ #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+        data = make_question_data(self.tmp_path, variant_seed=0)
+        config = pl_faded_parsons._build_config(html, data)
+        state = pl_faded_parsons._build_initial_state(config)
+
+        self.assertEqual(state["solution"][0]["codeSnippets"], ["total = ", " + ", ""])
+        self.assertEqual(state["solution"][0]["blankValues"], ["", ""])
+        self.assertEqual(state["solution"][0]["blankPlaceholders"], ["", ""])
+
+    def test_optional_fade_placeholders_are_preserved_when_the_fade_is_blank(self):
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>total = __[bonus](hint)__ #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+        config = pl_faded_parsons._build_config(html, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
+        line = state["solution"][0]
+
+        self.assertEqual(line["codeSnippets"], ["total = ", ""])
+        self.assertEqual(line["blankValues"], [""])
+        self.assertEqual(line["blankPlaceholders"], ["hint"])
+
+    def test_optional_fade_placeholders_are_removed_when_the_fade_is_text(self):
+        line_info = pl_faded_parsons._parse_author_markup_line(
+            "total = __[bonus]__ #pin(1)"
+        )
+        line = {
+            "indent": line_info.indent,
+            "pinned": line_info.pinned,
+            "codeSnippets": ["total = bonus"],
+            "blankValues": [],
+            "blankPlaceholders": [],
+        }
+
+        self.assertEqual(line["codeSnippets"], ["total = bonus"])
+        self.assertEqual(line["blankValues"], [])
+        self.assertEqual(line["blankPlaceholders"], [])
+
+    def test_optional_fade_placeholder_requires_data(self):
+        with self.assertRaisesRegex(SyntaxError, "Optional fade solution_text must not be empty"):
+            pl_faded_parsons._parse_author_markup_line("print(__[](hint)__)")
 
     def test_parse_saved_state_validates_shape(self):
         with self.assertRaisesRegex(
@@ -821,7 +1014,7 @@ end</post-text>
         rendered = render_with_uuid(html, self.data)
 
         self.assertIn("&lt;root attr=&quot;1&quot;&gt;hello&lt;/root&gt;", rendered)
-        self.assertNotIn("<root attr=\"1\">", rendered)
+        self.assertNotIn('<root attr="1">', rendered)
         self.assertNotIn("</root>", rendered)
 
     def test_render_question_preserves_literal_xml_in_post_text(self):
@@ -837,7 +1030,7 @@ end</post-text>
         rendered = render_with_uuid(html, self.data)
 
         self.assertIn("&lt;root attr=&quot;1&quot;&gt;goodbye&lt;/root&gt;", rendered)
-        self.assertNotIn("<root attr=\"1\">", rendered)
+        self.assertNotIn('<root attr="1">', rendered)
         self.assertNotIn("</root>", rendered)
 
     def test_render_question_omits_copy_button_by_default(self):
@@ -862,7 +1055,10 @@ end</post-text>
         rendered = render_with_uuid(html, self.data)
 
         self.assertIn("widget-controls-uuid-123", rendered)
-        self.assertIn('class="widget-copy btn btn-light border d-flex align-items-center"', rendered)
+        self.assertIn(
+            'class="widget-copy btn btn-light border d-flex align-items-center"',
+            rendered,
+        )
 
     def test_render_question_omits_outer_border_in_borderless_one_tray_mode(self):
         html = """
@@ -934,7 +1130,9 @@ starter()</code-lines>
 
         self.assertRegex(
             rendered,
-            re.compile(r'id="pl-faded-parsons-uuid-123"\s+role="application"\s+tabindex="0"'),
+            re.compile(
+                r'id="pl-faded-parsons-uuid-123"\s+role="application"\s+tabindex="0"'
+            ),
         )
         self.assertRegex(
             rendered,
@@ -948,28 +1146,56 @@ starter()</code-lines>
         self.assertIn("solution-uuid-123", rendered)
 
     def test_render_submission_and_answer_panels(self):
-        html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
+        html = '<pl-faded-parsons answers-name="demo" language="python">expected_solution()</pl-faded-parsons>'
 
         submission_data = make_question_data(self.tmp_path, panel="submission")
         submission_data["raw_submitted_answers"] = {
             "demo.main": json.dumps(
                 {
-                    "solution": [{"indent": 0, "codeSnippets": ["answer()"], "blankValues": []}],
+                    "solution": [
+                        {"indent": 0, "codeSnippets": ["answer()"], "blankValues": []}
+                    ],
                     "starter": [],
                 }
             )
         }
 
         submission_rendered = pl_faded_parsons.render(html, submission_data)
-        answer_rendered = pl_faded_parsons.render(
-            html, make_question_data(self.tmp_path, panel="answer")
-        )
+        answer_data = make_question_data(self.tmp_path, panel="answer")
+        pl_faded_parsons.parse(html, answer_data)
+        answer_rendered = pl_faded_parsons.render(html, answer_data)
 
         self.assertIn("SUBMISSION", submission_rendered)
         self.assertIn("answer()", submission_rendered)
-        self.assertIn("<p>The reference solution:</p>", answer_rendered)
-        self.assertIn("source-file-name=", answer_rendered)
-        self.assertIn(str(self.tmp_path / "solution"), answer_rendered)
+        self.assertIn("<pl-code language=\"python\"", answer_rendered)
+        self.assertNotIn("source-file-name=", answer_rendered)
+        self.assertIn("expected_solution()", answer_rendered)
+
+    def test_render_answer_panel_falls_back_to_inferred_answer_without_file(self):
+        solution_path = self.tmp_path / "solution"
+        solution_path.unlink()
+
+        html = """
+        <pl-faded-parsons answers-name="demo" language="python">
+            <code-lines>print(__[value]__) #pin(1)</code-lines>
+        </pl-faded-parsons>
+        """
+
+        data = make_question_data(self.tmp_path, panel="answer")
+        (self.tmp_path / "solution").unlink()
+        pl_faded_parsons.parse(html, data)
+        answer_rendered = pl_faded_parsons.render(html, data)
+
+        self.assertIn("<pl-code language=\"python\">", answer_rendered)
+        self.assertIn("print(value)", answer_rendered)
+
+    def test_render_answer_panel_errors_without_parsed_correct_answer(self):
+        html = '<pl-faded-parsons answers-name="demo">___</pl-faded-parsons>'
+
+        with self.assertRaisesRegex(FileNotFoundError, "solution"):
+            pl_faded_parsons.render(
+                html, make_question_data(self.tmp_path, panel="answer")
+            )
 
     def test_submission_panel_hides_feedback_header_without_feedback(self):
         html = '<pl-faded-parsons answers-name="demo"></pl-faded-parsons>'
@@ -978,7 +1204,9 @@ starter()</code-lines>
         submission_data["raw_submitted_answers"] = {
             "demo.main": json.dumps(
                 {
-                    "solution": [{"indent": 0, "codeSnippets": ["answer()"], "blankValues": []}],
+                    "solution": [
+                        {"indent": 0, "codeSnippets": ["answer()"], "blankValues": []}
+                    ],
                     "starter": [],
                 }
             )
@@ -1058,9 +1286,9 @@ return 3 #pin(1)</code-lines>
         self.assertNotIn("demosubmission-lines", self.data["submitted_answers"])
         self.assertNotIn("demostarter-lines", self.data["submitted_answers"])
         self.assertEqual(
-            base64.b64decode(self.data["submitted_answers"]["_files"]["student.py"]).decode(
-                "utf-8"
-            ),
+            base64.b64decode(
+                self.data["submitted_answers"]["_files"]["student.py"]
+            ).decode("utf-8"),
             expected_code,
         )
 
@@ -1071,9 +1299,9 @@ return 3 #pin(1)</code-lines>
 
         self.assertEqual(self.data["submitted_answers"]["demo"], "")
         self.assertEqual(
-            base64.b64decode(self.data["submitted_answers"]["_files"]["student.py"]).decode(
-                "utf-8"
-            ),
+            base64.b64decode(
+                self.data["submitted_answers"]["_files"]["student.py"]
+            ).decode("utf-8"),
             "",
         )
 
@@ -1118,7 +1346,7 @@ starter()</code-lines>
         """
 
         config = pl_faded_parsons._build_config(html, self.data)
-        state = pl_faded_parsons._build_initial_state(config, self.data)
+        state = pl_faded_parsons._build_initial_state(config)
 
         self.assertEqual(
             [pl_faded_parsons._compile_line(line) for line in state["solution"]],
@@ -1166,7 +1394,9 @@ class TestReloadIndentRegression(unittest.TestCase):
                     ]
                 ),
             }
-            element_html = '<pl-faded-parsons answers-name="demo" log="true"></pl-faded-parsons>'
+            element_html = (
+                '<pl-faded-parsons answers-name="demo" log="true"></pl-faded-parsons>'
+            )
 
             with patch.object(pl_faded_parsons.pl, "get_uuid", return_value="uuid-123"):
                 rendered = pl_faded_parsons.render(element_html, data)
@@ -1328,6 +1558,30 @@ class TestReloadIndentRegression(unittest.TestCase):
             "    return value",
         )
 
+    def test_parse_infers_correct_answer_from_optional_only_blanks(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            (tmp_path / "solution").unlink()
+            html = """
+            <pl-faded-parsons answers-name="demo" language="python">
+                <code-lines>print(__[value]__) #pin(1)</code-lines>
+            </pl-faded-parsons>
+            """
+
+            pl_faded_parsons.parse(html, data)
+
+        self.assertEqual(data["correct_answers"]["demo"], "    print(value)")
+
+    def test_parse_reads_correct_answer_from_solution_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_path = Path(temp_dir)
+            data = make_question_data(tmp_path)
+            html = '<pl-faded-parsons answers-name="demo" language="python">\n\texpected_solution()\n</pl-faded-parsons>'
+
+            pl_faded_parsons.parse(html, data)
+
+        self.assertEqual(data["correct_answers"]["demo"], "expected_solution()")
 
 if __name__ == "__main__":
     unittest.main()

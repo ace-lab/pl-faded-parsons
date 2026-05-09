@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 try:
-    import prairielearn as pl # type: ignore
+    import prairielearn as pl  # type: ignore
 except ModuleNotFoundError:
     import _prairielearn_mock_ as pl
 
@@ -10,8 +10,9 @@ import html as html_lib
 import json
 import random
 import re
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict
 
 import chevron
 import lxml.html as xml
@@ -25,6 +26,8 @@ OPTIONAL_ATTRIBS = [
     "log",
     "max-indent-level",
     "max-distractors",
+    "max-optional-fades",
+    "max-fades",
     "enable-copy-code",
 ]
 
@@ -33,18 +36,26 @@ FORMAT_BOTTOM = "bottom"
 FORMAT_ONE_TRAY = "one-tray"
 FORMAT_NO_CODE = "no-code"
 VALID_FORMATS = {FORMAT_RIGHT, FORMAT_BOTTOM, FORMAT_ONE_TRAY}
+ElementSize: TypeAlias = Literal["narrow", "wide"]
 
 LINE_COMMENT_PREFIX = r"(?:#|//)"
-COMMENT_START_PATTERN = re.compile(LINE_COMMENT_PREFIX)
+COMMENT_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}.*")
 PIN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}pin\b(?:\((\d+)\))?")
 LEGACY_GIVEN_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}(\d+)given\b")
 DISTRACTOR_PATTERN = re.compile(rf"{LINE_COMMENT_PREFIX}distractor")
 LEGACY_BLANK_SUFFIX_PATTERN = re.compile(
     rf"{LINE_COMMENT_PREFIX}blank\s*(.*?)(?={LINE_COMMENT_PREFIX}|\r?\n|$)"
 )
-MARKUP_BLANK_PATTERN = re.compile(r"\b__\((.*?)\)__\b|\b_{3,4}\b")
+MARKUP_BLANK_PATTERN = re.compile(
+    r"(?P<optional>"
+    r"__\[(?P<optional_text_only>.*?)\]__|"
+    r"__\[(?P<optional_text>.*?)\]\((?P<optional_placeholder>.*?)\)__|"
+    r"__\((?P<optional_placeholder_rev>.*?)\)\[(?P<optional_text_rev>.*?)\]__"
+    r")|"
+    r"(?P<blank>\b__\((?P<blank_placeholder>.*?)\)__\b|\b_{3,4}\b)"
+)
 INDENT = "    "
-DEBUG = False
+
 
 class ParsingError(Exception):
     """Raised when saved widget state cannot be reconstructed."""
@@ -76,9 +87,31 @@ class WidgetState(TypedDict):
     log: list[LogEntry]
 
 
-class ElementConfig(TypedDict):
+@dataclass(frozen=True, slots=True)
+class MarkupToken:
+    """One token parsed from author-authored code-line markup."""
+
+    kind: Literal["text", "blank", "optional"]
+    value: str = ""
+    placeholder: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class MarkupLineInfo:
+    """Precomputed information used while building initial trays."""
+
+    raw_leading_spaces: int
+    tokens: tuple[MarkupToken, ...]
+    indent: int | None
+    pinned: bool
+    role: Literal["starter", "solution", "distractor"]
+
+
+@dataclass(frozen=True, slots=True)
+class ElementConfig:
     """Element configuration derived from the author-authored markup."""
 
+    question_path: Path
     answers_name: str
     format: str
     language: str
@@ -93,16 +126,19 @@ class ElementConfig(TypedDict):
     visual_indent: int
     max_indent_level: int
     max_distractors: int | None
-    size: str
-    solution_path: Path
+    max_optional_fades: int | None
+    size: ElementSize
+    solution_path: Path | None
 
 
 def prepare(element_html: str, data: pl.QuestionData) -> None:
     """Validate the element and reserve its PrairieLearn answers-name."""
 
-    element = _parse_element(element_html)
-    answers_name = pl.get_string_attrib(element, "answers-name")
-    pl.check_answers_names(data, answers_name)
+    config = _build_config(element_html, data)
+    correct_answer = _infer_correct_answer(config)
+    if correct_answer is not None:
+        data["correct_answers"].setdefault(config.answers_name, correct_answer)
+    pl.check_answers_names(data, config.answers_name)
 
 
 def render(element_html: str, data: pl.QuestionData) -> str:
@@ -122,7 +158,7 @@ def render(element_html: str, data: pl.QuestionData) -> str:
             "incomplete_blank_message": _find_empty_blank_message(state["solution"]),
         }
     elif panel == "answer":
-        params = {"solution_path": _require_solution_path(config)}
+        params = _build_answer_params(config, data)
     else:
         raise ValueError(f"Invalid panel type: {panel}")
 
@@ -133,23 +169,22 @@ def parse(element_html: str, data: pl.QuestionData) -> None:
     """Compile the student's solution tray into PrairieLearn outputs."""
 
     config = _build_config(element_html, data)
+    correct_answer = _infer_correct_answer(config)
+    if correct_answer is not None:
+        data["correct_answers"].setdefault(config.answers_name, correct_answer)
+
     state = _load_state(config, data)
     empty_blank_message = _find_empty_blank_message(state["solution"])
     if empty_blank_message is not None:
-        data["format_errors"][config["answers_name"]] = empty_blank_message
+        data["format_errors"][config.answers_name] = empty_blank_message
         return
 
     student_code = _compile_code(state["solution"])
 
-    if DEBUG:
-        print("DEBUG parse answers_name:", config["answers_name"])
-        print("DEBUG parse solution state:", state["solution"])
-        print("DEBUG parse compiled student_code:", repr(student_code))
-
-    data["submitted_answers"][config["answers_name"]] = student_code
+    data["submitted_answers"][config.answers_name] = student_code
     pl.add_submitted_file(
         data,
-        config["file_name"],
+        config.file_name,
         base64.b64encode(student_code.encode("utf-8")).decode("ascii"),
     )
 
@@ -175,9 +210,7 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         raise ValueError(
             "format `no-code` has been renamed to `one-tray`; use `one-tray` instead."
         )
-    format_name = (
-        raw_format_name
-    )
+    format_name = raw_format_name
     if format_name not in VALID_FORMATS:
         raise ValueError(
             f"Unsupported format `{format_name}`. Expected one of: "
@@ -230,9 +263,13 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
     if max_indent_level < 0:
         raise ValueError("Attribute `max-indent-level` must be nonnegative.")
 
-    max_distractors = pl.get_integer_attrib(element, "max-distractors")
+    max_distractors = pl.get_integer_attrib(element, "max-distractors", None)
     if max_distractors is not None and max_distractors <= 0:
-        raise ValueError("Attribute `max-distractors` must be a positive number.")
+        raise ValueError("Attribute `max-distractors` must be positive.")
+
+    max_optional_fades = pl.get_integer_attrib(element, "max-optional-fades", None)
+    if max_optional_fades is not None and max_optional_fades <= 0:
+        raise ValueError("Attribute `max-optional-fades` must be positive.")
 
     visual_indent = (
         pl.get_integer_attrib(code_lines_element, "visual-indent", 0)
@@ -249,46 +286,41 @@ def _build_config(element_html: str, data: pl.QuestionData) -> ElementConfig:
         )
 
     question_path = Path(data["options"]["question_path"])
-    solution_path = question_path / pl.get_string_attrib(
-        element, "solution-path", "./solution"
-    )
-    language = pl.get_string_attrib(element, "language", "")
-    if language in ("py", "ipynb", "python") and not solution_path.exists():
-        ans_path = question_path / "tests" / "ans.py"
-        if ans_path.exists():
-            solution_path = ans_path
+    solution_path = pl.get_string_attrib(element, "solution-path", None)
+    if solution_path is not None:
+        solution_path = question_path / solution_path
 
-    return {
-        "answers_name": pl.get_string_attrib(element, "answers-name"),
-        "format": format_name,
-        "language": language,
-        "file_name": pl.get_string_attrib(element, "file-name", "user_code.py"),
-        "logging_enabled": pl.get_boolean_attrib(element, "log", False),
-        "enable_copy_code": pl.get_boolean_attrib(
-            element, "enable-copy-code", False
-        ),
-        "markup": _load_markup(
+    language = pl.get_string_attrib(element, "language", "")
+
+    return ElementConfig(
+        question_path=question_path,
+        answers_name=pl.get_string_attrib(element, "answers-name"),
+        format=format_name,
+        language=language,
+        file_name=pl.get_string_attrib(element, "file-name", "user_code.py"),
+        logging_enabled=pl.get_boolean_attrib(element, "log", False),
+        enable_copy_code=pl.get_boolean_attrib(element, "enable-copy-code", False),
+        markup=_load_markup(
             element_html,
             element,
             question_path,
             code_lines_element,
             has_text_blocks=has_text_blocks,
         ),
-        "pre_text": pre_text,
-        "post_text": post_text,
-        "pre_text_indent": pre_text_indent,
-        "post_text_indent": post_text_indent,
-        "visual_indent": visual_indent,
-        "max_indent_level": max_indent_level,
-        "max_distractors": max_distractors,
-        "size": "narrow" if format_name == FORMAT_RIGHT else "wide",
-        "solution_path": solution_path,
-    }
+        pre_text=pre_text,
+        post_text=post_text,
+        pre_text_indent=pre_text_indent,
+        post_text_indent=post_text_indent,
+        visual_indent=visual_indent,
+        max_indent_level=max_indent_level,
+        max_distractors=max_distractors,
+        max_optional_fades=max_optional_fades,
+        size="narrow" if format_name == FORMAT_RIGHT else "wide",
+        solution_path=solution_path,
+    )
 
 
-def _get_unique_child(
-    element: xml.HtmlElement, tag: str
-) -> xml.HtmlElement | None:
+def _get_unique_child(element: xml.HtmlElement, tag: str) -> xml.HtmlElement | None:
     """Return the single direct child with a given tag, if present."""
 
     matching_children = [child for child in element if child.tag == tag]
@@ -358,15 +390,15 @@ def _load_state(config: ElementConfig, data: pl.QuestionData) -> WidgetState:
     """Load saved widget state when present, otherwise build the initial trays."""
 
     raw_answers = data["raw_submitted_answers"]
-    main_key = f"{config['answers_name']}.main"
+    main_key = f"{config.answers_name}.main"
 
     if raw_answers.get(main_key):
         return _parse_saved_state(
             raw_answers[main_key],
-            raw_answers.get(f"{config['answers_name']}.log", "[]"),
+            raw_answers.get(f"{config.answers_name}.log", "[]"),
         )
 
-    return _build_initial_state(config, data)
+    return _build_initial_state(config)
 
 
 def _parse_saved_state(raw_main: str, raw_log: str) -> WidgetState:
@@ -468,44 +500,40 @@ def _parse_log(raw_log: str) -> list[LogEntry]:
     return parsed_log
 
 
-def _build_initial_state(
-    config: ElementConfig, data: pl.QuestionData
-) -> WidgetState:
+def _build_initial_state(config: ElementConfig) -> WidgetState:
     """Build the initial starter and solution trays from author markup."""
+
+    line_infos = _parse_author_markup(config)
+    selected_optional_tokens = _sample_optional_fades(
+        line_infos, config.max_optional_fades
+    )
 
     starter_lines: list[SavedLine] = []
     solution_lines: list[SavedLine] = []
     distractor_lines: list[SavedLine] = []
 
-    for raw_line in config["markup"].strip().splitlines():
-        line_text = raw_line.strip()
-        if not line_text:
-            continue
-        line = _parse_markup_line(line_text)
+    for line_info in line_infos:
+        line = _build_saved_line(line_info, selected_optional_tokens)
 
-        match = PIN_PATTERN.search(line_text) or LEGACY_GIVEN_PATTERN.search(line_text)
-        if match:
-            line["indent"] = int(match.group(1) or 0)
-            line["pinned"] = True
+        if line_info.role == "solution":
             solution_lines.append(line)
-        elif DISTRACTOR_PATTERN.search(line_text):
+        elif line_info.role == "distractor":
             distractor_lines.append(line)
         else:
             starter_lines.append(line)
 
-    if config["format"] == FORMAT_ONE_TRAY and distractor_lines:
+    if config.format == FORMAT_ONE_TRAY and distractor_lines:
         raise ValueError("one-tray format does not allow distractor lines.")
 
-    # Seed from the variant so repeated renders keep the same initial tray order.
-    rng = random.Random(f"{data['variant_seed']}:{config['answers_name']}")
     distractor_count = len(distractor_lines)
-    if config["max_distractors"] is not None:
-        distractor_count = min(distractor_count, config["max_distractors"])
-    included_distractors = rng.sample(distractor_lines, k=distractor_count)
+    if config.max_distractors is not None:
+        distractor_count = min(distractor_count, config.max_distractors)
+    included_distractors = random.sample(distractor_lines, k=distractor_count)
     starter_lines.extend(included_distractors)
-    rng.shuffle(starter_lines)
 
-    if config["format"] == FORMAT_ONE_TRAY:
+    random.shuffle(starter_lines)
+
+    if config.format == FORMAT_ONE_TRAY:
         return {
             "solution": solution_lines + starter_lines,
             "starter": [],
@@ -519,113 +547,309 @@ def _build_initial_state(
     }
 
 
-def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
-    """Return a parse error message when any submitted blank is empty."""
+def _infer_correct_answer(config: ElementConfig) -> str | None:
+    """Read or compile the canonical answer when it can be determined."""
 
-    for line in lines:
-        for blank in line["blankValues"]:
-            if not blank.strip():
-                return (
-                    "Your answer has incomplete blanks. Fill in every blank before submitting."
-                )
+    solution_path = _resolve_solution_path(config)
+    if solution_path is not None and solution_path.exists():
+        return solution_path.read_text(encoding="utf-8").rstrip("\n")
+
+    solution_lines = [
+        line for line in _parse_author_markup(config) if line.role != "distractor"
+    ]
+
+    if any(
+        token.kind not in ("text", "optional")
+        for line in solution_lines
+        for token in line.tokens
+    ):
+        return None
+
+    indent_levels = sorted(set(line.raw_leading_spaces for line in solution_lines))
+
+    inferred_lines: list[SavedLine] = [
+        {
+            "indent": line.indent or indent_levels.index(line.raw_leading_spaces),
+            "pinned": line.pinned,
+            "codeSnippets": ["".join(token.value for token in line.tokens)],
+            "blankValues": [],
+            "blankPlaceholders": [],
+        }
+        for line in solution_lines
+    ]
+    return _compile_code(inferred_lines)
+
+
+def _build_answer_params(
+    config: ElementConfig, data: pl.QuestionData
+) -> dict[str, Any]:
+    """Build the answer-panel payload from the parsed correct answer."""
+
+    language = config.language
+    if config.solution_path is not None:
+        if solution_path := _resolve_solution_path(config):
+            return {
+                "language": language,
+                "solution_path": str(solution_path),
+            }
+
+    correct_answer = data["correct_answers"].get(config.answers_name)
+    if correct_answer is not None:
+        return {
+            "language": language,
+            "correct_answer": correct_answer,
+        }
+
+    solution_path = config.solution_path or (config.question_path / ".solution")
+    raise FileNotFoundError(
+        f"Correct answer not found at `{solution_path}`!\nEither:\n"
+        f"  - Provide an answer at {solution_path}\n"
+        f"  - Make all blanks optional with __[answer]__ syntax\n"
+        f'  - Set the language to "python" and provide a tests/ans.py file\n'
+        f'  - Set "showCorrectAnswer" to false in `./info.json`'
+    )
+
+
+def _resolve_solution_path(config: ElementConfig) -> Path | None:
+    """Return the author-provided or inferred source file path, if it exists."""
+
+    if config.solution_path is not None and config.solution_path.exists():
+        return config.solution_path
+
+    if config.language in ("py", "ipynb", "python"):
+        ans_path = config.question_path / "tests" / "ans.py"
+        if ans_path.exists():
+            return ans_path
+
+    solution_path = config.question_path / ".solution"
+    if solution_path.exists():
+        return solution_path
+
+    if config.language in ("py", "ipynb", "python") and not solution_path.exists():
+        ans_path = config.question_path / "tests" / "ans.py"
+        if ans_path.exists():
+            return ans_path
+
     return None
 
 
-def _parse_markup_line(line_text: str) -> SavedLine:
-    """Convert one author-authored markup line into the saved line schema."""
+def _sample_optional_fades(
+    line_infos: list[MarkupLineInfo], max_optional_fades: int | None
+) -> set[MarkupToken]:
+    """Select which optional markup tokens should fade into blanks."""
 
-    comment_match = COMMENT_START_PATTERN.search(line_text)
-    code_portion = (
-        line_text[:comment_match.start()].rstrip()
-        if comment_match
-        else line_text.rstrip()
+    optional_tokens = [
+        token
+        for line_info in line_infos
+        for token in line_info.tokens
+        if token.kind == "optional"
+    ]
+    if not optional_tokens:
+        return set()
+
+    optional_fade_count = len(optional_tokens)
+    fade_count = (
+        min(optional_fade_count, max_optional_fades)
+        if max_optional_fades is not None
+        else optional_fade_count
     )
-    code_snippets: list[str] = []
+    return set(random.sample(optional_tokens, k=fade_count))
+
+
+def _build_saved_line(
+    line_info: MarkupLineInfo, selected_optional_tokens: set[MarkupToken]
+) -> SavedLine:
+    """Convert parsed markup tokens into the serialized tray representation."""
+
+    code_snippets = [""]
     blank_values: list[str] = []
     blank_placeholders: list[str] = []
 
-    last_end = 0
-    for match in MARKUP_BLANK_PATTERN.finditer(code_portion):
-        start, end = match.span()
-        code_snippets.append(code_portion[last_end:start])
-        blank_values.append("")
-        blank_placeholders.append(match.group(1) or "")
-        last_end = end
-
-    code_snippets.append(code_portion[last_end:])
-
-    for index, raw_blank in enumerate(LEGACY_BLANK_SUFFIX_PATTERN.findall(line_text)):
-        if index >= len(blank_placeholders):
-            raise ParsingError(
-                f"Too many blank placeholders specified, \n"
-                f"only {len(blank_placeholders)} blanks exist"
-            )
-        text = raw_blank.strip()
-        if blank_placeholders[index] and text:
-            raise ParsingError(
-                f"Placeholder text for blank {index} set twice: \n"
-                f"{blank_placeholders[index]} and {text}"
-            )
-        blank_placeholders[index] = text
+    for token in line_info.tokens:
+        if token.kind == "blank" or (
+            token.kind == "optional" and token in selected_optional_tokens
+        ):
+            blank_values.append("")
+            blank_placeholders.append(token.placeholder)
+            code_snippets.append("")
+        else:
+            code_snippets[-1] += token.value
 
     return {
-        "indent": 0,
-        "pinned": False,
+        "indent": line_info.indent or 0,
+        "pinned": line_info.pinned,
         "codeSnippets": code_snippets,
         "blankValues": blank_values,
         "blankPlaceholders": blank_placeholders,
     }
 
 
-def _build_question_params(
-    config: ElementConfig, state: WidgetState
-) -> dict[str, Any]:
+def _find_empty_blank_message(lines: list[SavedLine]) -> str | None:
+    """Return a parse error message when any submitted blank is empty."""
+
+    for line in lines:
+        for blank in line["blankValues"]:
+            if not blank.strip():
+                return "Your answer has incomplete blanks. Fill in every blank before submitting."
+    return None
+
+
+def _parse_author_markup(config: ElementConfig) -> list[MarkupLineInfo]:
+    """Parses the author markup into a reusable IR from a config."""
+
+    return [
+        line
+        for raw_text in config.markup.splitlines()
+        if (line := _parse_author_markup_line(raw_text))
+    ]
+
+
+def _parse_author_markup_line(raw_text: str) -> MarkupLineInfo | None:
+    """Parse author markup into a reusable IR."""
+
+    line_text = raw_text.strip()
+    if not line_text:
+        return None
+
+    leading_spaces = 0
+    for c in raw_text:
+        match c:
+            case " ":
+                leading_spaces += 1
+            case "\t":
+                leading_spaces += len(INDENT)
+            case _:
+                break
+
+    comment_match = COMMENT_PATTERN.search(line_text)
+    code_portion = (
+        line_text[: comment_match.start()].rstrip()
+        if comment_match
+        else line_text.rstrip()
+    )
+
+    tokens: list[MarkupToken] = []
+    last_end = 0
+
+    for match in MARKUP_BLANK_PATTERN.finditer(code_portion):
+        start, end = match.span()
+        if start > last_end:
+            tokens.append(MarkupToken("text", value=code_portion[last_end:start]))
+
+        if match.group("optional") is not None:
+            optional_text = match.group("optional_text_only")
+            optional_placeholder = None
+            if optional_text is None:
+                optional_text = match.group("optional_text")
+                optional_placeholder = match.group("optional_placeholder")
+            if optional_text is None:
+                optional_text = match.group("optional_text_rev")
+                optional_placeholder = match.group("optional_placeholder_rev")
+            optional_text = (optional_text or "").strip()
+            placeholder = (optional_placeholder or "").strip()
+            if not optional_text:
+                raise SyntaxError("Optional fade solution_text must not be empty.")
+            tokens.append(
+                MarkupToken(
+                    "optional",
+                    value=optional_text,
+                    placeholder=placeholder,
+                )
+            )
+        else:
+            placeholder = match.group("blank_placeholder")
+            placeholder = (placeholder or "").strip()
+            tokens.append(MarkupToken("blank", placeholder=placeholder))
+
+        last_end = end
+
+    if last_end < len(code_portion):
+        tokens.append(MarkupToken("text", value=code_portion[last_end:]))
+
+    role, indent, pinned = "starter", None, False
+    if comment_text := comment_match and comment_match.group(0):
+        if pin_match := PIN_PATTERN.search(comment_text):
+            role, indent, pinned = "solution", int(pin_match.group(1) or 0), True
+        elif LEGACY_GIVEN_PATTERN.search(comment_text):
+            role, pinned = "solution", True
+        else:
+            role = (
+                "distractor" if DISTRACTOR_PATTERN.search(comment_text) else "starter"
+            )
+
+        _apply_legacy_blank_placeholders(comment_text, tokens)
+
+    return MarkupLineInfo(leading_spaces, tuple(tokens), indent, pinned, role)
+
+
+def _apply_legacy_blank_placeholders(
+    comment_text: str, tokens: list[MarkupToken]
+) -> None:
+    """Backfill blank placeholders from legacy trailing `#blank` comments."""
+
+    raw_placeholders = LEGACY_BLANK_SUFFIX_PATTERN.finditer(comment_text)
+
+    empty_blank_iter = (
+        (index, token)
+        for index, token in enumerate(tokens)
+        if token.kind in ("blank", "optional") and not token.placeholder
+    )
+
+    for (index, token), mtch in zip(empty_blank_iter, raw_placeholders, strict=False):
+        if placeholder := mtch.group(1).strip():
+            tokens[index] = replace(token, placeholder=placeholder)
+
+    if next(raw_placeholders, None) is not None:
+        raise ParsingError("Too many blank placeholders specified")
+
+
+def _build_question_params(config: ElementConfig, state: WidgetState) -> dict[str, Any]:
     """Translate controller state into the Mustache structure."""
 
     return {
-        "answers_name": config["answers_name"],
-        "bottom_layout": config["format"] == FORMAT_BOTTOM,
-        "language": config["language"],
-        "max_indent_level": config["max_indent_level"],
-        "borderless": not config["pre_text"] and not config["post_text"],
-        "previous_log": json.dumps(state["log"] if config["logging_enabled"] else []),
-        "logging_enabled": config["logging_enabled"],
-        "enable_copy_code": config["enable_copy_code"],
+        "answers_name": config.answers_name,
+        "bottom_layout": config.format == FORMAT_BOTTOM,
+        "language": config.language,
+        "max_indent_level": config.max_indent_level,
+        "borderless": not config.pre_text and not config.post_text,
+        "previous_log": json.dumps(state["log"] if config.logging_enabled else []),
+        "logging_enabled": config.logging_enabled,
+        "enable_copy_code": config.enable_copy_code,
         "uuid": pl.get_uuid(),
         "starter": _build_tray_params(
             state["starter"],
-            config["language"],
-            config["size"],
-            visual_indent=config["visual_indent"],
-            allow_empty=config["format"] == FORMAT_ONE_TRAY,
+            config.language,
+            config.size,
+            visual_indent=config.visual_indent,
+            allow_empty=config.format == FORMAT_ONE_TRAY,
         ),
         "pre_text": _build_text_block_params(
-            config["pre_text"],
-            config["language"],
-            config["pre_text_indent"],
+            config.pre_text,
+            config.language,
+            config.pre_text_indent,
             placement="pre",
         ),
-        "pin": _build_tray_params(
+        "solution": _build_tray_params(
             state["solution"],
-            config["language"],
-            config["size"],
-            visual_indent=config["visual_indent"],
+            config.language,
+            config.size,
+            visual_indent=config.visual_indent,
             allow_empty=False,
         ),
         "post_text": _build_text_block_params(
-            config["post_text"],
-            config["language"],
-            config["post_text_indent"],
+            config.post_text,
+            config.language,
+            config.post_text_indent,
             placement="post",
         ),
-        "visual_indent": config["visual_indent"],
+        "visual_indent": config.visual_indent,
     }
 
 
 def _build_tray_params(
     lines: list[SavedLine],
     language: str,
-    size: str,
+    size: ElementSize,
     *,
     visual_indent: int = 0,
     allow_empty: bool = False,
@@ -636,9 +860,7 @@ def _build_tray_params(
         return ""
 
     tray = {
-        "lines": [
-            _line_to_mustache(line, language) for line in lines
-        ],
+        "lines": [_line_to_mustache(line, language) for line in lines],
         "narrow": size == "narrow",
         "wide": size == "wide",
         "visual_indent": visual_indent,
@@ -663,7 +885,9 @@ def _build_text_block(
     baseline_line = lines[0] if placement == "pre" else _find_last_nonempty_line(lines)
     indent_spaces = _infer_text_baseline_spaces(baseline_line)
     normalized_lines = [
-        _normalize_text_block_line(line, indent_spaces, placement=placement, line_number=index + 1)
+        _normalize_text_block_line(
+            line, indent_spaces, placement=placement, line_number=index + 1
+        )
         for index, line in enumerate(lines)
     ]
     normalized = "\n".join(normalized_lines)
@@ -675,11 +899,7 @@ def _build_text_block(
 
 
 def _build_text_block_params(
-    text: str,
-    language: str,
-    indent: float,
-    *,
-    placement: Literal["pre", "post"],
+    text: str, language: str, indent: float, *, placement: Literal["pre", "post"]
 ) -> dict[str, Any] | bool:
     """Return the Mustache payload for an optional pre/post text block."""
 
@@ -736,16 +956,16 @@ def _normalize_text_block_line(
             f"{placement}-text line {line_number} does not match the leading whitespace prefix "
             "established by the baseline line."
         )
-    return line[len(prefix):] if prefix else line
+    return line[len(prefix) :] if prefix else line
 
 
-def _line_to_mustache(
-    line: SavedLine, language: str
-) -> dict[str, Any]:
+def _line_to_mustache(line: SavedLine, language: str) -> dict[str, Any]:
     """Convert a saved line into the segment structure used by the template."""
 
     segments = []
-    for index, part in enumerate(_interleave(line["codeSnippets"], line["blankValues"])):
+    for index, part in enumerate(
+        _interleave(line["codeSnippets"], line["blankValues"])
+    ):
         if part is None:
             continue
         if index % 2 == 0:
@@ -796,29 +1016,11 @@ def _interleave(left: list[str], right: list[str]) -> list[str]:
     return merged
 
 
-def _require_solution_path(config: ElementConfig) -> str:
-    """Return the reference solution path or raise a clear authoring error."""
-
-    solution_path = config["solution_path"]
-    if not solution_path.exists():
-        raise FileNotFoundError(
-            "\n"
-            f"\tCorrect answer not found at `{solution_path}`!\n"
-            '\tEither:\n'
-            f' - Provide an answer at {solution_path}\n'
-            '  - Set the language to python and provide a tests/ans.py file\n'
-            '  - Set "showCorrectAnswer" to false in `./info.json`'
-        )
-    return str(solution_path)
-
-
 def _render_template(template_name: str, params: dict[str, Any]) -> str:
     """Render an element template from the local element tree."""
 
     template_path = Path(template_name)
     with template_path.open(encoding="utf-8") as template_file:
         return chevron.render(
-            template_file,
-            params,
-            partials_path=template_path.parent
+            template_file, params, partials_path=template_path.parent
         ).strip()
