@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import NamedTuple
 
+import pytest
 import lxml.html as xml
-from lxml import etree
+import lxml.etree as etree
+
 from browser.render_core import render_question_html
 
 
-class RenderFailure(NamedTuple):
-    question_file: Path
-    element_index: int
-    element_html: str
-    error: str
+ELEMENT_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_QUESTION_ROOT = ELEMENT_DIR.parent.parent / "questions"
+QUESTION_ROOT_ENV = "PL_FPP_QUESTION_ROOT"
 
 
 def _find_question_files(root: Path) -> list[Path]:
@@ -50,7 +50,7 @@ def _find_question_files(root: Path) -> list[Path]:
             f"{completed.stderr.strip()}"
         )
 
-    return [Path(line) for line in completed.stdout.splitlines() if line.strip()]
+    return sorted(Path(line) for line in completed.stdout.splitlines() if line.strip())
 
 
 def _extract_element_html(source: str) -> list[str]:
@@ -86,47 +86,47 @@ def _render_element(element_html: str, question_dir: Path) -> str:
     return rendered
 
 
-def check_directory(root: Path) -> int:
+def _question_root() -> Path:
+    return Path(os.environ.get(QUESTION_ROOT_ENV, DEFAULT_QUESTION_ROOT)).resolve()
+
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    if "question_file" not in metafunc.fixturenames:
+        return
+
+    root = _question_root()
     question_files = _find_question_files(root)
     if not question_files:
-        print(
-            f"No question files containing <pl-faded-parsons> were found under {root}.",
-            file=sys.stderr,
+        raise pytest.UsageError(
+            f"No question files containing <pl-faded-parsons> were found under {root}."
         )
-        return 1
 
-    rendered_count = 0
-    failures: list[RenderFailure] = []
-    for question_file in question_files:
-        source = question_file.read_text(encoding="utf-8")
-        for element_index, element_html in enumerate(_extract_element_html(source), start=1):
-            try:
-                _render_element(element_html, question_file.parent)
-            except Exception as exc:
-                failures.append(
-                    RenderFailure(
-                        question_file=question_file,
-                        element_index=element_index,
-                        element_html=element_html,
-                        error=str(exc),
-                    )
-                )
-                continue
-            rendered_count += 1
+    metafunc.parametrize(
+        "question_file",
+        question_files,
+        ids=[str(path.relative_to(root)) for path in question_files],
+    )
 
-    for failure in failures:
-        print(
-            f"{failure.question_file} [element {failure.element_index}]",
-            file=sys.stderr,
+
+def test_question_file_renders(question_file: Path) -> None:
+    source = question_file.read_text(encoding="utf-8")
+    elements = _extract_element_html(source)
+    if not elements:
+        pytest.fail(
+            f"{question_file} did not contain any <pl-faded-parsons> elements."
         )
-        print("element_html:", file=sys.stderr)
-        print(failure.element_html, file=sys.stderr)
-        print(failure.error, file=sys.stderr)
 
-    print('summary')
-    print(f"\n{rendered_count} success(es)")
-    print(f"\n{len(failures)} failure(s)", file=sys.stderr if failures else sys.stdout)
-    return int(bool(failures))
+    for element_html in elements:
+        _render_element(element_html, question_file.parent)
+
+
+def _run_pytest(root: Path) -> int:
+    os.environ[QUESTION_ROOT_ENV] = str(root)
+    return pytest.main(
+        [
+            str(Path(__file__).resolve()),
+        ]
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,7 +143,14 @@ def main(argv: list[str] | None = None) -> int:
     if not root.is_dir():
         parser.error(f"{root} is not a directory")
 
-    return check_directory(root)
+    if not _find_question_files(root):
+        print(
+            f"No question files containing <pl-faded-parsons> were found under {root}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    return _run_pytest(root)
 
 
 if __name__ == "__main__":
