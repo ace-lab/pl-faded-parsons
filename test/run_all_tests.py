@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ELEMENT_DIR = Path(__file__).resolve().parent.parent
-TEST_DIR = ELEMENT_DIR / "tests"
+TEST_DIR = ELEMENT_DIR / "test"
 
 
 def run_python_tests() -> bool:

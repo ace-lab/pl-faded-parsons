@@ -4,12 +4,13 @@ import json
 import re
 import sys
 import tempfile
+from typing import TypedDict
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 ELEMENT_DIR = Path(__file__).resolve().parent.parent
-BROWSER_DIR = ELEMENT_DIR / "tests" / "browser"
+BROWSER_DIR = ELEMENT_DIR / "test" / "browser"
 MODULE_PATH = ELEMENT_DIR / "pl-faded-parsons.py"
 
 if str(ELEMENT_DIR) not in sys.path:
@@ -27,14 +28,24 @@ SPEC.loader.exec_module(pl_faded_parsons)
 from render_core import BANNED_IMPORT_GLOBALS, load_controller_module
 
 
+class SolutionFile(TypedDict):
+    rel_path: str | Path
+    text: str
+
+
 def make_question_data(
     tmp_path: Path,
     *,
     panel: str = "question",
     variant_seed: int = 0,
+    solution_file: SolutionFile = {
+        "rel_path": "solution",
+        "text": "expected_solution()\n",
+    }
 ) -> dict:
-    solution_path = tmp_path / "solution"
-    solution_path.write_text("expected_solution()\n", encoding="utf-8")
+    solution_path = tmp_path / solution_file["rel_path"]
+    solution_path.parent.mkdir(parents=True, exist_ok=True)
+    solution_path.write_text(solution_file["text"], encoding="utf-8")
     seed_variant(variant_seed)
     return {
         "params": {},
@@ -551,19 +562,21 @@ ignored_c() #distractor
         state_b = pl_faded_parsons._build_initial_state(config_b)
 
         self.assertEqual(state_a, repeat_state_a)
-        compiled_a = [pl_faded_parsons._compile_line(line) for line in state_a["solution"]]
-        compiled_b = [pl_faded_parsons._compile_line(line) for line in state_b["solution"]]
+        compiled_a = [
+            pl_faded_parsons._compile_line(line) for line in state_a["solution"]
+        ]
+        compiled_b = [
+            pl_faded_parsons._compile_line(line) for line in state_b["solution"]
+        ]
         self.assertNotEqual(compiled_a, compiled_b)
-        self.assertTrue(
-            ("bonus" in compiled_a[0]) ^ ("extra" in compiled_a[0])
-        )
-        self.assertTrue(
-            ("bonus" in compiled_b[0]) ^ ("extra" in compiled_b[0])
-        )
+        self.assertTrue(("bonus" in compiled_a[0]) ^ ("extra" in compiled_a[0]))
+        self.assertTrue(("bonus" in compiled_b[0]) ^ ("extra" in compiled_b[0]))
         self.assertEqual(len(state_a["solution"][0]["blankValues"]), 2)
         self.assertEqual(len(state_b["solution"][0]["blankValues"]), 2)
 
-    def test_build_initial_state_respects_max_optional_fades_with_duplicate_tokens(self):
+    def test_build_initial_state_respects_max_optional_fades_with_duplicate_tokens(
+        self,
+    ):
         html = """
         <pl-faded-parsons
             answers-name="demo"
@@ -926,7 +939,9 @@ ignored() #distractor
         self.assertEqual(line["blankPlaceholders"], [])
 
     def test_optional_fade_placeholder_requires_data(self):
-        with self.assertRaisesRegex(SyntaxError, "Optional fade solution_text must not be empty"):
+        with self.assertRaisesRegex(
+            SyntaxError, "Optional fade solution_text must not be empty"
+        ):
             pl_faded_parsons._parse_author_markup_line("print(__[](hint)__)", 0)
 
     def test_parse_saved_state_validates_shape(self):
@@ -1209,7 +1224,7 @@ starter()</code-lines>
 
         self.assertIn("SUBMISSION", submission_rendered)
         self.assertIn("answer()", submission_rendered)
-        self.assertIn("<pl-code language=\"python\"", answer_rendered)
+        self.assertIn('<pl-code language="python"', answer_rendered)
         self.assertNotIn("source-file-name=", answer_rendered)
         self.assertIn("expected_solution()", answer_rendered)
 
@@ -1228,7 +1243,7 @@ starter()</code-lines>
         pl_faded_parsons.parse(html, data)
         answer_rendered = pl_faded_parsons.render(html, data)
 
-        self.assertIn("<pl-code language=\"python\">", answer_rendered)
+        self.assertIn('<pl-code language="python">', answer_rendered)
         self.assertIn("print(value)", answer_rendered)
 
     def test_render_answer_panel_errors_without_parsed_correct_answer(self):
@@ -1631,14 +1646,16 @@ class TestReloadIndentRegression(unittest.TestCase):
     def test_prepare_reads_correct_answer_from_custom_solution_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_path = Path(temp_dir)
-            data = make_question_data(tmp_path)
-            (tmp_path / "tests").mkdir()
-            (tmp_path / "tests" / "clamp.solution").write_text(
-                "def clamp(value):\n    return value\n", encoding="utf-8"
+            data = make_question_data(
+                tmp_path,
+                solution_file={
+                    "rel_path": Path("test") / "clamp.solution",
+                    "text": "def clamp(value):\n    return value\n",
+                },
             )
             html = (
                 '<pl-faded-parsons answers-name="demo" language="python" '
-                'solution-path="tests/clamp.solution">___</pl-faded-parsons>'
+                'solution-path="test/clamp.solution">___</pl-faded-parsons>'
             )
 
             pl_faded_parsons.prepare(html, data)
@@ -1646,6 +1663,7 @@ class TestReloadIndentRegression(unittest.TestCase):
         self.assertEqual(
             data["correct_answers"]["demo"], "def clamp(value):\n    return value"
         )
+
 
 if __name__ == "__main__":
     unittest.main()
