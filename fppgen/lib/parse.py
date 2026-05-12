@@ -10,6 +10,11 @@ from lib.tokens import Tokens, Token, TokenType, regex_chunk_lines
 import lib.io_helpers as io
 
 
+def format_optional_fade(text: str) -> str:
+    """Render an extracted blank as the new optional fade syntax."""
+    return f"__[{text}]__"
+
+
 def parse_blanks(
     source_path: Path | str | None, tkn: Token, blank_re: Pattern
 ) -> Generator[tuple[str, str], None, None]:
@@ -26,7 +31,7 @@ def parse_blanks(
                     + io.format_ln(source_path, line_number)
                 )
 
-            yield (blank, consts.BLANK_SUBSTITUTE)
+            yield (blank, format_optional_fade(blank))
         else:
             yield (chunk, chunk)
 

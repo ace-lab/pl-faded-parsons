@@ -25,7 +25,7 @@ def test_metadata_attrs_are_translated_to_standard_element_attrs() -> None:
 
 def test_question_html_includes_standard_attrs() -> None:
     rendered = generate_question_html(
-        "print(___)",
+        "print(__[DATA]__)",
         element_attrs={
             "enable_copy_code": True,
             "language": "python",

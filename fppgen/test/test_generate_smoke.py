@@ -238,7 +238,7 @@ CASES = [
             ## setup_code ##
             """
         ).strip("\n"),
-        prompt_code="def add(a, b):\n    return ___ + ___",
+        prompt_code="def add(a, b):\n    return __[a]__ + __[b]__",
         answer_code="def add(a, b):\n    return a + b",
         setup_code="# no setup needed",
     ),
@@ -255,7 +255,7 @@ CASES = [
             ## setup_code ##
             """
         ).strip("\n"),
-        prompt_code="def clamp(x, lo, hi): #pin\n    return ___ if x < hi else hi #pin(1)",
+        prompt_code="def clamp(x, lo, hi): #pin\n    return __[x]__ if x < hi else hi #pin(1)",
         answer_code="def clamp(x, lo, hi):\n    # keep x in range\n    return x if x < hi else hi",
         setup_code="# no setup needed",
     ),

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .common import (
-    BLANK_SUBSTITUTE,
     lines,
     make_metadata_region,
     make_region,
@@ -176,8 +175,8 @@ class TestParseFPP(TestCase):
             metadata=metadata,
             answer_code=lines("4.times do", "\tputs i.?dis?belief??", "end"),
             prompt_code=lines(
-                f"4.{BLANK_SUBSTITUTE} do #blank _verb_",
-                f"\tputs {BLANK_SUBSTITUTE}",
+                "4.__[times]__ do #blank _verb_",
+                "\tputs __[i.?dis?belief??]__",
                 "end",
             ),
         )
@@ -196,8 +195,8 @@ class TestParseFPP(TestCase):
                 metadata=metadata,
                 answer_code=lines("4.times do", "\tputs i.?dis?belief??", "end"),
                 prompt_code=lines(
-                    f"4.{BLANK_SUBSTITUTE} do #blank _verb_",
-                    f"\tputs {BLANK_SUBSTITUTE}",
+                    "4.__[times]__ do #blank _verb_",
+                    "\tputs __[i.?dis?belief??]__",
                     "end",
                 ),
             )
@@ -215,8 +214,8 @@ class TestParseFPP(TestCase):
                 metadata=metadata,
                 answer_code=lines("4.times do", "\tputs i.?dis?belief??", "end"),
                 prompt_code=lines(
-                    f"4.{BLANK_SUBSTITUTE} do #blank _verb_",
-                    f"\tputs {BLANK_SUBSTITUTE}",
+                    "4.__[times]__ do #blank _verb_",
+                    "\tputs __[i.?dis?belief??]__",
                     "end",
                 ),
             )
@@ -235,8 +234,8 @@ class TestParseFPP(TestCase):
                 metadata=metadata,
                 answer_code=lines("4.times do", "\tputs i.?dis?belief??", "end"),
                 prompt_code=lines(
-                    f"4.{BLANK_SUBSTITUTE} do #blank _verb_",
-                    f"\tputs {BLANK_SUBSTITUTE}",
+                    "4.__[times]__ do #blank _verb_",
+                    "\tputs __[i.?dis?belief??]__",
                     "end",
                 ),
             )
@@ -312,9 +311,9 @@ class TestParseFPP(TestCase):
         )
         ppt = lines(
             "def poly(coeffs, x): #pin",
-            "    total = ___ #blank test #pin(1)",
-            "    for ___ in enumerate(coeffs):",
-            "        ___ = total + coeff * (x ** power) #pin(2)",
+            "    total = __[0]__ #blank test #pin(1)",
+            "    for __[power, coeff]__ in enumerate(coeffs):",
+            "        __[total]__ = total + coeff * (x ** power) #pin(2)",
             "    return total #pin(1)",
         )
 

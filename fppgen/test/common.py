@@ -5,7 +5,7 @@ from collections import defaultdict
 from json import dumps
 from unittest import TestCase
 
-from lib.consts import DEFAULT_BLANK_PATTERN, BLANK_SUBSTITUTE
+from lib.consts import DEFAULT_BLANK_PATTERN
 from lib.tokens import Tokens, lex
 
 
@@ -41,7 +41,7 @@ def scrub_blank(txt: str):
 
 
 def sub_blank(txt: str):
-    return DEFAULT_BLANK_PATTERN.sub(lambda _: BLANK_SUBSTITUTE, txt)
+    return DEFAULT_BLANK_PATTERN.sub(lambda m: f"__[{m.group(1)}]__", txt)
 
 
 class TestLexABC(TestCase, ABC):
