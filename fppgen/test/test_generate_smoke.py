@@ -11,17 +11,12 @@ import pytest
 
 from fppgen import __main__ as fppgen_main
 from fppgen.__main__ import Options, generate_fpp_question
+from lib.autograde import DEFAULT_GEMFILE
+import lib.autograde as autograde_mod
+from lib.consts import TEST_DEFAULT
 
 
 FIXED_UUID = UUID("00000000-0000-4000-8000-000000000000")
-MOCK_SERVER = dedent(
-    """\
-    # mock server.py
-    def generate(data):
-        return data
-    """
-).strip("\n")
-MOCK_TEST_SCAFFOLD = "# mock test scaffold"
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,29 +30,12 @@ class SmokeCase:
     question_text: str | None = None
     question_attrs: str = ""
     test_region: str = ""
-    server_code: str = MOCK_SERVER
+    server_code: str | None = None
     info_json: str | None = None
     metadata_json: str | None = None
     import_files: dict[str, str] = field(default_factory=dict)
-
-
-def qhtml(prompt_code: str, *, question_text: str | None = None, attrs: str = "") -> str:
-    tab = "  "
-    question_block = "" if question_text is None else question_text
-    indented = prompt_code.replace("\n", "\n" + tab)
-    return (
-        "<!-- AUTO-GENERATED FILE -->\n"
-        "<pl-question-panel>\n"
-        f"{question_block}\n"
-        "</pl-question-panel>\n\n"
-        "<!-- see README for where the various parts of question live -->\n"
-        f'<pl-faded-parsons answers-name="fpp"{attrs}>\n'
-        f"{tab}{indented}\n"
-        "</pl-faded-parsons>"
-    )
-
-
-def generated_info_json(title: str) -> str:
+    expect_python_tests: bool = True
+def generated_info_json(title: str, autograder) -> str:
     return dumps(
         {
             "uuid": str(FIXED_UUID),
@@ -65,19 +43,16 @@ def generated_info_json(title: str) -> str:
             "topic": "",
             "tags": ["berkeley", "fp"],
             "type": "v3",
-            "gradingMethod": "External",
-            "externalGradingOptions": {
-                "image": "mock/grader",
-            },
+            **autograder.info_json_update(),
         },
         indent=4,
     ) + "\n"
 
 
-def metadata_json() -> str:
+def metadata_json(autograder: str = ".py") -> str:
     return dumps(
         {
-            "autograder": ".py",
+            "autograder": autograder,
             "parse": False,
             "make-dir": True,
             "output-path": "",
@@ -87,20 +62,62 @@ def metadata_json() -> str:
 
 def build_expected_files(case: SmokeCase) -> dict[str, str]:
     qdir = Path(case.source_path).with_suffix("")
+    source_suffix = Path(case.source_path).suffix
+    autograder = fppgen_main.new_autograder_from_ext(source_suffix)
+    question_text = "" if case.question_text is None else case.question_text
+    server_code, setup_names, _ = autograder.generate_server(
+        setup_code=case.setup_code,
+        answer_code=case.answer_code,
+        no_ast=True,
+    )
+    question_html = fppgen_main.generate_question_html(
+        case.prompt_code,
+        question_text=question_text,
+        setup_names=setup_names,
+    )
+    if case.question_attrs:
+        question_html = question_html.replace(
+            '<pl-faded-parsons answers-name="fpp">',
+            f'<pl-faded-parsons answers-name="fpp"{case.question_attrs}>',
+            1,
+        )
     expected = {
-        str(qdir / "question.html"): qhtml(
-            case.prompt_code,
-            question_text=case.question_text,
-            attrs=case.question_attrs,
-        ),
-        str(qdir / "server.py"): case.server_code,
+        str(qdir / "question.html"): question_html,
+        str(qdir / "server.py"): case.server_code or server_code,
         str(qdir / "solution"): case.answer_code,
-        str(qdir / "tests" / "test.py"): case.test_region or MOCK_TEST_SCAFFOLD,
-        str(qdir / "tests" / "ans.py"): case.answer_code,
-        str(qdir / "tests" / "setup_code.py"): case.setup_code,
-        str(qdir / "info.json"): case.info_json or generated_info_json(qdir.name.replace("_", " ").title()),
-        str(qdir / "metadata.json"): case.metadata_json or metadata_json(),
+        str(qdir / "info.json"): case.info_json
+        or generated_info_json(qdir.name.replace("_", " ").title(), autograder),
+        str(qdir / "metadata.json"): case.metadata_json or metadata_json(source_suffix),
     }
+
+    if source_suffix == ".rb":
+        expected.update(
+            {
+                str(qdir / "app" / "script.rb"): case.setup_code,
+                str(qdir / "app" / "Gemfile"): DEFAULT_GEMFILE,
+                str(qdir / "spec" / "script_spec.rb"): "require_relative '../script.rb'\n\n"
+                + (case.test_region or ""),
+                str(qdir / "tests" / "meta.json"): dumps(
+                    {
+                        "submission_file": "script.rb",
+                        "submission_root": "",
+                        "submit_to_line": -1,
+                        "pre-text": "\n",
+                        "post-text": "\n",
+                        "grading_exclusions": [],
+                    }
+                ),
+                str(qdir / "tests" / "solution"): case.answer_code,
+            }
+        )
+    else:
+        expected.update(
+            {
+                str(qdir / "tests" / "test.py"): case.test_region or TEST_DEFAULT,
+                str(qdir / "tests" / "ans.py"): case.answer_code,
+                str(qdir / "tests" / "setup_code.py"): case.setup_code,
+            }
+        )
 
     return expected
 
@@ -136,46 +153,30 @@ def run_case(case: SmokeCase) -> tuple[dict[str, str], list[tuple[str, str]]]:
     def fake_copyfile(src, dst):
         copy_calls.append((str(src), str(dst)))
 
-    class FakeAutograder:
-        def info_json_update(self):
-            return {
-                "gradingMethod": "External",
-                "externalGradingOptions": {
-                    "image": "mock/grader",
-                },
-            }
+    class FakeProcess:
+        def __enter__(self):
+            return self
 
-        def generate_server(self, setup_code, answer_code, *, no_ast=False, tab="    "):
-            return MOCK_SERVER, [], []
+        def __exit__(self, exc_type, exc, tb):
+            return False
 
-        def populate_tests_dir(
-            self,
-            test_dir,
-            answer_code,
-            setup_code,
-            test_region,
-            pre_code="",
-            post_code="",
-            log_details=True,
-        ):
-            fppgen_main.io_helpers.write_to(
-                test_dir, "test.py", test_region or MOCK_TEST_SCAFFOLD
-            )
-            fppgen_main.io_helpers.write_to(test_dir, "ans.py", answer_code)
-            fppgen_main.io_helpers.write_to(test_dir, "setup_code.py", setup_code)
+        def read(self):
+            return ""
 
-        def clean_tests_dir(self, test_dir):
-            return None
+    def fake_popen(*args, **kwargs):
+        return FakeProcess()
 
     with (
         patch.object(Path, "exists", fake_exists),
         patch.object(Path, "read_text", fake_read_text),
+        patch.object(Path, "mkdir", lambda self, *args, **kwargs: None),
         patch.object(fppgen_main.io_helpers, "resolve_path", fake_resolve_path),
         patch.object(fppgen_main.io_helpers, "write_to", fake_write_to),
         patch.object(fppgen_main.io_helpers, "make_if_absent", lambda path: None),
+        patch.object(autograde_mod, "write_to", fake_write_to),
         patch.object(fppgen_main, "copyfile", fake_copyfile),
-        patch.object(fppgen_main, "new_autograder_from_ext", lambda ext: FakeAutograder()),
         patch.object(fppgen_main, "uuid4", lambda: FIXED_UUID),
+        patch("lib.autograde.popen", fake_popen),
     ):
         generate_fpp_question(
             Path(case.source_path),
@@ -386,6 +387,58 @@ CASES = [
         setup_code="factor = 2",
         import_files={"shared/setup.py": "factor = 2"},
     ),
+    SmokeCase(
+        name="rspec_file_name_metadata",
+        source_path="fake_examples/rspec_file_name_metadata.rb",
+        source_text=dedent(
+            """\
+            def answer
+              ?value?
+            end
+            ## metadata ##
+            {"file_name": "student.rb", "autograder": ".rb"}
+            ## metadata ##
+            ## setup_code ##
+            # rspec setup
+            ## setup_code ##
+            """
+        ).strip("\n"),
+        prompt_code="def answer\n  __[value]__\nend",
+        answer_code="def answer\n  value\nend",
+        setup_code="# rspec setup",
+        question_attrs=' file-name="student.rb"',
+        info_json=generated_info_json(
+            "Rspec File Name Metadata",
+            fppgen_main.new_autograder_from_ext(".rb"),
+        ),
+        expect_python_tests=False,
+    ),
+    SmokeCase(
+        name="rspec_solution_path_metadata",
+        source_path="fake_examples/rspec_solution_path_metadata.rb",
+        source_text=dedent(
+            """\
+            def answer
+              ?value?
+            end
+            ## metadata ##
+            {"solution_path": "tests/clamp.solution", "autograder": ".rb"}
+            ## metadata ##
+            ## setup_code ##
+            # rspec setup
+            ## setup_code ##
+            """
+        ).strip("\n"),
+        prompt_code="def answer\n  __[value]__\nend",
+        answer_code="def answer\n  value\nend",
+        setup_code="# rspec setup",
+        question_attrs=' solution-path="tests/clamp.solution"',
+        info_json=generated_info_json(
+            "Rspec Solution Path Metadata",
+            fppgen_main.new_autograder_from_ext(".rb"),
+        ),
+        expect_python_tests=False,
+    ),
 ]
 
 
@@ -397,3 +450,8 @@ def test_fppgen_smoke_generates_expected_files(case: SmokeCase) -> None:
 
     assert copy_calls == [expected_copy]
     assert writes == build_expected_files(case)
+    if not case.expect_python_tests:
+        assert not any(
+            path.startswith(str(qdir / "tests" / "")) and path.endswith(".py")
+            for path in writes
+        )
