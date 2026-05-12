@@ -25,10 +25,51 @@ From the top-level of your directory run:
 git submodule update --remote ./elements/pl-faded-parsons/
 ```
 
+## Testing Locally
+
+The element now has a browser-backed test harness in `tests/browser/` that runs
+through Playwright. Install the JS dependencies with `yarn install` inside this
+directory, then run the full suite with:
+
+```bash
+python tests/run_all_tests.py
+```
+
+If you only want the browser suite, run:
+
+```bash
+yarn test:browser
+```
+
+To scan a question directory for `pl-faded-parsons` blocks and render each one
+with the current Python implementation, run:
+
+```bash
+python tests/check_python_compatibility.py ../../questions
+```
+
 ## The RSpec Autograder
 
 If your Parsons problems test students' ability to write unit tests in RSpec,
 we have developed an autograder companion to this tool ![which can be found here](https://hub.docker.com/r/saasbook/pl-fpp-ruby-autograder).
+
+## Optional Interaction Logging
+
+The `log="true"` attribute enables the element's interaction log, which records
+student edit actions during a submission. This is useful for instructor review
+when you want to inspect how a student built their answer step by step.
+
+Logging is disabled by default, so you only get the extra data when you
+explicitly opt in.
+
+## Developers
+
+Unfortunately, getting a real harness into testing with prairielearn is difficult.
+The next best thing we have is playwright e2e testing.
+
+To get started, at the top of the repo run `yarn install` once to install deps.
+
+From then on, just run `python3 ./tests/run_all_tests.py` from the directory root!
 
 ## Work around `pl-faded-parsons`
 

@@ -1,6 +1,7 @@
 .fpp-global-defs {
   --focus-border-color: var(--bs-primary, var(--primary, #007bff));
   --motion-border-color: #d0a62a;
+  --invalid-blank-border-color: #c0392b;
   background: var(--code-background);
 }
 
@@ -9,7 +10,58 @@ code {
 }
 
 .pl-faded-parsons {
+  --pl-faded-parsons-indent-width: 4ch;
+  max-width: 80ch;
+  margin: 0 auto;
+  position: relative;
+  box-sizing: border-box;
   padding: 10px;
+  overflow-x: clip;
+}
+
+.pl-faded-parsons.pl-faded-parsons-solution-only {
+  max-width: 50ch;
+}
+
+.pl-faded-parsons.pl-faded-parsons-borderless {
+  border: 0;
+  padding: 0;
+}
+
+.pl-faded-parsons-layout-row {
+  align-items: stretch;
+  margin: 0px;
+  position: relative;
+}
+
+.pl-faded-parsons .fpp-tray-flex {
+  flex: 1 1 0;
+  max-width: none;
+  min-width: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex.starter-code-tray {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex.solution-code-tray {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+}
+
+.pl-faded-parsons-layout-row .fpp-tray-flex {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.pl-faded-parsons-layout-row .starter-code-tray.fpp-tray-flex {
+  padding-right: 0.4em;
+}
+
+.pl-faded-parsons-layout-row .solution-code-tray.fpp-tray-flex {
+  padding-left: 0.4em;
 }
 
 .aria-descriptor, .aria-details {
@@ -29,27 +81,81 @@ code {
   border-radius: 5px;
 }
 
+.pl-faded-parsons.pl-faded-parsons-borderless .codeline-tray {
+  padding-left: 0.75em;
+  padding-right: 0.75em;
+}
+
 .codeline-tray {
+  --pl-faded-parsons-visual-indent: 0;
+  --pl-faded-parsons-visual-indent-correction: 0ch;
+  --pl-faded-parsons-visual-indent-offset: calc(
+    var(--pl-faded-parsons-visual-indent, 0) * var(--pl-faded-parsons-indent-width) - var(--pl-faded-parsons-visual-indent-correction)
+  );
   padding: 0 0.5em;
-  position: static;
-  float: left;
+  position: relative;
+  float: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  left: var(--pl-faded-parsons-visual-indent-offset);
+  width: calc(100% - var(--pl-faded-parsons-visual-indent-offset));
+  box-sizing: border-box;
 }
 
 .codeline-tray.starter-code-tray {
   background: #4448;
 }
 
+.pl-faded-parsons .fpp-tray-corner-label {
+  position: absolute;
+  bottom: 0.2em;
+  font-family: monospace;
+  font-size: smaller;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.pl-faded-parsons .fpp-tray-corner-label-starter {
+  right: 0.45em;
+  color: #fff;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.pl-faded-parsons.pl-faded-parsons-bottom-layout .fpp-tray-corner-label-starter {
+  left: 0.45em;
+  right: auto;
+}
+
+.pl-faded-parsons .fpp-tray-corner-label-solution {
+  left: 0.45em;
+  color: var(--pln-txt-color, rgba(0, 0, 0, 0.8));
+}
+
 .codeline-tray ol {
+  /* flex: 1 1 auto; */
+  min-height: 100%;
   font-size: smaller;
   font-family: monospace;
   list-style: none;
-  padding-bottom: 60px;
+  padding-bottom: 0;
   padding-left: 0;
   margin-left: 0;
 }
 
+.starter-code-tray .codeline-list {
+  padding-bottom: 1rem;
+}
+
+.solution-code-tray .codeline-list {
+  padding-bottom: 2.5rem;
+}
+
 .codeline-tray ol:empty {
-  padding-bottom: 80px;
+  padding-bottom: 0;
 }
 
 .codeline-tray li,
@@ -63,6 +169,25 @@ code {
   overflow: visible;
 }
 
+.codeline-tray li.pinned,
+.codeline-tray li.pinned:hover,
+.codeline-tray li.pinned:focus,
+.codeline-tray li.pinned:focus-within {
+  cursor: not-allowed;
+}
+
+.codeline-tray li.pinned {
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  opacity: 0.94;
+  user-select: none;
+}
+
+.codeline-tray li.pinned:hover {
+  border-color: rgba(120, 120, 120, 0.9);
+  overflow: hidden;
+}
+
 .codeline-tray li:focus,
 .codeline-tray li:focus-within {
   outline: 2px solid var(--focus-border-color);
@@ -70,23 +195,55 @@ code {
   border-radius: 15px;
 }
 
+.codeline-tray li.pinned:focus,
+.codeline-tray li.pinned:focus-within {
+  outline-color: rgba(120, 120, 120, 0.8);
+  border-color: rgba(120, 120, 120, 0.9);
+}
+
+.codeline-tray .ui-sortable-placeholder,
+.codeline-tray .codeline-sortable-placeholder {
+  visibility: visible !important;
+  background: rgba(0, 123, 255, 0.06);
+  border: 2px dotted var(--focus-border-color);
+  border-radius: 10px;
+  box-sizing: border-box;
+  min-height: 2.2em;
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.12);
+}
+
+.codeline-tray .codeline-sortable-placeholder {
+  padding: 0;
+  overflow: hidden;
+}
+
+.codeline-tray .codeline-sortable-placeholder * {
+  display: none !important;
+}
+
 .codeline-tray li.codeline-in-motion {
   outline: 4px solid var(--motion-border-color) !important;
   border-color: var(--motion-border-color);
-  margin: 12px;
-  rotate: -2deg;
+}
+
+.codeline-tray li.codeline-dragging {
+  opacity: 0.65;
+}
+
+.starter-code-tray.codeline-tray li {
+  margin-left: 0px !important;
 }
 
 .codeline-tray li {
-  --pl-faded-parsons-indent-width: 4ch;
   -moz-border-radius: 10px;
   -webkit-border-radius: 10px;
   border-radius: 10px;
   border-right: 2px solid var(--pln-txt-color);
   border-left: 2px solid var(--pln-txt-color);
   background-color: var(--code-background);
-  padding: 2px;
-  padding-left: 3ch;
+  padding: 2px 2ch;
   text-indent: -2ch;
   /* 0.6ch */
   margin-left: calc(
@@ -96,6 +253,10 @@ code {
   overflow: hidden;
   cursor: move;
   outline: 0;
+}
+
+.codeline-tray li code {
+  cursor: inherit;
 }
 
 .codeline-tray li span:before {
@@ -114,20 +275,159 @@ code {
   border-radius: 5px;
 }
 
+.solution-code-tray input.parsons-blank-missing {
+  border-bottom-color: var(--invalid-blank-border-color);
+  outline: 1px solid rgba(192, 57, 43, 0.18);
+  outline-offset: -1px;
+}
+
+.solution-code-tray li.codeline:has(.parsons-blank-missing) {
+  border-color: var(--invalid-blank-border-color);
+}
+
 .codeline-tray input.parsons-blank:focus {
   outline-color: var(--focus-border-color);
 }
 
-.toolbar {
-  margin: -10px;
-  margin-top: 2px;
-  background: #e0e0e030;
+.solution-code-tray input.parsons-blank-missing:focus {
+  outline-color: var(--invalid-blank-border-color);
+}
+
+.fpp-floating-controls {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 2;
   font-size: 90%;
-  align-items: flex-end;
-  flex-direction: row-reverse;
-  border-radius: 0;
+  pointer-events: auto;
+}
+
+.fpp-floating-controls .btn {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .pre-text, .post-text {
-  width: 100%;
+  font-family: monospace;
+  font-size: smaller;
+  line-height: 1.35;
+  margin: 0;
+  padding: 0;
+}
+
+
+/* all the prettify bindings */
+/* from https://github.com/ericwbailey/a11y-syntax-highlighting/blob/main/dist/highlight/a11y-light.css */
+.fpp-global-defs {
+  --code-background: #fefefe;
+  --pln-txt-color: #545454;
+  --pln-txt-color-faded: #54545490;
+}
+
+.prettyprint {
+  background: var(--code-background);
+  font-family: Menlo, "Bitstream Vera Sans Mono", "DejaVu Sans Mono", Monaco,
+    Consolas, monospace;
+  /* border: 0 !important; */
+}
+
+.pln {
+  color: var(--pln-txt-color);
+}
+
+/* Specify class=linenums on a pre to get line numbering */
+ol.linenums {
+  margin-top: 0;
+  margin-bottom: 0;
+  color: #202746;
+}
+
+li.L0,
+li.L1,
+li.L2,
+li.L3,
+li.L4,
+li.L5,
+li.L6,
+li.L7,
+li.L8,
+li.L9 {
+  padding-left: 1em;
+  background-color: var(--code-background);
+  list-style-type: decimal;
+}
+
+@media screen {
+  /* string content */
+  .str {
+    color: #008000;
+  }
+
+  /* keyword */
+  .kwd {
+    color: #7928a1;
+  }
+
+  /* comment */
+  .com {
+    color: #696969;
+  }
+
+  /* type name */
+  .typ {
+    color: #aa5d00;
+  }
+
+  /* literal value */
+  .lit {
+    color: #aa5d00;
+  }
+
+  /* punctuation */
+  .pun {
+    color: var(--pln-txt-color);
+  }
+
+  /* lisp open bracket */
+  .opn {
+    color: #202746;
+  }
+
+  /* lisp close bracket */
+  .clo {
+    color: #202746;
+  }
+
+  /* markup tag name */
+  .tag {
+    color: #c94922;
+  }
+
+  /* markup attribute name */
+  .atn {
+    color: #aa5d00;
+  }
+
+  /* markup attribute value */
+  .atv {
+    color: #aa5d00;
+  }
+
+  /* declaration */
+  .dec {
+    color: #c76b29;
+  }
+
+  /* variable name */
+  .var {
+    color: #d91e18;
+  }
+
+  /* function name */
+  .fun {
+    color: #d91e18;
+  }
 }

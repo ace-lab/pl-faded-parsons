@@ -33,7 +33,10 @@ data["raw_submitted_answers"][f"{answers_name}.main"]
 data["raw_submitted_answers"][f"{answers_name}.log"]
 ```
 
-Legacy compatibility data is also written into `submitted_answers`, but it is not the primary contract.
+Interaction logging is optional and disabled by default. Set `log="true"` on the
+element to preserve the browser event log in `raw_submitted_answers`, which can
+then be used for instructor review of the student's edit history during a
+submission.
 
 ## Lifecycle
 
@@ -43,6 +46,7 @@ File: `pl-faded-parsons.py`
 
 - Validates element attributes.
 - Validates `answers-name` uniqueness with `pl.check_answers_names(...)`.
+- Reads `log="true|false"` and defaults logging to `false`.
 
 Important contract:
 
@@ -52,10 +56,10 @@ Important contract:
 
 File: `pl-faded-parsons.py`
 
-- Instantiates `FadedParsonsProblem`.
+- Builds a small config dictionary from the element HTML.
 - Reconstructs state from `raw_submitted_answers` if `"{answers_name}.main"` exists.
 - Otherwise builds trays from element markup.
-- Converts internal Python state into a `Mustache` dataclass.
+- Converts the state into the plain dictionary shape expected by Mustache.
 - Renders `pl-faded-parsons-question.mustache`.
 
 ### 3. Browser initialization
@@ -72,7 +76,7 @@ The question template creates:
   - `name="{{answers_name}}.main"`
   - `name="{{answers_name}}.log"`
 - one or two sortable trays
-- toolbar buttons
+- floating help/copy controls
 - a `ParsonsWidget` config whose selectors must match the rendered DOM
 
 ### 4. Browser-side state persistence
@@ -96,15 +100,14 @@ On parse:
 - compiles the solution tray into plaintext code
 - stores the canonical answer in `submitted_answers[answers_name]`
 - adds a submitted file using `file-name` or the default `user_code.py`
-- writes legacy flat compatibility keys into `submitted_answers`
 
 ## Boundary Map
 
-### Python -> Mustache (`Mustache`)
+### Python -> Mustache
 
 File: `pl-faded-parsons.py`
 
-`FadedParsonsProblem.to_mustache()` returns:
+`render(panel="question")` builds a dictionary with:
 
 - `answers_name: str`
   - used for hidden input names in the question template
@@ -112,6 +115,9 @@ File: `pl-faded-parsons.py`
   - used for syntax highlighting and copied onto the root widget DOM node
 - `previous_log: str`
   - JSON string used to initialize the hidden log input
+  - defaults to `[]` unless `log="true"` is set on the element
+- `logging_enabled: bool`
+  - controls whether the browser widget records interaction logs
 - `uuid: str`
   - used to build DOM ids and JS selectors
 - `starter`
@@ -120,8 +126,16 @@ File: `pl-faded-parsons.py`
   - always rendered
 - `pre_text`
   - optional block before the solution tray
+  - only supported when `format="one-tray"` or the legacy alias `format="no-code"`
+  - normalized in Python using the first non-empty line as the shared leading whitespace baseline
+  - raises `IndentationError` if later lines do not preserve that baseline prefix
+  - rendered with `lines` and `indent` fields
 - `post_text`
   - optional block after the solution tray
+  - only supported when `format="one-tray"` or the legacy alias `format="no-code"`
+  - normalized in Python using the last non-empty line as the shared leading whitespace baseline
+  - raises `IndentationError` if earlier lines do not preserve that baseline prefix
+  - rendered with `lines` and `indent` fields
 
 ### Mustache -> DOM
 
@@ -140,8 +154,8 @@ Generated DOM state includes:
   - `#ol-starter-code-{{uuid}}`
   - `#solution-{{uuid}}`
   - `#ol-solution-{{uuid}}`
-- toolbar id
-  - `#widget-toolbar-{{uuid}}`
+- floating controls id
+  - `#widget-controls-{{uuid}}`
 
 These ids must stay aligned with the config object passed into `new ParsonsWidget(...)`.
 
@@ -160,23 +174,30 @@ Each rendered code line is built from:
 - `segments`
   - alternates between:
     - `code.content`, `code.language`
-    - `blank.default`, `blank.width`
+    - `blank.value`, `blank.placeholder`, `blank.width`
 
-This mirrors `Submission.Line` in Python:
+This mirrors one saved line in Python:
 
 ```python
-Submission.Line(
-    indent: int,
-    codeSnippets: list[str],
-    blankValues: list[str],
-)
+{
+    "indent": int,
+    "pinned": bool,
+    "codeSnippets": list[str],
+    "blankValues": list[str],
+    "blankPlaceholders": list[str],
+}
 ```
 
-The invariant is:
+The invariants are:
 
 ```text
 len(codeSnippets) == len(blankValues) + 1
+len(blankValues) == len(blankPlaceholders)
 ```
+
+The `code-lines` child may also carry an optional `visual-indent` attribute
+that is threaded through the render config as a nonnegative integer. It
+defaults to `0` and is intended for later tray-level styling.
 
 ### JS config -> DOM selectors
 
@@ -186,13 +207,16 @@ File: `pl-faded-parsons-question.mustache`
 
 - `main`
 - `uuid`
-- `logStorage`
 - `storage`
+- optionally `logStorage`
+- `loggingEnabled`
 - `ariaDescriptor`
 - `ariaDetails`
 - `toolbar`
 - `solution`
 - `solutionList`
+- `maxIndentLevel`
+- `visualIndent`
 - optionally `starter`
 - optionally `starterList`
 
@@ -204,7 +228,7 @@ File: `pl-faded-parsons-question.mustache`
 - `main`
 - `toolbar`
 - `storage`
-- `logStorage`
+- `logStorage` when `loggingEnabled` is true
 
 Starter selectors are optional.
 
@@ -221,6 +245,7 @@ File: `pl-faded-parsons.js`
   "starter": [
     {
       "indent": 0,
+      "pinned": false,
       "codeSnippets": ["..."],
       "blankValues": ["..."]
     }
@@ -228,6 +253,7 @@ File: `pl-faded-parsons.js`
   "solution": [
     {
       "indent": 1,
+      "pinned": true,
       "codeSnippets": ["..."],
       "blankValues": ["..."]
     }
@@ -237,26 +263,24 @@ File: `pl-faded-parsons.js`
 
 Important mapping:
 
-- JS `starter` -> Python `Submission.Trays.starter`
-- JS `solution` -> Python `Submission.Trays.solution`
+- JS `starter` -> Python `state["starter"]`
+- JS `solution` -> Python `state["solution"]`
 
-This schema is read in `pl-faded-parsons.py` by constructing:
+This schema is read in `pl-faded-parsons.py` by validating the JSON and returning:
 
 ```python
-Submission(
-    main={
-        "starter": ...,
-        "solution": ...
-    },
-    log=[...]
-)
+{
+    "starter": [...],
+    "solution": [...],
+    "log": [...],
+}
 ```
 
 ### Hidden `.log` input
 
 File: `pl-faded-parsons.js`
 
-`addLogEntry()` appends entries shaped like:
+When `loggingEnabled` is true, `addLogEntry()` appends entries shaped like:
 
 ```json
 {
@@ -275,37 +299,35 @@ Observed tags include:
 - `moveOutput`
 - `addOutput`
 
-This schema is read back into Python as `Submission.LogEntry`.
+This schema is read back into Python as a list of dictionaries with
+`timestamp`, `tag`, and `data` keys.
 
 ## Python Internal State
 
-### `Submission`
+### State dictionary
 
 File: `pl-faded-parsons.py`
 
 Python reconstructs the raw submission into:
 
 ```python
-Submission(
-    main=Submission.Trays(
-        solution=[Submission.Line(...), ...],
-        starter=[Submission.Line(...), ...],
-    ),
-    log=[Submission.LogEntry(...), ...],
-)
+{
+    "solution": [{"indent": ..., "pinned": True, "codeSnippets": [...], "blankValues": [...]}, ...],
+    "starter": [{"indent": ..., "pinned": False, "codeSnippets": [...], "blankValues": [...]}, ...],
+    "log": [{"timestamp": "...", "tag": "...", "data": {...}}, ...],
+}
 ```
 
 This internal representation is then used for:
 
 - re-rendering prior student state on the question panel
 - generating the compiled code string
-- generating legacy compatibility outputs
 
 ### Compiled code
 
 File: `pl-faded-parsons.py`
 
-`to_code()` compiles only the `solution` tray.
+`parse()` and `render(panel="submission")` compile only the `solution` tray.
 
 Each line is rendered by:
 
@@ -329,20 +351,9 @@ File: `pl-faded-parsons.py`
 
 - `data["submitted_answers"][answers_name] = student_code`
 - `pl.add_submitted_file(data, out_filename, base64(student_code))`
+- `data["correct_answers"][answers_name] = correct_solution` when the correct answer can be read from `solution-path` or inferred from optional-only markup
 
 These are the modern outputs other graders/elements should rely on.
-
-### Legacy outputs
-
-File: `pl-faded-parsons.py`
-
-`to_legacy_data()` writes flat keys into `submitted_answers`:
-
-- `answers_name + "student-parsons-solution"`
-- `answers_name + "submission-lines"`
-- optionally `answers_name + "starter-lines"`
-
-These exist for backwards compatibility with older autograders/questions.
 
 ## Panel-Specific Data
 
@@ -374,11 +385,12 @@ File: `pl-faded-parsons-answer.mustache`
 
 Uses:
 
-- `solution_path`
+- `language`
+- `correct_answer`
 
 Expected intent:
 
-- display the reference solution file
+- display the canonical answer that `parse()` populated in `data["correct_answers"][answers_name]`
 
 ## Name Linkage Summary
 
@@ -392,6 +404,7 @@ These names must stay aligned:
 - JS:
   - `storage`
   - `logStorage`
+  - `loggingEnabled`
 - Python:
   - `raw_submitted_answers[f"{answers_name}.main"]`
   - `raw_submitted_answers[f"{answers_name}.log"]`
@@ -403,18 +416,27 @@ These names must stay aligned:
   - `codeSnippets`
   - `blankValues`
 - Python:
-  - `Submission.Line.indent`
-  - `Submission.Line.codeSnippets`
-  - `Submission.Line.blankValues`
+  - `state_line["indent"]`
+  - `state_line["codeSnippets"]`
+  - `state_line["blankValues"]`
 
 ### Mustache line schema
 
 - Python:
-  - `Mustache.Line.Segment.Code`
-  - `Mustache.Line.Segment.Blank`
+  - `{"code": {...}}`
+  - `{"blank": {...}}`
 - Mustache partial:
   - `{{#code}}`
   - `{{#blank}}`
+
+### Child element rules
+
+- `pre-text` and `post-text`
+  - only allowed when `format="one-tray"` or the legacy alias `format="no-code"`
+  - at most one of each
+- `code-lines`
+  - at most one direct child
+  - required when `format="one-tray"` or the legacy alias `format="no-code"`
 
 ## Audit Notes And Inconsistencies
 

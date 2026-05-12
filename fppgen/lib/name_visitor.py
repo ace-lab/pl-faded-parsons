@@ -1,7 +1,7 @@
-from ast import *
+import ast
 
 from dataclasses import dataclass
-from typing import Union, Any
+from typing import Any
 
 from lib.consts import Bcolors, SERVER_DEFAULT
 
@@ -9,69 +9,69 @@ from lib.consts import Bcolors, SERVER_DEFAULT
 @dataclass(init=True, repr=True, frozen=True)
 class AnnotatedName:
     id: str
-    annotation: str = None
-    description: str = None
+    annotation: str | None = None
+    description: str | None = None
 
 
-class GlobalNameVisitor(NodeVisitor):
+class GlobalNameVisitor(ast.NodeVisitor):
     @staticmethod
     def get_names(code: str) -> list[AnnotatedName]:
         if not code:
             return list()
 
         visitor = GlobalNameVisitor()
-        visitor.visit(parse(code))
+        visitor.visit(ast.parse(code))
         return [AnnotatedName(n, *t) if t else AnnotatedName(n) for n, t in visitor.names.items()]
 
     def __init__(self) -> None:
         super().__init__()
-        self.names: dict[str, str] = dict()
+        self.names: dict[str, tuple[str, str | None] | None] = dict()
 
-    def visit_Assign(self, node: Assign) -> Any:
+    def visit_Assign(self, node: ast.Assign) -> Any:
         for t in node.targets:
-            if isinstance(t, Name) and t.id not in self.names:
+            if isinstance(t, ast.Name) and t.id not in self.names:
                 self.names[t.id] = None
 
-    def visit_AnnAssign(self, node: AnnAssign) -> Any:
-        key = node.target.id
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> Any:
+        if isinstance(node.target, ast.Name):
+            key = node.target.id
+        elif isinstance(node.target, ast.Attribute):
+            key = node.target.attr
+        else:
+            # is an ast.Subscript...
+            return
         if node.simple:
-            ann, desc = node.annotation, None
-            # if hasattr(ann, 'slice'):
-            #     if isinstance(ann.slice, Constant):
-            #         if isinstance(ann.slice.value, str):
-            #             desc = ann.slice.value
-            #             ann = ann.value
-            # use unparse to stringify compound types like list[int]
-            # and simple types like int
-            self.names[key] = (unparse(ann), desc)
+            self.names[key] = ast.unparse(node.annotation), None
         elif key not in self.names:
             self.names[key] = None
 
-    def visit_FunctionDef(self, node: FunctionDef) -> Any:
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> Any:
         self.names[node.name] = (
             get_function_type(node), get_function_desc(node))
 
-    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> Any:
         self.names[node.name] = (
             get_function_type(node), get_function_desc(node))
 
 
-def get_function_desc(node: Union[FunctionDef, AsyncFunctionDef]) -> str:
-    doc = get_docstring(node, clean=True)
+def get_function_desc(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    doc = ast.get_docstring(node, clean=True)
     if not doc:
-        return doc
+        return ''
     # cannot allow newlines, will break server.py file
     return doc.replace('\n', '<br>').strip()
 
 
-def get_function_type(node: Union[FunctionDef, AsyncFunctionDef]) -> str:
+def get_function_type(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     if node.type_comment:
         return node.type_comment
 
-    def unparse_ann(a): return unparse(a.annotation) if a.annotation else None
+    def unparse_ann(a):
+        return ast.unparse(v) if (v := getattr(a, "annotation", None)) else None
+
     arg_types = list(map(unparse_ann, node.args.args))
     kw_only_types = [(a.arg, unparse_ann(a)) for a in node.args.kwonlyargs]
-    ret_type = node.returns and unparse(node.returns)
+    ret_type = node.returns and ast.unparse(node.returns)
     if ret_type or any(arg_types) or any(t for _, t in kw_only_types):
         out = 'python fn('
         out += ', '.join(x or 'Any' for x in arg_types)

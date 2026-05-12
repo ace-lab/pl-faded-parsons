@@ -6,10 +6,6 @@
       "jquery-ui-touch-punch/jquery.ui.touch-punch.min.js"
     ],
     "elementScripts": ["prettify.js", "pl-faded-parsons.js"],
-    "elementStyles": [
-      "pl-faded-parsons.css",
-      "pl-faded-parsons-prettify-light.css",
-      "pl-faded-parsons-prettify-dark.css"
-    ]
+    "elementStyles": ["pl-faded-parsons.css"]
   }
 }

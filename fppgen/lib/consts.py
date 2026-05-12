@@ -1,6 +1,10 @@
-from typing import Final
+from pathlib import Path
+from typing import Final, Literal, TypedDict
 from re import compile, Pattern
-import os.path
+from sys import version_info
+
+if version_info < (3, 10):
+    raise ValueError("Requires Python 3.10 or higher")
 
 class Bcolors:
     # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
@@ -43,11 +47,10 @@ class Bcolors:
         Bcolors.printf(Bcolors.OK_BLUE, *args, **kwargs)
 
 
-TEMPLATE_DIRECTORY = os.path.join(os.path.dirname(__file__), 'template')
+TEMPLATE_DIRECTORY = Path(__file__).with_name('template')
 
-def read_template(path):
-    with open(os.path.join(TEMPLATE_DIRECTORY, path), 'r') as f:
-        return f.read()
+def read_template(template_name):
+    return (TEMPLATE_DIRECTORY / template_name).read_text()
 
 TEST_DEFAULT: Final[str] = read_template('test.py')
 
@@ -78,11 +81,12 @@ MAIN_PATTERN: Final[Pattern] = compile('|'.join((
 )))
 
 SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
-    r'^#(blank[^#]*|\d+given)'
+    r'^#(blank[^#]*|pin\b(?:\(\d+\))?|(?:\d+)?given\b)'
 )
 
 DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?([^?\n]*)\?')
-BLANK_SUBSTITUTE: Final[str] = '!BLANK'
+# TODO: update blanks to the new optional blank syntax that includes answers
+BLANK_SUBSTITUTE: Final[str] = '___'
 
 REGION_IMPORT_PATTERN: Final[Pattern] = compile(
     r'^\s*import\s*(.+?)\s+as\s+(.+?)\s*$'
@@ -101,7 +105,7 @@ PROGRAM_DESCRIPTION: Final[str] = Bcolors.f(Bcolors.OK_GREEN, ' A tool for gener
      - Blanks cannot span more than a single line
      - The text within the question marks fills the blank in the answer
      - `?`s in any kind of string-literal or comment are ignored
- - Comments are removed from the prompt unless the comment matches the form `#{n}given` or `#blank`
+ - Comments are removed from the prompt unless the comment matches the form `#pin`, `#pin(n)`, `#given`, `#<n>given`, or `#blank`
      - These special forms are the only comments removed from the answer
  - Regions are begun and ended by `## {region name} ##`
      - A maximum of one region may be open at a time
@@ -119,3 +123,41 @@ PROGRAM_DESCRIPTION: Final[str] = Bcolors.f(Bcolors.OK_GREEN, ' A tool for gener
      - They are formatted as `## import {rel_file_path} as {region name} ##`
         where `rel_file_path` is the relative path to the file from the source file
      - Like regular regions, they cannot be used inside of another region"""
+
+
+class BlankDelimiterRange(TypedDict):
+    start: str
+    end: str
+
+class BlankDelimiterPattern(TypedDict):
+    pattern: str
+
+QuestionElementAttributes = TypedDict(
+    "QuestionElementAttributes",
+    {
+        "enable-copy-code": bool,
+        "file-name": str,
+        "max-indent-level": int,
+        "max-optional-fades": int,
+        "solution-path": str,
+        "format": Literal["right", "bottom", "one-tray"],
+        "language": str,
+        "log": bool,
+    },
+    total=False,
+)
+
+QUESTION_ELEMENT_ATTRS = tuple(QuestionElementAttributes.__annotations__.keys())
+
+
+class Metadata(QuestionElementAttributes, total=False):
+    blankDelimiter: str | BlankDelimiterRange | BlankDelimiterPattern
+    parse: bool
+    autograder: str
+    make_dir: bool
+    output_path: str
+    enable_copy_code: bool
+    file_name: str
+    max_indent_level: int
+    max_optional_fades: int
+    solution_path: str

@@ -1,5 +1,5 @@
 from io import StringIO
-from typing import Final
+from typing import Final, TypeVar, cast
 
 
 STUB: Final[str] = """
@@ -46,13 +46,15 @@ class Writer:
         return self.stream.getvalue()
 
 
-def expect_type(clz: type, obj: object, context: str):
+_T = TypeVar("_T")
+
+def expect_type(clz: type[_T], obj: object, context: str) -> _T:
     if obj.__class__ != clz:
         raise SyntaxError(f"{context} expected a {clz}, got a {obj.__class__} ({obj})")
-    return obj
+    return cast(clz, obj) # type: ignore
 
 
-def expect_value(obj: dict, key: str, clz: type, context: str):
+def expect_value(obj: dict, key: str, clz: type[_T], context: str) -> _T:
     if key in obj:
         return expect_type(clz, obj[key], f'key "{key}" in {context}')
     raise SyntaxError(
@@ -61,7 +63,7 @@ def expect_value(obj: dict, key: str, clz: type, context: str):
 
 def clean_input_iter(inputs: list, context: str):
     for i, inp in enumerate(inputs):
-        inp: str = expect_type(str, inp.strip(), f'input {i} in {context}')
+        inp = expect_type(str, inp, f'input {i} in {context}').strip()
         # format into tuple if necessary
         if not inp.startswith('(') and not inp.endswith(')'):
             inp = f'({inp},)'
