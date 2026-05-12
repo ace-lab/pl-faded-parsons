@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from itertools import cycle
 from json import JSONDecoder
-from unittest.mock import mock_open, patch
+from pathlib import Path
+from unittest.mock import patch
 
 from .common import (
     TestLexABC,
@@ -65,7 +66,7 @@ class TestLex(TestLexABC):
             self.assertSyntaxError(txt)
             txt = "outer text\n\n## not_okay ##\n\ninner text...\n"
             self.assertSyntaxError(txt)
-            txt = f"\t\t## region ### hi"
+            txt = "\t\t## region ### hi"
             self.assertSyntaxError(txt)
 
         with self.subTest("integration"):
@@ -135,7 +136,9 @@ class TestLex(TestLexABC):
     def test_import_concat(self):
         """ Check that import regions concat to themselves like regular regions """
         file_data = "imported file:\n3\n2\n1"
-        with patch("builtins.open", mock_open(read_data=file_data)):
+        with patch.object(Path, "exists", lambda self: str(self) == "file.txt"), patch.object(
+            Path, "read_text", lambda self, *args, **kwargs: file_data
+        ):
             i_r = make_import("file.txt", "imported")
             txt = i_r + "\n" + make_region("r", "data") + ("\n" + i_r) * 2
             self.assertLexesTo(txt, r="data", imported=3 * file_data)
@@ -143,7 +146,11 @@ class TestLex(TestLexABC):
     def test_multiple_imports(self):
         """ Importing multiple sources is possible """
         file_data = "imported file:\n3\n2\n1"
-        with patch("builtins.open", mock_open(read_data=file_data)):
+        with patch.object(
+            Path,
+            "exists",
+            lambda self: str(self) in {"f1.txt", "f2.txt"},
+        ), patch.object(Path, "read_text", lambda self, *args, **kwargs: file_data):
             txt = make_region("r", "data") + "\n" + make_import("f1.txt", "i1") + "\n" + make_import("f2.txt", "i2")
             self.assertLexesTo(txt, i1=file_data, i2=file_data, r="data")
 
@@ -158,7 +165,9 @@ class TestLex(TestLexABC):
     def test_valid_import_content(self):
         """ Valid imports read file contents and do not edit other regions """
         file_data = "imported file:\n3\n2\n1"
-        with patch("builtins.open", mock_open(read_data=file_data)):
+        with patch.object(Path, "exists", lambda self: str(self) == "file.txt"), patch.object(
+            Path, "read_text", lambda self, *args, **kwargs: file_data
+        ):
             i_r = make_import("file.txt", "imported")
             self.assertLexesTo(i_r, imported=file_data)
 

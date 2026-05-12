@@ -1,6 +1,6 @@
+from pathlib import Path
 from typing import Final
 from re import compile, Pattern
-import os.path
 
 class Bcolors:
     # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
@@ -43,11 +43,10 @@ class Bcolors:
         Bcolors.printf(Bcolors.OK_BLUE, *args, **kwargs)
 
 
-TEMPLATE_DIRECTORY = os.path.join(os.path.dirname(__file__), 'template')
+TEMPLATE_DIRECTORY = Path(__file__).with_name('template')
 
-def read_template(path):
-    with open(os.path.join(TEMPLATE_DIRECTORY, path), 'r') as f:
-        return f.read()
+def read_template(template_name):
+    return (TEMPLATE_DIRECTORY / template_name).read_text()
 
 TEST_DEFAULT: Final[str] = read_template('test.py')
 
@@ -82,6 +81,7 @@ SPECIAL_COMMENT_PATTERN: Final[Pattern] = compile(
 )
 
 DEFAULT_BLANK_PATTERN: Final[Pattern] = compile(r'\?([^?\n]*)\?')
+# TODO: update blanks to the new optional blank syntax that includes answers
 BLANK_SUBSTITUTE: Final[str] = '___'
 
 REGION_IMPORT_PATTERN: Final[Pattern] = compile(
