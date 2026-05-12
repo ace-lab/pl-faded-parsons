@@ -15,7 +15,6 @@ from lib.autograde import DEFAULT_GEMFILE
 import lib.autograde as autograde_mod
 from lib.consts import TEST_DEFAULT
 
-
 FIXED_UUID = UUID("00000000-0000-4000-8000-000000000000")
 
 
@@ -35,18 +34,23 @@ class SmokeCase:
     metadata_json: str | None = None
     import_files: dict[str, str] = field(default_factory=dict)
     expect_python_tests: bool = True
+
+
 def generated_info_json(title: str, autograder) -> str:
-    return dumps(
-        {
-            "uuid": str(FIXED_UUID),
-            "title": title,
-            "topic": "",
-            "tags": ["berkeley", "fp"],
-            "type": "v3",
-            **autograder.info_json_update(),
-        },
-        indent=4,
-    ) + "\n"
+    return (
+        dumps(
+            {
+                "uuid": str(FIXED_UUID),
+                "title": title,
+                "topic": "",
+                "tags": ["berkeley", "fp"],
+                "type": "v3",
+                **autograder.info_json_update(),
+            },
+            indent=4,
+        )
+        + "\n"
+    )
 
 
 def metadata_json(autograder: str = ".py") -> str:
@@ -95,7 +99,9 @@ def build_expected_files(case: SmokeCase) -> dict[str, str]:
             {
                 str(qdir / "app" / "script.rb"): case.setup_code,
                 str(qdir / "app" / "Gemfile"): DEFAULT_GEMFILE,
-                str(qdir / "spec" / "script_spec.rb"): "require_relative '../script.rb'\n\n"
+                str(
+                    qdir / "spec" / "script_spec.rb"
+                ): "require_relative '../script.rb'\n\n"
                 + (case.test_region or ""),
                 str(qdir / "tests" / "meta.json"): dumps(
                     {
@@ -196,15 +202,13 @@ CASES = [
     SmokeCase(
         name="simple_add",
         source_path="examples/simple_add.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def add(a, b):
                 return a + b
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def add(a, b):\n    return a + b",
         answer_code="def add(a, b):\n    return a + b",
         setup_code="# no setup needed",
@@ -212,16 +216,14 @@ CASES = [
     SmokeCase(
         name="docstring_question",
         source_path="examples/docstring_question.py",
-        source_text=dedent(
-            '''\
+        source_text=dedent('''\
             """Add two numbers."""
             def add(a, b):
                 return a + b
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            '''
-        ).strip("\n"),
+            ''').strip("\n"),
         prompt_code="def add(a, b):\n    return a + b",
         answer_code="def add(a, b):\n    return a + b",
         setup_code="# no setup needed",
@@ -230,15 +232,13 @@ CASES = [
     SmokeCase(
         name="blank_placeholders",
         source_path="examples/blank_placeholders.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def add(a, b):
                 return ?a? + ?b?
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def add(a, b):\n    return __[a]__ + __[b]__",
         answer_code="def add(a, b):\n    return a + b",
         setup_code="# no setup needed",
@@ -246,16 +246,14 @@ CASES = [
     SmokeCase(
         name="pin_and_comments",
         source_path="examples/pin_and_comments.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def clamp(x, lo, hi): #pin
                 # keep x in range
                 return ?x? if x < hi else hi #pin(1)
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def clamp(x, lo, hi): #pin\n    return __[x]__ if x < hi else hi #pin(1)",
         answer_code="def clamp(x, lo, hi):\n    # keep x in range\n    return x if x < hi else hi",
         setup_code="# no setup needed",
@@ -263,8 +261,7 @@ CASES = [
     SmokeCase(
         name="metadata_attrs",
         source_path="examples/metadata_attrs.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             ## metadata ##
             {"enable_copy_code": true, "language": "python", "max_optional_fades": 2}
             ## metadata ##
@@ -273,8 +270,7 @@ CASES = [
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def square(x):\n    return x * x",
         answer_code="def square(x):\n    return x * x",
         setup_code="# no setup needed",
@@ -284,8 +280,7 @@ CASES = [
     SmokeCase(
         name="explicit_question_text",
         source_path="examples/explicit_question_text.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             ## question_text ##
             Write a helper that formats a greeting.
             ## question_text ##
@@ -294,8 +289,7 @@ CASES = [
             ## setup_code ##
             # no setup needed
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code='def greet(name):\n    return f"Hello, {name}"',
         answer_code='def greet(name):\n    return f"Hello, {name}"',
         setup_code="# no setup needed",
@@ -304,16 +298,14 @@ CASES = [
     SmokeCase(
         name="setup_region",
         source_path="examples/setup_region.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             # combine the prefix and the name
             def format_name(name):
                 return prefix + name
             ## setup_code ##
             prefix = "Dr. "
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def format_name(name):\n    return prefix + name",
         answer_code="# combine the prefix and the name\ndef format_name(name):\n    return prefix + name",
         setup_code='prefix = "Dr. "',
@@ -321,8 +313,7 @@ CASES = [
     SmokeCase(
         name="server_and_test_regions",
         source_path="examples/server_and_test_regions.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def echo(value):
                 return value
             ## setup_code ##
@@ -337,26 +328,22 @@ CASES = [
             ## test ##
             print("smoke")
             ## test ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def echo(value):\n    return value",
         answer_code="def echo(value):\n    return value",
         setup_code="# no setup needed",
         test_region='print("smoke")',
-        server_code=dedent(
-            """\
+        server_code=dedent("""\
             # custom server override
             def generate(data):
                 data["custom"] = True
                 return data
-            """
-        ).strip("\n"),
+            """).strip("\n"),
     ),
     SmokeCase(
         name="custom_info_json",
         source_path="examples/custom_info_json.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def noop():
                 return None
             ## setup_code ##
@@ -365,8 +352,7 @@ CASES = [
             ## info.json ##
             {"uuid": "12345678-1234-5678-1234-567812345678", "title": "Custom Info", "topic": "demo", "tags": [], "type": "v3"}
             ## info.json ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def noop():\n    return None",
         answer_code="def noop():\n    return None",
         setup_code="# no setup needed",
@@ -375,13 +361,11 @@ CASES = [
     SmokeCase(
         name="imported_setup",
         source_path="examples/imported_setup.py",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def area(w, h):
                 return w * h * factor
             ## import shared/setup.py as setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def area(w, h):\n    return w * h * factor",
         answer_code="def area(w, h):\n    return w * h * factor",
         setup_code="factor = 2",
@@ -390,8 +374,7 @@ CASES = [
     SmokeCase(
         name="rspec_file_name_metadata",
         source_path="fake_examples/rspec_file_name_metadata.rb",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def answer
               ?value?
             end
@@ -401,8 +384,7 @@ CASES = [
             ## setup_code ##
             # rspec setup
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def answer\n  __[value]__\nend",
         answer_code="def answer\n  value\nend",
         setup_code="# rspec setup",
@@ -416,8 +398,7 @@ CASES = [
     SmokeCase(
         name="rspec_solution_path_metadata",
         source_path="fake_examples/rspec_solution_path_metadata.rb",
-        source_text=dedent(
-            """\
+        source_text=dedent("""\
             def answer
               ?value?
             end
@@ -427,8 +408,7 @@ CASES = [
             ## setup_code ##
             # rspec setup
             ## setup_code ##
-            """
-        ).strip("\n"),
+            """).strip("\n"),
         prompt_code="def answer\n  __[value]__\nend",
         answer_code="def answer\n  value\nend",
         setup_code="# rspec setup",
