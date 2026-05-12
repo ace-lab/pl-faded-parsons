@@ -1,11 +1,12 @@
 from pathlib import Path
 import sys
 from typing import Generator, TypedDict
-from lib.tokens import Tokens, Token, TokenType, regex_chunk_lines
 from collections import defaultdict
 from enum import IntEnum
 from re import Match, Pattern, match as test
+
 from lib import consts
+from lib.tokens import Tokens, Token, TokenType, regex_chunk_lines
 import lib.io_helpers as io
 
 
@@ -34,7 +35,7 @@ class RegionDict(
     TypedDict,
     **({"extra_items": str} if sys.version_info >= (3, 11) else {"total": False})
 ):
-    metadata: dict[str, str]
+    metadata: consts.Metadata
 
 
 def parse_fpp_regions(tokens: Tokens) -> RegionDict:

@@ -6,11 +6,10 @@ from json import dumps
 from unittest import TestCase
 
 from lib.consts import DEFAULT_BLANK_PATTERN, BLANK_SUBSTITUTE
-from lib.parse import parse_fpp_regions
-from lib.tokens import Lexer, lex
+from lib.tokens import Tokens, lex
 
 
-def flatten_into_region_map(tokens: Lexer) -> dict[str, list[str]]:
+def flatten_into_region_map(tokens: Tokens) -> dict[str, str]:
     col = defaultdict(list)
     for t in tokens.data:
         col[t.region].append(t.text)

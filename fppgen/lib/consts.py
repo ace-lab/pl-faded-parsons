@@ -1,6 +1,10 @@
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal, TypedDict
 from re import compile, Pattern
+from sys import version_info
+
+if version_info < (3, 10):
+    raise ValueError("Requires Python 3.10 or higher")
 
 class Bcolors:
     # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
@@ -119,3 +123,41 @@ PROGRAM_DESCRIPTION: Final[str] = Bcolors.f(Bcolors.OK_GREEN, ' A tool for gener
      - They are formatted as `## import {rel_file_path} as {region name} ##`
         where `rel_file_path` is the relative path to the file from the source file
      - Like regular regions, they cannot be used inside of another region"""
+
+
+class BlankDelimiterRange(TypedDict):
+    start: str
+    end: str
+
+class BlankDelimiterPattern(TypedDict):
+    pattern: str
+
+QuestionElementAttributes = TypedDict(
+    "QuestionElementAttributes",
+    {
+        "enable-copy-code": bool,
+        "file-name": str,
+        "max-indent-level": int,
+        "max-optional-fades": int,
+        "solution-path": str,
+        "format": Literal["right", "bottom", "one-tray"],
+        "language": str,
+        "log": bool,
+    },
+    total=False,
+)
+
+QUESTION_ELEMENT_ATTRS = tuple(QuestionElementAttributes.__annotations__.keys())
+
+
+class Metadata(QuestionElementAttributes, total=False):
+    blankDelimiter: str | BlankDelimiterRange | BlankDelimiterPattern
+    parse: bool
+    autograder: str
+    make_dir: bool
+    output_path: str
+    enable_copy_code: bool
+    file_name: str
+    max_indent_level: int
+    max_optional_fades: int
+    solution_path: str

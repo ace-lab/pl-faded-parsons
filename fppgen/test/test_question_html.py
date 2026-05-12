@@ -30,7 +30,7 @@ def test_question_html_includes_standard_attrs() -> None:
             "enable_copy_code": True,
             "language": "python",
             "max_optional_fades": 2,
-        },
+        }, # type: ignore
     )
 
     assert '<pl-faded-parsons answers-name="fpp"' in rendered

@@ -3,63 +3,58 @@ from html import escape
 from pathlib import Path
 from shutil import copyfile
 from uuid import uuid4
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from argparse import Namespace
-from typing import Any
 
 from lib import consts, io_helpers
 
+from lib.consts import QuestionElementAttributes, Metadata
 from lib.tokens import lex
 from lib.name_visitor import AnnotatedName
 from lib.autograde import AutograderConfig, new_autograder_from_ext
 from lib.parse import parse_fpp_regions
 
-QUESTION_ELEMENT_ATTRS = (
-    "enable-copy-code",
-    "file-name",
-    "format",
-    "language",
-    "log",
-    "max-indent-level",
-    "max-optional-fades",
-    "solution-path",
-)
 
-
-@dataclass
+@dataclass(slots=True, frozen=True)
 class Options:
-    def __init__(self, cli_args: Namespace, metadata: dict = {}):
-        self.force_generate_json = False
-
-        self.cli_args: Namespace = cli_args
-        self.profile: bool = cli_args.profile
-        self.source_paths: list = cli_args.source_paths
-        self.verbosity: int = cli_args.verbosity
-
-        self.metadata: dict = metadata
-        self.do_parse: bool = metadata.get("parse", cli_args.parse)
-        self.ag_extension: str = metadata.get("autograder", "")
-        self.make_dir: bool = metadata.get("make-dir", cli_args.make_dir)
-
-        self.out_path: Path | None = self._coerce_path(
-            cli_args.output_path or metadata.get("output-path")
-        )
+    profile: bool
+    source_paths: list
+    verbosity: int
+    do_parse: bool
+    make_dir: bool
+    force_generate_json: bool = False
+    ag_extension: str = ""
+    cli_out_path: Path | None = None
+    metadata_out_path: Path | None = None
 
     @staticmethod
-    def _coerce_path(value):
-        if value is None or value == "":
-            return None
-        return value if isinstance(value, Path) else Path(value)
+    def build(cli_args: Namespace, metadata: Metadata = {}, force_json: bool = False) -> "Options":
+        return Options(
+            force_generate_json=force_json,
+            profile=cli_args.profile,
+            source_paths=cli_args.source_paths,
+            verbosity=cli_args.verbosity,
+            cli_out_path=cli_args.output_path,
+            do_parse=cli_args.parse,
+            make_dir=cli_args.make_dir,
+        ).with_metadata(metadata)
 
-    def update(self, **metadata):
-        self.metadata.update(metadata)
-        self.do_parse: bool = metadata.get("parse", self.do_parse)
-        self.ag_extension: str = metadata.get("autograder", self.ag_extension)
-        self.make_dir: bool = metadata.get("make-dir", self.make_dir)
+    @property
+    def out_path(self) -> Path | None:
+        if value := self.cli_out_path or self.metadata_out_path:
+            return Path(value)
+        return None
 
-        self.out_path = self._coerce_path(
-            self.cli_args.output_path or metadata.get("output-path", self.out_path)
+    def with_metadata(self, metadata: Metadata) -> "Options":
+        return self.with_(
+            do_parse=metadata.get("parse", self.do_parse),
+            ag_extension=metadata.get("autograder", self.ag_extension),
+            make_dir=metadata.get("make-dir", self.make_dir),
+            metadata_out_path=metadata.get("output-path", self.metadata_out_path),
         )
+
+    def with_(self, **kwargs: str | int | bool | Path | None):
+        return replace(self, **kwargs)
 
     def dump(self) -> str:
         """Produce a json dump of this object"""
@@ -69,7 +64,7 @@ class Options:
                 "autograder": self.ag_extension,
                 "parse": self.do_parse,
                 "make-dir": self.make_dir,
-                "output-path": str(self.out_path) if self.out_path else "",
+                "output-path": self.out_path or "",
             }
         )
 
@@ -81,13 +76,11 @@ def generate_question_html(
     tab: str = "  ",
     setup_names: list[AnnotatedName] | None = None,
     answer_names: list[AnnotatedName] | None = None,
-    element_attrs: dict[str, Any] | None = None,
+    element_attrs: consts.QuestionElementAttributes | None = None,
 ) -> str:
     """Turn an extracted prompt string into a question html file body"""
     indented = prompt_code.replace("\n", "\n" + tab)
-    attrs = _format_element_attrs(
-        _question_element_attrs_from_metadata(element_attrs or {})
-    )
+    attrs = _format_element_attrs(element_attrs)
 
     if question_text is None:
         question_text = tab + "<!-- Write the question prompt here -->"
@@ -133,16 +126,18 @@ def generate_question_html(
     )
 
 
-def _format_element_attrs(element_attrs: dict[str, Any] | None = None) -> str:
+def _format_element_attrs(
+    element_attrs: QuestionElementAttributes | None = None,
+) -> str:
     """Format standard pl-faded-parsons attributes for the question tag."""
     if not element_attrs:
         return ""
 
     pieces = []
-    for attr_name in QUESTION_ELEMENT_ATTRS:
-        if attr_name not in element_attrs:
-            continue
-        value = element_attrs[attr_name]
+    for attr_name in consts.QUESTION_ELEMENT_ATTRS:
+        value = element_attrs.get(attr_name)
+        if value is None:
+            value = element_attrs.get(attr_name.replace("-", "_"))
         if value is None:
             continue
         if isinstance(value, bool):
@@ -152,17 +147,19 @@ def _format_element_attrs(element_attrs: dict[str, Any] | None = None) -> str:
     return "".join(pieces)
 
 
-def _question_element_attrs_from_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+def _question_element_attrs_from_metadata(
+    metadata: Metadata,
+) -> QuestionElementAttributes:
     """Select metadata entries that belong on the pl-faded-parsons tag."""
-    attrs = {}
-    for key in QUESTION_ELEMENT_ATTRS:
-        if key in metadata:
-            attrs[key] = metadata[key]
-            continue
-        legacy_key = key.replace("-", "_")
-        if legacy_key in metadata:
-            attrs[key] = metadata[legacy_key]
-    return attrs
+    return QuestionElementAttributes(
+        **{
+            k: v
+            for k in consts.QUESTION_ELEMENT_ATTRS
+            # check for the skewer-case-key first, fallback to snake_case_key
+            if (v := metadata.get(k, None) or metadata.get(k.replace("-", "_"), None))
+            is not None
+        }
+    )
 
 
 def generate_info_json(
@@ -202,16 +199,12 @@ def generate_fpp_question(source_path: Path, *, options: Options):
     tokens = lex(source_code, source_path=source_path)
     regions = parse_fpp_regions(tokens)
 
-    def remove_region(key: str, default = "") -> str:
-        if key in regions:
-            v = regions[key]
-            del regions[key]
-            return v
-        return default
+    def remove_region(key: str, default="") -> str:
+        return regions.pop(key, default) #type: ignore
 
     metadata = regions["metadata"]
-    metadata["autograder"] = metadata.get("autograder", source_path.suffix)
-    options.update(**metadata)
+    metadata.setdefault("autograder", source_path.suffix)
+    options = options.with_metadata(metadata)
 
     autograder: AutograderConfig = new_autograder_from_ext(options.ag_extension)
 
@@ -246,7 +239,7 @@ def generate_fpp_question(source_path: Path, *, options: Options):
     if options.verbosity > 0:
         print("- Populating {} ...".format(question_dir))
 
-    gen_server_code, setup_names, answer_names = autograder.generate_server(
+    gen_server_code, setup_names, _answer_names = autograder.generate_server(
         setup_code=setup_code, answer_code=answer_code, no_ast=(not options.do_parse)
     )
     server_code = server_code or gen_server_code
@@ -256,8 +249,6 @@ def generate_fpp_question(source_path: Path, *, options: Options):
         question_text=question_text,
         setup_names=setup_names,
         element_attrs=_question_element_attrs_from_metadata(metadata),
-        # show_required removed:
-        # answer_names=answer_names if show_required else None
     )
 
     io_helpers.write_to(question_dir, "question.html", question_html)
@@ -326,8 +317,7 @@ def generate_many(args: Namespace):
         args.source_paths = io_helpers.auto_detect_sources()
 
     def generate_one(source_path, force_json=False):
-        options = Options(args)
-        options.force_generate_json = force_json
+        options = Options.build(args, force_json=force_json)
 
         try:
             generate_fpp_question(source_path, options=options)

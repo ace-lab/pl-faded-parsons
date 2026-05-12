@@ -5,7 +5,7 @@ from pathlib import Path
 from re import Match, Pattern, finditer, match as test
 from typing import Any, Generator, Literal
 
-from lib.consts import MAIN_PATTERN, REGION_IMPORT_PATTERN
+from lib.consts import MAIN_PATTERN, REGION_IMPORT_PATTERN, Metadata
 from lib.io_helpers import read_region_source_lines, format_ln
 
 
@@ -38,7 +38,7 @@ class Tokens:
 
     source_path: Path | None
     data: list[Token]
-    metadata: dict[str, Any]
+    metadata: Metadata
 
 
 @dataclass(slots=True)
@@ -122,25 +122,23 @@ class Lexer:
             return "".join(q_tkn.text for q_tkn in tkns)
 
         data = []
-        metadata = []
+        metadata: list[Token] = []
         for t in self.data:
             if t.region == "metadata":
                 metadata.append(t)
             else:
                 data.append(t)
 
-        if metadata:
-            metadata = unparse(metadata)
+        metadata_dict: Metadata = {}
+        if metadata and (m_str := unparse(metadata)):
             # strict allows control chars (\n \t \r) in strings
-            metadata = metadata and JSONDecoder(strict=False).decode(metadata)
+            # use or to replace None, 0, '', or [] with {}
+            metadata_dict = JSONDecoder(strict=False).decode(m_str) or metadata_dict
 
-        # replace None, 0, '', or [] with {}
-        metadata = metadata or {}
-
-        if not isinstance(metadata, dict):
+        if not isinstance(metadata_dict, dict):
             raise SyntaxError("Metadata region must be empty or a JSON object.")
 
-        return Tokens(self.source_path, data, metadata)
+        return Tokens(self.source_path, data, metadata_dict)
 
 
 def regex_chunk_lines(
@@ -184,11 +182,11 @@ def lex(source_code: str, *, source_path: Path | None = None) -> Tokens:
     for line_number, found, chunk in regex_chunk_lines(MAIN_PATTERN, source_code):
         # found is False when chunk is the text between matches
         if not found:
-            lexer.put_curr(line_number, TokenType.UNMATCHED, chunk)
+            lexer.put_curr(line_number, TokenType.UNMATCHED, chunk) # type: ignore
             continue
 
         # exactly one is non-None
-        region_delim, comment, docstring, string = chunk.groups()
+        region_delim, comment, docstring, string = chunk.groups() # type: ignore
 
         if region_delim:
             lexer.put_region_delim(region_delim, line_number)
@@ -201,7 +199,7 @@ def lex(source_code: str, *, source_path: Path | None = None) -> Tokens:
         else:
             raise Exception(
                 "Unreachable! Inexhaustive match groups.\n",
-                f"{line_number=}, {found=} \n{chunk.groups()}",
+                f"{line_number=}, {found=} \n{chunk.groups()}", # type: ignore
             )
 
     return lexer.finish()
